@@ -27,7 +27,6 @@ and shows each frame in 3D.
 1. Open a regular 2D film from the library.
 2. Open **Settings** on the control bar.
 3. Set **2D films in 3D** to **On**. The setting is remembered for every 2D film after that.
-4. Pick how strong the effect is under **Depth**: Pop out, Balanced or Full.
 
 ## Building
 
