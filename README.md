@@ -19,6 +19,16 @@ they play.
 - Double tap the left or right of the picture to skip 10 seconds back or forward.
 - Hand tracking: the pointer hides when the hand is idle; show an open palm to bring it back.
 
+## Watch any 2D film in 3D, live
+
+No conversion step and nothing to wait for: Aaks estimates depth on the headset as the film plays
+and shows each frame in 3D.
+
+1. Open a regular 2D film from the library.
+2. Open **Settings** on the control bar.
+3. Set **2D films in 3D** to **On**. The setting is remembered for every 2D film after that.
+4. Pick how strong the effect is under **Depth**: Pop out, Balanced or Full.
+
 ## Building
 
 Requires Android Studio with the NDK. Debug build:
