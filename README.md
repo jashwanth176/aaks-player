@@ -23,7 +23,9 @@ they play.
 No conversion step and nothing to wait for: AaksVR estimates depth on the headset as the film plays
 and shows each frame in 3D.
 
-![A 2D film beside the depth AaksVR works out for it](docs/screenshots/2_2d_to_3d.jpg)
+[![A 2D film turning into 3D as AaksVR works out its depth live](docs/video/aaksvr_2d_to_3d.gif)](docs/video/aaksvr_2d_to_3d.mp4)
+
+*Click for the full-quality video.*
 
 1. Open a regular 2D film from the library.
 2. Open **Settings** on the control bar.
@@ -34,7 +36,7 @@ and shows each frame in 3D.
 | | |
 |---|---|
 | ![Library](docs/screenshots/3_library.jpg) | ![Double tap to skip](docs/screenshots/4_double_tap.jpg) |
-| ![Settings](docs/screenshots/5_settings.jpg) | ![Giant screen](docs/screenshots/1_hero.jpg) |
+| ![Settings](docs/screenshots/5_settings.jpg) | ![2D film beside its depth](docs/screenshots/2_2d_to_3d.jpg) |
 
 ## Features
 
