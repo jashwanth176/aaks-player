@@ -28,6 +28,7 @@ Cameron Gutman, Diego Waxemberg, Aaron Neyer and Andrew Hennessy, through the Op
 Sean Gilleece, both GPLv3; their copyright notices stay in the source.
 
 The screenshots show frames from [Sintel](https://durian.blender.org) and
-[Tears of Steel](https://mango.blender.org), © Blender Foundation, CC BY 3.0. The rooms are
+[Tears of Steel](https://mango.blender.org), © Blender Foundation, CC BY 3.0, and NASA
+photographs from the International Space Station (public domain). The rooms are
 panoramas from [Poly Haven](https://polyhaven.com) (CC0), and the depth map was made by the app's
 own ZipDepth model.
