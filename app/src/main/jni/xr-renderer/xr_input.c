@@ -270,7 +270,7 @@ static int suggestHandBindings(XrCtx* ctx, const char* profile, const char* aim,
 int initXrInput(XrCtx* ctx) {
     XrActionSetCreateInfo setInfo = { XR_TYPE_ACTION_SET_CREATE_INFO };
     strncpy(setInfo.actionSetName, "aaks", XR_MAX_ACTION_SET_NAME_SIZE - 1);
-    strncpy(setInfo.localizedActionSetName, "Aaks", XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE - 1);
+    strncpy(setInfo.localizedActionSetName, "AaksVR", XR_MAX_LOCALIZED_ACTION_SET_NAME_SIZE - 1);
     if (!checkXr(xrCreateActionSet(ctx->instance, &setInfo, &ctx->actionSet), "create action set")) {
         return 0;
     }

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="aaks-logo.png" height="160" alt="Aaks">
+  <img src="aaks-logo.png" height="160" alt="AaksVR">
 </p>
 
 # AaksVR
@@ -8,7 +8,15 @@ A 3D movie player for the Meta Quest 3, running as a native OpenXR app. It plays
 over under 3D files, 3D Blu-ray disc images, and ordinary 2D films, which it can turn into 3D as
 they play.
 
-![Aaks playing a film on a giant screen in a living room](docs/screenshots/1_hero.jpg)
+![AaksVR playing a film on a giant screen in a living room](docs/screenshots/1_hero.jpg)
+
+## Install
+
+1. Download the latest `AaksVR-*.apk` from [Releases](https://github.com/jashwanth176/aaks-player/releases).
+2. Turn on Developer Mode for your Quest in the Meta Horizon phone app.
+3. Install the APK with [SideQuest](https://sidequestvr.com) or `adb install AaksVR-0.9.0.apk`.
+4. On the headset, open AaksVR from **Library > Unknown Sources**, and allow file access so it can
+   find your films.
 
 ## What it does
 
@@ -23,10 +31,10 @@ they play.
 
 ## Watch any 2D film in 3D, live
 
-No conversion step and nothing to wait for: Aaks estimates depth on the headset as the film plays
+No conversion step and nothing to wait for: AaksVR estimates depth on the headset as the film plays
 and shows each frame in 3D.
 
-![A 2D film beside the depth Aaks works out for it](docs/screenshots/2_2d_to_3d.jpg)
+![A 2D film beside the depth AaksVR works out for it](docs/screenshots/2_2d_to_3d.jpg)
 
 1. Open a regular 2D film from the library.
 2. Open **Settings** on the control bar.

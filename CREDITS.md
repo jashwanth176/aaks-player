@@ -23,7 +23,7 @@ Copyright (c) 2026 Sean Gilleece / Woodford XR, licensed under
 Sean Gilleece / Woodford XR. It is made in code by `tools/make_controller.py` and baked by
 `tools/bake_room.py`, as `tools/models/controller/NOTE.txt` describes.
 
-Aaks is built on [Moonlight for Android](https://github.com/moonlight-stream/moonlight-android) by
+AaksVR is built on [Moonlight for Android](https://github.com/moonlight-stream/moonlight-android) by
 Cameron Gutman, Diego Waxemberg, Aaron Neyer and Andrew Hennessy, through the OpenXR fork of it by
 Sean Gilleece, both GPLv3; their copyright notices stay in the source.
 

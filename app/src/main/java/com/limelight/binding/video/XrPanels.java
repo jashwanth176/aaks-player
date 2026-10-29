@@ -106,7 +106,7 @@ final class XrPanels {
             { R.string.vr_panel_brightness, R.string.vr_panel_contrast, R.string.vr_panel_gamma,
               R.string.vr_panel_saturation };
     // About tab: app name, version and log path, over the report button
-    private static final String COG_ABOUT_NAME = "Aaks";
+    private static final String COG_ABOUT_NAME = "AaksVR";
 
     // In-world keyboard: four sheets of one layout, in KB_STATE_ order. The native side only
     // gets key rectangles and codes (KB_ values in XrShared).
@@ -216,7 +216,7 @@ final class XrPanels {
     private static final int EXIT_QUESTION = R.string.vr_exit_question;
 
     // Splash: the logo over the app name (a product name, never translated)
-    private static final String SPLASH_NAME = "Aaks";
+    private static final String SPLASH_NAME = "AaksVR";
     // Logo colours
     private static final int SPLASH_GROUND = 0xFF0B0E13;
     private static final int SPLASH_AMBER = 0xF59E0B;

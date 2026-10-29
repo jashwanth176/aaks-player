@@ -370,9 +370,9 @@ static int initXrInstance(XrCtx* ctx) {
 
     XrInstanceCreateInfo createInfo = { XR_TYPE_INSTANCE_CREATE_INFO };
     createInfo.next = &androidInfo;
-    strncpy(createInfo.applicationInfo.applicationName, "Aaks", XR_MAX_APPLICATION_NAME_SIZE - 1);
+    strncpy(createInfo.applicationInfo.applicationName, "AaksVR", XR_MAX_APPLICATION_NAME_SIZE - 1);
     createInfo.applicationInfo.applicationVersion = 1;
-    strncpy(createInfo.applicationInfo.engineName, "Aaks", XR_MAX_ENGINE_NAME_SIZE - 1);
+    strncpy(createInfo.applicationInfo.engineName, "AaksVR", XR_MAX_ENGINE_NAME_SIZE - 1);
     createInfo.applicationInfo.apiVersion = XR_API_VERSION_1_0;
     createInfo.enabledExtensionCount = enabledCount;
     createInfo.enabledExtensionNames = enabledExts;

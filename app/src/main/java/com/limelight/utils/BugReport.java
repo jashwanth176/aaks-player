@@ -106,7 +106,7 @@ public final class BugReport {
     public static final String START_FAILURE_PREF = "xr_start_failure";
 
     /** First line of every report; the collector rejects summaries without it. */
-    static final String HEADER = "Aaks bug report\n";
+    static final String HEADER = "AaksVR bug report\n";
 
     // Collector limits: note and summary in chars, logs and body in UTF-8 bytes.
     static final int NOTE_MAX = 4000;

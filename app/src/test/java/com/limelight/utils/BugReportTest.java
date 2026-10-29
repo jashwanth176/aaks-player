@@ -145,7 +145,7 @@ public class BugReportTest {
     @Test
     public void theNoteAndEveryDetailAreThere() {
         String text = BugReport.compose("  the picture went black  ", "a@b.co", details());
-        assertTrue(text.startsWith("Aaks bug report\nVersion: 12.1-xr0.3\nFrom: a@b.co\n\n"
+        assertTrue(text.startsWith("AaksVR bug report\nVersion: 12.1-xr0.3\nFrom: a@b.co\n\n"
                 + "the picture went black\n"));
         assertTrue(text.contains(
                 "aaks 12.1-xr0.3 com.aaks.player commit 0123456789\n"));
@@ -183,7 +183,7 @@ public class BugReportTest {
                 + "  stopped at: runtime (xrEnumerateInstanceExtensionProperties)\n"
                 + "  result: XR_ERROR_RUNTIME_UNAVAILABLE (-51)\n";
         String text = BugReport.compose("no settings bar", "", d);
-        assertTrue(text.startsWith("Aaks bug report\nVersion: 12.1-xr0.3\nFrom: \n\n"
+        assertTrue(text.startsWith("AaksVR bug report\nVersion: 12.1-xr0.3\nFrom: \n\n"
                 + "no settings bar\n"
                 + "\n----- last VR start -----\n"
                 + "VR session did not start, 2026-10-01 21:40:00\n"
@@ -245,7 +245,7 @@ public class BugReportTest {
         assertEquals("it froze\nafter a minute", field(json, "note"));
         assertEquals("a@b.co", field(json, "replyTo"));
         assertEquals(summary, field(json, "summary"));
-        assertTrue(field(json, "summary").startsWith("Aaks bug report\nVersion: "));
+        assertTrue(field(json, "summary").startsWith("AaksVR bug report\nVersion: "));
         assertEquals("\n----- aaks.log -----\n10-01 19:00:00.000 I session start \"quoted\"\n",
                 field(json, "log"));
         assertEquals(NAME, field(json, "fileName"));
@@ -259,7 +259,7 @@ public class BugReportTest {
     @Test
     public void noAddressIsNullAndNoTokenSendsNoAuthorization() throws IOException {
         Recorder net = new Recorder();
-        BugReport.sendOrSave(folder.newFolder("r"), NAME, "Aaks bug report\n", "x", "  ",
+        BugReport.sendOrSave(folder.newFolder("r"), NAME, "AaksVR bug report\n", "x", "  ",
                 new File[0], URL, "", net);
         assertTrue(net.text().contains("\"replyTo\":null,"));
         assertNull(field(net.text(), "replyTo"));
