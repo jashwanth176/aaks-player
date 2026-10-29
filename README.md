@@ -18,16 +18,56 @@ they play.
 4. On the headset, open AaksVR from **Library > Unknown Sources**, and allow file access so it can
    find your films.
 
-## What it does
+## Features
 
-- Plays video files through Media3, with TrueHD and DTS sound decoded in the app.
-- Plays 3D Blu-ray ISOs: the MVC video decoded on the headset, Dolby and DTS sound, PGS subtitles.
-- Turns a 2D film into 3D while it plays, with the ZipDepth depth model on the headset's GPU.
-- Shows HDR10 and HLG films tone mapped for the headset's screen, with Natural and Vivid colours.
-- Plays at 0.5x to 2x, the sound keeping its pitch, and shows where a skip will land.
-- Styled subtitles with their own depth and sync, a curved screen, and passthrough or a dark room.
-- Double tap the left or right of the picture to skip 10 seconds back or forward.
-- Hand tracking: the pointer hides when the hand is idle; show an open palm to bring it back.
+### Every kind of 3D
+- **3D files:** side by side and over under, full or half width. The layout is read from the file
+  name (`HSBS`, `FSBS`, `OU`, `TAB` and similar) or the shape of the frame, or set by hand in
+  **Settings > 3D** (Auto, 2D, Side by side, Over under).
+- **3D Blu-ray discs:** plays `.iso` disc images directly, with the MVC 3D video decoded on the
+  headset, Dolby and DTS sound, and the disc's PGS subtitles.
+- **2D films in 3D:** converts any 2D film live as it plays (see below).
+- **Depth:** choose how far 3D films pop out: Pop out, Balanced or Full.
+
+### Picture
+- **HDR10 and HLG** films are tone mapped for the Quest's screen, so highlights keep their detail.
+- **Colours:** Natural shows the film as it was graded; Vivid uses the headset's wider colour range.
+- **Black bars** are detected and trimmed, so the screen fits the picture.
+- **A screen your way:** move it, resize it from its corners, and curve it from flat to wrapped
+  around you.
+
+### Your room
+- **Passthrough or Dark:** watch with your room around you, or in darkness.
+- **Walk around:** in passthrough the guardian boundary steps aside, so you can move about the room.
+- **Immersion and Brightness:** let the screen's light spill into the room, and dim the room as much
+  as you like.
+
+### Sound and subtitles
+- Plays the sound in films that the headset can't decode on its own, such as Dolby TrueHD and DTS.
+- **Playback speed** from 0.5x to 2x, with the voice keeping its pitch.
+- Pick any **audio or subtitle track**; your choice survives switching between 2D and 3D.
+- **Subtitles** from the file, or `.srt`, `.ass`, `.ssa` and `.vtt` files placed next to it with the
+  same name.
+- **Subtitle style:** size, colour, background, edge, height on the screen, depth in 3D, and whether
+  to use the file's own styling.
+- **Subtitle sync:** shift them earlier or later, remembered for each film.
+
+### Library
+- Finds your films anywhere on the headset's storage: `mp4`, `m4v`, `mkv`, `mov`, `webm`, `ts`,
+  `m2ts`, `mts`, `avi` and `iso`.
+- **Continue** for films you're part way through, **Films** for everything (newest first), and
+  **Folders** to browse.
+- Thumbnails, a 3D badge and a progress bar on each film, and every film resumes where you left it.
+- Films can also be opened straight from a file manager.
+
+### Controls
+- **Controllers:** point and pull the trigger to click, A to play or pause, and push the thumbstick
+  left or right to skip 10 seconds (hold it to skip 30 seconds at a time).
+- **Hands:** pinch to click. **Double tap** the left or right of the picture to skip 10 seconds, and
+  keep tapping to skip further.
+- **Hand pointer:** hides when your hand is idle; show an open palm to bring it back. Prefer it
+  always visible? Set **Hand pointer** to **Always on** in Settings.
+- Pauses when you take the headset off or open the Quest menu, and carries on when you're back.
 
 ## Watch any 2D film in 3D, live
 
@@ -46,25 +86,6 @@ and shows each frame in 3D.
 |---|---|
 | ![Library](docs/screenshots/3_library.jpg) | ![Double tap to skip](docs/screenshots/4_double_tap.jpg) |
 | ![Settings](docs/screenshots/5_settings.jpg) | ![Giant screen](docs/screenshots/1_hero.jpg) |
-
-## Building
-
-Requires Android Studio with the NDK. Debug build:
-
-    ./gradlew assembleDebug
-
-The APK lands in `app/build/outputs/apk/debug/`. Install it with `adb install -r`. The app
-is `com.aaks.player`, and the debug build `com.aaks.player.debug`.
-
-### Tests
-
-The parts of the renderer with no GL, OpenXR or Android in them build and run on a desktop with any
-C compiler, and the Java side has plain unit tests:
-
-    make -C app/src/test/cpp test
-    ./gradlew testDebugUnitTest
-
-Release builds are signed when `keystore.properties` exists; see `keystore.properties.example`.
 
 ## Licence
 
