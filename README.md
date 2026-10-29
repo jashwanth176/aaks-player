@@ -2,7 +2,7 @@
   <img src="aaks-logo.png" height="160" alt="Aaks">
 </p>
 
-# Aaks
+# AaksVR
 
 A 3D movie player for the Meta Quest 3, running as a native OpenXR app. It plays side by side and
 over under 3D files, 3D Blu-ray disc images, and ordinary 2D films, which it can turn into 3D as
