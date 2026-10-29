@@ -8,6 +8,8 @@ A 3D movie player for the Meta Quest 3, running as a native OpenXR app. It plays
 over under 3D files, 3D Blu-ray disc images, and ordinary 2D films, which it can turn into 3D as
 they play.
 
+![Aaks playing a film on a giant screen in a living room](docs/screenshots/1_hero.jpg)
+
 ## What it does
 
 - Plays video files through Media3, with TrueHD and DTS sound decoded in the app.
@@ -24,9 +26,18 @@ they play.
 No conversion step and nothing to wait for: Aaks estimates depth on the headset as the film plays
 and shows each frame in 3D.
 
+![A 2D film beside the depth Aaks works out for it](docs/screenshots/2_2d_to_3d.jpg)
+
 1. Open a regular 2D film from the library.
 2. Open **Settings** on the control bar.
 3. Set **2D films in 3D** to **On**. The setting is remembered for every 2D film after that.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Library](docs/screenshots/3_library.jpg) | ![Double tap to skip](docs/screenshots/4_double_tap.jpg) |
+| ![Settings](docs/screenshots/5_settings.jpg) | ![Giant screen](docs/screenshots/1_hero.jpg) |
 
 ## Building
 
