@@ -18,6 +18,24 @@ they play.
 4. On the headset, open AaksVR from **Library > Unknown Sources**, and allow file access so it can
    find your films.
 
+## Watch any 2D film in 3D, live
+
+No conversion step and nothing to wait for: AaksVR estimates depth on the headset as the film plays
+and shows each frame in 3D.
+
+![A 2D film beside the depth AaksVR works out for it](docs/screenshots/2_2d_to_3d.jpg)
+
+1. Open a regular 2D film from the library.
+2. Open **Settings** on the control bar.
+3. Set **2D films in 3D** to **On**. The setting is remembered for every 2D film after that.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Library](docs/screenshots/3_library.jpg) | ![Double tap to skip](docs/screenshots/4_double_tap.jpg) |
+| ![Settings](docs/screenshots/5_settings.jpg) | ![Giant screen](docs/screenshots/1_hero.jpg) |
+
 ## Features
 
 ### Every kind of 3D
@@ -68,24 +86,6 @@ they play.
 - **Hand pointer:** hides when your hand is idle; show an open palm to bring it back. Prefer it
   always visible? Set **Hand pointer** to **Always on** in Settings.
 - Pauses when you take the headset off or open the Quest menu, and carries on when you're back.
-
-## Watch any 2D film in 3D, live
-
-No conversion step and nothing to wait for: AaksVR estimates depth on the headset as the film plays
-and shows each frame in 3D.
-
-![A 2D film beside the depth AaksVR works out for it](docs/screenshots/2_2d_to_3d.jpg)
-
-1. Open a regular 2D film from the library.
-2. Open **Settings** on the control bar.
-3. Set **2D films in 3D** to **On**. The setting is remembered for every 2D film after that.
-
-## Screenshots
-
-| | |
-|---|---|
-| ![Library](docs/screenshots/3_library.jpg) | ![Double tap to skip](docs/screenshots/4_double_tap.jpg) |
-| ![Settings](docs/screenshots/5_settings.jpg) | ![Giant screen](docs/screenshots/1_hero.jpg) |
 
 ## Licence
 
