@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preferences -->
+    <string name="vr_hand_hint_title">O rastreamento de mãos está ativado.</string>
+    <string name="vr_hand_hint_body">Junte o polegar e o indicador três vezes rápido para travar as mãos, assim uma pinça acidental não clica; a mesma pinça tripla as destrava.</string>
+    <string name="vr_hand_hint_never">Não mostrar novamente</string>
+    <string name="vr_environment_passthrough">Passthrough</string>
+    <string name="vr_environment_void">Vazio escuro</string>
+    <!-- %1$s is one of the vr_fail lines below, which say why -->
+    <string name="vr_fail_no_runtime">Nenhum runtime OpenXR respondeu</string>
+    <!-- %1$s is the names of the missing OpenXR extensions -->
+    <string name="vr_fail_extensions">O runtime OpenXR não oferece %1$s</string>
+    <!-- %1$s in the vr_fail lines is what the runtime answered, like XR_ERROR_RUNTIME_FAILURE -->
+    <string name="vr_fail_instance">O runtime recusou a instância (%1$s)</string>
+    <string name="vr_fail_system">O runtime não encontrou nenhum headset pronto (%1$s)</string>
+    <string name="vr_fail_graphics">O runtime recusou o OpenGL ES (%1$s)</string>
+    <string name="vr_fail_egl">O driver gráfico do headset falhou (%1$s)</string>
+    <string name="vr_fail_session">O runtime recusou a sessão (%1$s)</string>
+    <string name="vr_fail_space">O runtime recusou um espaço de rastreamento (%1$s)</string>
+    <string name="vr_fail_swapchain">O runtime recusou a swapchain de vídeo (%1$s)</string>
+    <string name="vr_fail_gl">Não foi possível compilar os shaders do renderizador</string>
+    <!-- %1$s is a number of seconds -->
+    <string name="vr_fail_timeout">O runtime não respondeu em %1$s segundos</string>
+    <string name="vr_fail_unknown">Não foi possível iniciar a sessão de VR</string>
+    <string name="vr_toast_rate">Tela a %1$d Hz</string>
+    <string name="vr_toast_hands_locked">Mãos travadas</string>
+    <string name="vr_toast_hands_unlocked">Mãos destravadas</string>
+    <string name="vr_toast_3d_off">3D desligado</string>
+    <string name="vr_toast_3d_on">3D ligado</string>
+    <string name="vr_toast_head_aim_on">Controle com a cabeça ligado</string>
+    <string name="vr_toast_head_aim_on_more">Virar a cabeça move o mouse</string>
+    <string name="vr_toast_head_aim_off">Controle com a cabeça desligado</string>
+    <string name="vr_toast_gamepad_mode">Modo gamepad</string>
+    <string name="vr_toast_gamepad_back_menu_grip">Segure o botão de menu esquerdo e o grip esquerdo para voltar ao ponteiro</string>
+    <string name="vr_toast_gamepad_back_sticks">Pressione os dois analógicos para voltar ao ponteiro</string>
+    <string name="vr_toast_gamepad_back_triggers_grips">Aperte os dois gatilhos e os dois grips para voltar ao ponteiro</string>
+    <string name="vr_toast_pointer_mode">Modo ponteiro</string>
+    <!-- The panels inside the session. They are drawn at a fixed size, so keep these short. -->
+    <string name="vr_panel_tab_screen">Tela</string>
+    <string name="vr_panel_tab_display">Exibição</string>
+    <string name="vr_panel_3d">3D</string>
+    <string name="vr_panel_tab_picture">Imagem</string>
+    <string name="vr_panel_tab_about">Sobre</string>
+    <string name="vr_panel_tab_room">Sala</string>
+    <string name="vr_panel_distance">Distância</string>
+    <string name="vr_panel_height">Altura</string>
+    <string name="vr_panel_tilt">Inclinação</string>
+    <string name="vr_panel_rotate">Rotação</string>
+    <string name="vr_panel_curve">Curvatura</string>
+    <string name="vr_panel_size">Tamanho</string>
+    <string name="vr_panel_aim_sensitivity">Cabeça: sensibilidade</string>
+    <string name="vr_panel_aim_dead_zone">Cabeça: zona morta</string>
+    <!-- Where head aim's rows are greyed out: the screen is not locked to the head. Names the Head locked row. -->
+    <string name="vr_panel_needs_head_lock">requer “Presa à cabeça”</string>
+    <string name="vr_panel_not_in_room">indisponível em uma sala</string>
+    <string name="vr_panel_reset">Redefinir</string>
+    <string name="vr_panel_brightness">Brilho</string>
+    <string name="vr_panel_glow">Halo</string>
+    <string name="vr_panel_screen_light">Luz da tela</string>
+    <string name="vr_panel_light_level">Nível de luz</string>
+    <string name="vr_panel_off">Desligado</string>
+    <string name="vr_panel_on">Ligado</string>
+    <string name="vr_panel_fixed_size">A tela desta sala tem tamanho fixo</string>
+    <string name="vr_panel_sharpen">Nitidez</string>
+    <string name="vr_panel_supersample">Supersampling</string>
+    <string name="vr_panel_stats">Estatísticas</string>
+    <string name="vr_panel_head_locked">Presa à cabeça</string>
+    <string name="vr_panel_head_aim">Controle com a cabeça</string>
+    <string name="vr_panel_controllers">Controles</string>
+    <string name="vr_panel_pointer_sleep">Pausa do ponteiro</string>
+    <string name="vr_panel_ray">Raio</string>
+    <string name="vr_panel_controller_model">Modelo do controle</string>
+    <string name="vr_panel_click_sound">Som de clique</string>
+    <string name="vr_panel_normal">Normal</string>
+    <string name="vr_panel_quality">Qualidade</string>
+    <string name="vr_panel_pointer">Ponteiro</string>
+    <string name="vr_panel_gamepad">Gamepad</string>
+    <string name="vr_panel_glow_level">Intensidade do halo</string>
+    <string name="vr_panel_shortcut_menu_grip">Atalho: menu + grip esquerdos</string>
+    <string name="vr_panel_shortcut_sticks">Atalho: os dois analógicos</string>
+    <string name="vr_panel_shortcut_triggers_grips">Atalho: gatilhos + grips</string>
+    <string name="vr_panel_preset">Predefinição</string>
+    <string name="vr_panel_comfort">Conforto</string>
+    <string name="vr_panel_balanced">Equilibrado</string>
+    <string name="vr_panel_strong">Forte</string>
+    <string name="vr_panel_depth">Profundidade</string>
+    <string name="vr_panel_convergence">Convergência</string>
+    <string name="vr_panel_harder_on_eyes">cansa mais os olhos</string>
+    <string name="vr_panel_3d_off_in_settings">O 3D está desligado nas configurações</string>
+    <string name="vr_panel_contrast">Contraste</string>
+    <string name="vr_panel_gamma">Gama</string>
+    <string name="vr_panel_saturation">Saturação</string>
+    <string name="vr_panel_version">Versão %1$s, commit %2$s</string>
+    <string name="vr_panel_version_no_commit">Versão %1$s</string>
+    <!-- %1$s is where the log file is, like Download/Aaks/aaks.log -->
+    <string name="vr_panel_log_file">Arquivo de log: %1$s</string>
+    <string name="vr_panel_log_file_off">Arquivo de log: desligado</string>
+    <string name="vr_panel_report_sends">Envia uma nota com o headset, suas configurações e o log</string>
+    <string name="vr_panel_rooms">Salas</string>
+    <!-- Keys on the keyboard inside the session, one key wide: Shift one and a half, space four -->
+    <string name="vr_key_shift">Shift</string>
+    <string name="vr_key_space">espaço</string>
+    <string name="vr_key_enter">Enter</string>
+    <string name="vr_key_hide">Ocultar</string>
+    <string name="vr_key_ctrl">Ctrl</string>
+    <string name="vr_key_alt">Alt</string>
+    <string name="vr_key_win">Win</string>
+    <string name="vr_exit_question">Sair da transmissão?</string>
+    <string name="vr_exit">Sair</string>
+    <!-- The report sheet inside the session -->
+    <string name="vr_report_note_hint">O que você estava fazendo quando deu errado?</string>
+    <string name="vr_report_optional">Opcional</string>
+    <string name="vr_report_email_bad">Isso não parece um endereço de e-mail</string>
+    <string name="vr_report_sends">Envia sua mensagem, os dados do headset e da versão, suas configurações e o log do app, que pode incluir o nome e o endereço do seu PC na rede. Nada é enviado até você tocar em “Enviar”.</string>
+    <string name="vr_report_not_written">Não foi possível salvar o relatório</string>
+    <string name="vr_battery">Bateria %1$d%%</string>
+    <string name="title_bug_report">Relatar um problema</string>
+    <!-- The About category at the end of the settings -->
+    <string name="bug_report_email_hint">Seu e-mail, para uma resposta</string>
+    <string name="bug_report_message_hint">O que aconteceu?</string>
+    <string name="bug_report_send_direct">Enviar</string>
+    <string name="bug_report_sending">Enviando o relatório…</string>
+    <string name="bug_report_sent">Relatório enviado</string>
+    <string name="bug_report_not_sent_at">Não foi possível enviar, salvo em</string>
+    <string name="bug_report_busy_at">Servidor ocupado, salvo em</string>
+    <string name="bug_report_no_collector_at">Versão sem servidor, salvo em</string>
+</resources>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Replaced by values-vXX/styles.xml on newer API levels -->
+    <style name="AppBaseTheme" parent="android:Theme">
+    </style>
+
+    <style name="AppTheme" parent="AppBaseTheme">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <style name="StreamBaseTheme" parent="AppBaseTheme">
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+    <!-- The player activity's theme -->
+    <style name="StreamTheme" parent="StreamBaseTheme">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

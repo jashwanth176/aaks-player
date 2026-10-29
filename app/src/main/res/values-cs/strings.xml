@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preferences -->
+    <string name="vr_hand_hint_title">Sledování rukou je zapnuté.</string>
+    <string name="vr_hand_hint_body">Rychle třikrát spojte palec a ukazováček, abyste ruce zamkli a náhodné gesto neklikalo; stejné trojité gesto je odemkne.</string>
+    <string name="vr_hand_hint_never">Znovu nezobrazovat</string>
+    <string name="vr_environment_passthrough">Passthrough</string>
+    <string name="vr_environment_void">Černá prázdnota</string>
+    <!-- %1$s is one of the vr_fail lines below, which say why -->
+    <string name="vr_fail_no_runtime">Žádné běhové prostředí OpenXR neodpovědělo</string>
+    <!-- %1$s is the names of the missing OpenXR extensions -->
+    <string name="vr_fail_extensions">Běhové prostředí OpenXR nenabízí %1$s</string>
+    <!-- %1$s in the vr_fail lines is what the runtime answered, like XR_ERROR_RUNTIME_FAILURE -->
+    <string name="vr_fail_instance">Běhové prostředí odmítlo instanci (%1$s)</string>
+    <string name="vr_fail_system">Běhové prostředí nenašlo připravený headset (%1$s)</string>
+    <string name="vr_fail_graphics">Běhové prostředí odmítlo OpenGL ES (%1$s)</string>
+    <string name="vr_fail_egl">Grafický ovladač headsetu selhal (%1$s)</string>
+    <string name="vr_fail_session">Běhové prostředí odmítlo relaci (%1$s)</string>
+    <string name="vr_fail_space">Běhové prostředí odmítlo sledovací prostor (%1$s)</string>
+    <string name="vr_fail_swapchain">Běhové prostředí odmítlo video swapchain (%1$s)</string>
+    <string name="vr_fail_gl">Shadery rendereru se nepodařilo sestavit</string>
+    <!-- %1$s is a number of seconds -->
+    <string name="vr_fail_timeout">Běhové prostředí neodpovědělo do %1$s sekund</string>
+    <string name="vr_fail_unknown">Relaci VR se nepodařilo spustit</string>
+    <string name="vr_toast_rate">Displej %1$d Hz</string>
+    <string name="vr_toast_hands_locked">Ruce zamčeny</string>
+    <string name="vr_toast_hands_unlocked">Ruce odemčeny</string>
+    <string name="vr_toast_3d_off">3D vypnuto</string>
+    <string name="vr_toast_3d_on">3D zapnuto</string>
+    <string name="vr_toast_head_aim_on">Ovládání hlavou zapnuto</string>
+    <string name="vr_toast_head_aim_on_more">Otáčení hlavou pohybuje myší</string>
+    <string name="vr_toast_head_aim_off">Ovládání hlavou vypnuto</string>
+    <string name="vr_toast_gamepad_mode">Režim gamepadu</string>
+    <string name="vr_toast_gamepad_back_menu_grip">Pro návrat k ukazateli podržte levé tlačítko menu a levý úchop</string>
+    <string name="vr_toast_gamepad_back_sticks">Pro návrat k ukazateli stiskněte obě páčky</string>
+    <string name="vr_toast_gamepad_back_triggers_grips">Pro návrat k ukazateli zmáčkněte obě spouště a oba úchopy</string>
+    <string name="vr_toast_pointer_mode">Režim ukazatele</string>
+    <!-- The panels inside the session. They are drawn at a fixed size, so keep these short. -->
+    <string name="vr_panel_tab_screen">Obrazovka</string>
+    <string name="vr_panel_tab_display">Zobrazení</string>
+    <string name="vr_panel_3d">3D</string>
+    <string name="vr_panel_tab_picture">Obraz</string>
+    <string name="vr_panel_tab_about">Info</string>
+    <string name="vr_panel_tab_room">Místnost</string>
+    <string name="vr_panel_distance">Vzdálenost</string>
+    <string name="vr_panel_height">Výška</string>
+    <string name="vr_panel_tilt">Náklon</string>
+    <string name="vr_panel_rotate">Otočení</string>
+    <string name="vr_panel_curve">Zakřivení</string>
+    <string name="vr_panel_size">Velikost</string>
+    <string name="vr_panel_aim_sensitivity">Hlava: citlivost</string>
+    <string name="vr_panel_aim_dead_zone">Hlava: mrtvá zóna</string>
+    <!-- Where head aim's rows are greyed out: the screen is not locked to the head. Names the Head locked row. -->
+    <string name="vr_panel_needs_head_lock">vyžaduje „Připnuto k hlavě“</string>
+    <string name="vr_panel_not_in_room">v místnosti nelze</string>
+    <string name="vr_panel_reset">Obnovit</string>
+    <string name="vr_panel_brightness">Jas</string>
+    <string name="vr_panel_glow">Záře</string>
+    <string name="vr_panel_screen_light">Světlo obrazovky</string>
+    <string name="vr_panel_light_level">Úroveň světla</string>
+    <string name="vr_panel_off">Vypnuto</string>
+    <string name="vr_panel_on">Zapnuto</string>
+    <string name="vr_panel_fixed_size">Obrazovka této místnosti má pevnou velikost</string>
+    <string name="vr_panel_sharpen">Doostření</string>
+    <string name="vr_panel_supersample">Supersampling</string>
+    <string name="vr_panel_stats">Statistiky</string>
+    <string name="vr_panel_head_locked">Připnuto k hlavě</string>
+    <string name="vr_panel_head_aim">Ovládání hlavou</string>
+    <string name="vr_panel_controllers">Ovladače</string>
+    <string name="vr_panel_pointer_sleep">Uspání ukazatele</string>
+    <string name="vr_panel_ray">Paprsek</string>
+    <string name="vr_panel_controller_model">Model ovladače</string>
+    <string name="vr_panel_click_sound">Zvuk kliknutí</string>
+    <string name="vr_panel_normal">Normální</string>
+    <string name="vr_panel_quality">Kvalita</string>
+    <string name="vr_panel_pointer">Ukazatel</string>
+    <string name="vr_panel_gamepad">Gamepad</string>
+    <string name="vr_panel_glow_level">Síla záře</string>
+    <string name="vr_panel_shortcut_menu_grip">Zkratka: levé menu + úchop</string>
+    <string name="vr_panel_shortcut_sticks">Zkratka: obě páčky</string>
+    <string name="vr_panel_shortcut_triggers_grips">Zkratka: spouště + úchopy</string>
+    <string name="vr_panel_preset">Předvolba</string>
+    <string name="vr_panel_comfort">Pohodlí</string>
+    <string name="vr_panel_balanced">Vyvážené</string>
+    <string name="vr_panel_strong">Silné</string>
+    <string name="vr_panel_depth">Hloubka</string>
+    <string name="vr_panel_convergence">Konvergence</string>
+    <string name="vr_panel_harder_on_eyes">více unavuje oči</string>
+    <string name="vr_panel_3d_off_in_settings">3D je v nastavení vypnuto</string>
+    <string name="vr_panel_contrast">Kontrast</string>
+    <string name="vr_panel_gamma">Gama</string>
+    <string name="vr_panel_saturation">Sytost</string>
+    <string name="vr_panel_version">Verze %1$s, commit %2$s</string>
+    <string name="vr_panel_version_no_commit">Verze %1$s</string>
+    <!-- %1$s is where the log file is, like Download/Aaks/aaks.log -->
+    <string name="vr_panel_log_file">Soubor protokolu: %1$s</string>
+    <string name="vr_panel_log_file_off">Soubor protokolu: vypnuto</string>
+    <string name="vr_panel_report_sends">Odešle poznámku s údaji o headsetu, nastavením a protokolem</string>
+    <string name="vr_panel_rooms">Místnosti</string>
+    <!-- Keys on the keyboard inside the session, one key wide: Shift one and a half, space four -->
+    <string name="vr_key_shift">Shift</string>
+    <string name="vr_key_space">mezera</string>
+    <string name="vr_key_enter">Enter</string>
+    <string name="vr_key_hide">Skrýt</string>
+    <string name="vr_key_ctrl">Ctrl</string>
+    <string name="vr_key_alt">Alt</string>
+    <string name="vr_key_win">Win</string>
+    <string name="vr_exit_question">Ukončit stream?</string>
+    <string name="vr_exit">Ukončit</string>
+    <!-- The report sheet inside the session -->
+    <string name="vr_report_note_hint">Co se dělo, když nastal problém?</string>
+    <string name="vr_report_optional">Volitelné</string>
+    <string name="vr_report_email_bad">Tohle nevypadá jako e-mailová adresa</string>
+    <string name="vr_report_sends">Odešle vaši zprávu, údaje o headsetu a sestavení, vaše nastavení a protokol aplikace, který může obsahovat název a síťovou adresu vašeho PC. Nic se neodešle, dokud nestisknete „Odeslat“.</string>
+    <string name="vr_report_not_written">Hlášení se nepodařilo uložit</string>
+    <string name="vr_battery">Baterie %1$d %%</string>
+    <string name="title_bug_report">Nahlásit problém</string>
+    <!-- The About category at the end of the settings -->
+    <string name="bug_report_email_hint">Vaše e-mailová adresa pro odpověď</string>
+    <string name="bug_report_message_hint">Co se stalo?</string>
+    <string name="bug_report_send_direct">Odeslat</string>
+    <string name="bug_report_sending">Odesílání hlášení…</string>
+    <string name="bug_report_sent">Hlášení odesláno</string>
+    <string name="bug_report_not_sent_at">Odeslání se nezdařilo, uloženo do</string>
+    <string name="bug_report_busy_at">Server je přetížený, uloženo do</string>
+    <string name="bug_report_no_collector_at">Sestavení bez serveru, uloženo do</string>
+</resources>

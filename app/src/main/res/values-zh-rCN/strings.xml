@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- VR Settings -->
+    <string name="vr_hand_hint_title">手势追踪已开启。</string>
+    <string name="vr_hand_hint_body">用拇指和食指快速捏合三次即可锁定手势，避免误捏造成点击；再快速捏合三次即可解锁。</string>
+    <string name="vr_hand_hint_never">不再显示</string>
+    <string name="vr_environment_passthrough">透视 (Passthrough)</string>
+    <string name="vr_environment_void">黑色虚空 (Black void)</string>
+    <string name="vr_fail_no_runtime">没有 OpenXR 运行时响应</string>
+    <string name="vr_fail_extensions">OpenXR 运行时未提供 %1$s</string>
+    <string name="vr_fail_instance">运行时拒绝了实例（%1$s）</string>
+    <string name="vr_fail_system">运行时未找到就绪的头显（%1$s）</string>
+    <string name="vr_fail_graphics">运行时拒绝了 OpenGL ES（%1$s）</string>
+    <string name="vr_fail_egl">头显的图形驱动出错（%1$s）</string>
+    <string name="vr_fail_session">运行时拒绝了会话（%1$s）</string>
+    <string name="vr_fail_space">运行时拒绝了追踪空间（%1$s）</string>
+    <string name="vr_fail_swapchain">运行时拒绝了视频交换链（%1$s）</string>
+    <string name="vr_fail_gl">渲染器的着色器编译失败</string>
+    <string name="vr_fail_timeout">运行时在 %1$s 秒内没有响应</string>
+    <string name="vr_fail_unknown">VR 会话无法启动</string>
+    <string name="vr_toast_rate">显示刷新率 %1$d Hz</string>
+    <string name="vr_toast_hands_locked">手部已锁定</string>
+    <string name="vr_toast_hands_unlocked">手部已解锁</string>
+    <string name="vr_toast_3d_off">3D 已关闭</string>
+    <string name="vr_toast_3d_on">3D 已开启</string>
+    <string name="vr_toast_head_aim_on">头部控制已开启</string>
+    <string name="vr_toast_head_aim_on_more">转动头部即可移动鼠标</string>
+    <string name="vr_toast_head_aim_off">头部控制已关闭</string>
+    <string name="vr_toast_gamepad_mode">游戏手柄模式</string>
+    <string name="vr_toast_gamepad_back_menu_grip">按住左手菜单键和左手握把即可回到指针</string>
+    <string name="vr_toast_gamepad_back_sticks">同时按下两个摇杆即可回到指针</string>
+    <string name="vr_toast_gamepad_back_triggers_grips">同时握紧两个扳机和两个握把即可回到指针</string>
+    <string name="vr_toast_pointer_mode">指针模式</string>
+    <string name="vr_report_note_hint">出现问题时您正在做什么？</string>
+    <string name="vr_report_optional">选填</string>
+    <string name="vr_report_email_bad">这看起来不像电子邮箱地址</string>
+    <string name="vr_report_sends">将发送您的说明、头显与版本信息、您的设置以及应用日志，日志中可能包含您电脑在局域网中的名称和地址。在您点击“发送报告”之前不会发送任何内容。</string>
+    <string name="vr_report_not_written">无法保存报告</string>
+    <string name="vr_battery">电量 %1$d%%</string>
+
+    <!-- Bug Report strings -->
+    <string name="title_bug_report">问题反馈与错误报告</string>
+    <string name="bug_report_email_hint">您的电子邮箱（用于接收回复）</string>
+    <string name="bug_report_message_hint">请描述具体发生了什么问题…</string>
+    <string name="bug_report_send_direct">发送报告</string>
+    <string name="bug_report_sending">正在发送报告…</string>
+    <string name="bug_report_sent">报告已发送</string>
+    <string name="bug_report_not_sent_at">发送失败，已保存至</string>
+    <string name="bug_report_busy_at">服务器繁忙，已保存至</string>
+    <string name="bug_report_no_collector_at">此版本未配置收集服务器，已保存至</string>
+
+    <!-- The panels inside the session. They are drawn at a fixed size, so keep these short. -->
+    <string name="vr_panel_tab_screen">屏幕</string>
+    <string name="vr_panel_tab_display">显示</string>
+    <string name="vr_panel_3d">3D</string>
+    <string name="vr_panel_tab_picture">画面</string>
+    <string name="vr_panel_tab_about">关于</string>
+    <string name="vr_panel_tab_room">房间</string>
+    <string name="vr_panel_distance">距离</string>
+    <string name="vr_panel_height">高度</string>
+    <string name="vr_panel_tilt">倾斜</string>
+    <string name="vr_panel_rotate">旋转</string>
+    <string name="vr_panel_curve">曲率</string>
+    <string name="vr_panel_size">大小</string>
+    <string name="vr_panel_aim_sensitivity">头部控制灵敏度</string>
+    <string name="vr_panel_aim_dead_zone">头部控制死区</string>
+    <!-- Where head aim's rows are greyed out: the screen is not locked to the head. Names the Head locked row. -->
+    <string name="vr_panel_needs_head_lock">需开启“头动锁定”</string>
+    <string name="vr_panel_not_in_room">房间中不可用</string>
+    <string name="vr_panel_reset">重置</string>
+    <string name="vr_panel_brightness">亮度</string>
+    <string name="vr_panel_glow">光晕</string>
+    <string name="vr_panel_screen_light">屏幕光照</string>
+    <string name="vr_panel_light_level">光照强度</string>
+    <string name="vr_panel_off">关闭</string>
+    <string name="vr_panel_on">开启</string>
+    <string name="vr_panel_fixed_size">此房间的屏幕大小固定</string>
+    <string name="vr_panel_sharpen">锐化</string>
+    <string name="vr_panel_supersample">超采样</string>
+    <string name="vr_panel_stats">统计信息</string>
+    <string name="vr_panel_head_locked">头动锁定</string>
+    <string name="vr_panel_head_aim">头部控制</string>
+    <string name="vr_panel_controllers">手柄</string>
+    <string name="vr_panel_pointer_sleep">指针休眠</string>
+    <string name="vr_panel_ray">射线</string>
+    <string name="vr_panel_controller_model">手柄模型</string>
+    <string name="vr_panel_click_sound">点击音</string>
+    <string name="vr_panel_normal">标准</string>
+    <string name="vr_panel_quality">高品质</string>
+    <string name="vr_panel_pointer">指针</string>
+    <string name="vr_panel_gamepad">游戏手柄</string>
+    <string name="vr_panel_glow_level">光晕强度</string>
+    <string name="vr_panel_shortcut_menu_grip">快捷键：左手菜单键 + 握把</string>
+    <string name="vr_panel_shortcut_sticks">快捷键：同时按下两个摇杆</string>
+    <string name="vr_panel_shortcut_triggers_grips">快捷键：扳机 + 握把</string>
+    <string name="vr_panel_preset">预设</string>
+    <string name="vr_panel_comfort">舒适</string>
+    <string name="vr_panel_balanced">均衡</string>
+    <string name="vr_panel_strong">强烈</string>
+    <string name="vr_panel_depth">深度</string>
+    <string name="vr_panel_convergence">汇聚</string>
+    <string name="vr_panel_harder_on_eyes">眼睛更易疲劳</string>
+    <string name="vr_panel_3d_off_in_settings">3D 已在设置中关闭</string>
+    <string name="vr_panel_contrast">对比度</string>
+    <string name="vr_panel_gamma">伽马</string>
+    <string name="vr_panel_saturation">饱和度</string>
+    <string name="vr_panel_version">版本 %1$s，提交 %2$s</string>
+    <string name="vr_panel_version_no_commit">版本 %1$s</string>
+    <!-- %1$s is where the log file is, like Download/Aaks/aaks.log -->
+    <string name="vr_panel_log_file">日志文件：%1$s</string>
+    <string name="vr_panel_log_file_off">日志文件：已关闭</string>
+    <string name="vr_panel_report_sends">发送一条附带头显信息、设置和日志的说明</string>
+    <string name="vr_panel_rooms">房间</string>
+    <!-- Keys on the keyboard inside the session, one key wide: Shift one and a half, space four -->
+    <string name="vr_key_shift">Shift</string>
+    <string name="vr_key_space">空格</string>
+    <string name="vr_key_enter">回车</string>
+    <string name="vr_key_hide">收起</string>
+    <string name="vr_key_ctrl">Ctrl</string>
+    <string name="vr_key_alt">Alt</string>
+    <string name="vr_key_win">Win</string>
+    <string name="vr_exit_question">退出串流？</string>
+    <string name="vr_exit">退出</string>
+</resources>

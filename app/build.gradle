@@ -1,0 +1,259 @@
+apply plugin: 'com.android.application'
+
+// Release signing details, kept out of the repo. Without them the release build is unsigned.
+def signingProps = new Properties()
+def signingPropsFile = rootProject.file('keystore.properties')
+if (signingPropsFile.exists()) {
+    signingPropsFile.withInputStream { signingProps.load(it) }
+}
+def canSign = signingProps.containsKey('storePassword')
+
+// Bug report collector address and token, from keystore.properties or -PaaksReportUrl /
+// -PaaksReportToken. Without them reports are only saved on the device.
+def reportUrl = signingProps.getProperty('reportUrl', project.findProperty('aaksReportUrl') ?: '')
+def reportToken = signingProps.getProperty('reportToken', project.findProperty('aaksReportToken') ?: '')
+// Reports carry the log, so only https is allowed.
+if (!reportUrl.toString().trim().isEmpty()
+        && !reportUrl.toString().trim().toLowerCase(Locale.ROOT).startsWith('https://')) {
+    throw new GradleException("reportUrl has to start with https://, and '"
+            + reportUrl.toString().trim() + "' does not. Fix it in keystore.properties"
+            + " or -PaaksReportUrl, or leave it empty for a build without a collector.")
+}
+def javaString = { String value ->
+    '"' + value.trim().replace('\\', '\\\\').replace('"', '\\"') + '"'
+}
+
+// The commit the build came from, with a + when the tree had changes. Empty without git.
+def gitHash = ''
+try {
+    def head = providers.exec {
+        commandLine 'git', 'rev-parse', '--short=10', 'HEAD'
+        ignoreExitValue = true
+    }
+    if (head.result.get().exitValue == 0) {
+        gitHash = head.standardOutput.asText.get().trim()
+        def diff = providers.exec {
+            commandLine 'git', 'diff', '--quiet', 'HEAD', '--'
+            ignoreExitValue = true
+        }
+        if (diff.result.get().exitValue != 0) {
+            gitHash += '+'
+        }
+    }
+} catch (Exception ignored) {
+    gitHash = ''
+}
+
+// Generates XrShared.java from xr_shared.h so Java and native share one set of constants.
+// The header may only hold plain #define lines of numbers and expressions over earlier ones;
+// anything else fails the build.
+abstract class GenerateXrShared extends DefaultTask {
+    @InputFile
+    abstract RegularFileProperty getHeader()
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDir()
+
+    @TaskAction
+    void generate() {
+        def headerFile = header.get().asFile
+        def define = ~/^#define\s+([A-Z][A-Z0-9_]*)\s+(.+?)\s*$/
+        def floats = [] as Set
+        def defined = [] as Set
+        def body = []
+        boolean inGuard = false
+        headerFile.eachLine { line ->
+            def trimmed = line.trim()
+            if (trimmed.startsWith('#ifndef')) {
+                // Skip the file comment above the include guard
+                inGuard = true
+                body.clear()
+                return
+            }
+            if (!inGuard || trimmed.startsWith('#endif')) {
+                return
+            }
+            if (trimmed.startsWith('//')) {
+                body << '    ' + trimmed
+                return
+            }
+            def m = define.matcher(line)
+            if (!m.matches()) {
+                if (trimmed.isEmpty() && !body.isEmpty() && body.last() != '') {
+                    body << ''
+                }
+                return
+            }
+            def name = m.group(1)
+            def value = m.group(2).replaceAll(/\s*\/\/.*$/, '').trim()
+            if (!(value ==~ /[A-Za-z0-9_.+\-*\/() ]+/)) {
+                throw new GradleException("${headerFile.name}: ${name} is not a plain constant: ${value}")
+            }
+            def names = value.findAll(/[A-Z][A-Z0-9_]*/)
+            def unknown = names.findAll { !(it in defined) }
+            if (!unknown.isEmpty()) {
+                throw new GradleException("${headerFile.name}: ${name} refers to ${unknown} before it is defined")
+            }
+            boolean isFloat = value ==~ /.*\d[fF]\b.*/ || value.contains('.') || names.any { it in floats }
+            if (isFloat) {
+                floats << name
+            }
+            defined << name
+            body << "    public static final ${isFloat ? 'float' : 'int'} ${name} = ${value};"
+        }
+        while (!body.isEmpty() && body.last() == '') {
+            body.removeLast()
+        }
+        def out = new File(outputDir.get().asFile, 'com/limelight/binding/video/XrShared.java')
+        out.parentFile.mkdirs()
+        out.text = ([
+            'package com.limelight.binding.video;',
+            '',
+            '/**',
+            " * Every value the native renderer and this side agree on, generated from",
+            " * ${headerFile.name} by the build. Change the header, not this file.",
+            ' */',
+            'public final class XrShared {',
+            '    private XrShared() {',
+            '    }',
+            '',
+        ] + body + ['}', '']).join('\n')
+    }
+}
+
+def generateXrShared = tasks.register('generateXrShared', GenerateXrShared) {
+    header = layout.projectDirectory.file('src/main/jni/xr-renderer/xr_shared.h')
+    outputDir = layout.buildDirectory.dir('generated/source/xrshared')
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.sources.java.addGeneratedSourceDirectory(generateXrShared, { it.outputDir })
+    }
+}
+
+android {
+    ndkVersion "29.0.14206865"
+
+    compileSdk 37
+
+    namespace 'com.limelight'
+
+    defaultConfig {
+        // Media3 needs 23
+        minSdk 23
+        targetSdk 36
+
+        versionName "12.1-xr0.4.3"
+        versionCode = 31407
+
+        applicationId "com.aaks.player"
+
+        ndk.debugSymbolLevel = 'FULL'
+        // Quest headsets are 64-bit ARM only
+        ndk.abiFilters 'arm64-v8a'
+
+        // Read by the bug report's device line
+        buildConfigField "boolean", "ROOT_BUILD", "false"
+
+        buildConfigField "String", "REPORT_URL", javaString(reportUrl.toString())
+        buildConfigField "String", "REPORT_TOKEN", javaString(reportToken.toString())
+        buildConfigField "String", "GIT_HASH", javaString(gitHash)
+    }
+
+    buildFeatures {
+        buildConfig = true
+        prefab = true
+        resValues = true
+    }
+
+    androidResources {
+        // The depth models are memory-mapped from the APK
+        noCompress 'tflite'
+    }
+
+    compileOptions {
+        encoding "UTF-8"
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+
+    lint {
+        disable 'MissingTranslation'
+    }
+
+    bundle {
+        language {
+            enableSplit = false
+        }
+        density {
+            // Density splits caused crashes from missing drawables
+            enableSplit = false
+        }
+    }
+
+    signingConfigs {
+        release {
+            if (canSign) {
+                storeFile rootProject.file(signingProps.getProperty('storeFile', 'release.keystore'))
+                storePassword signingProps.getProperty('storePassword')
+                keyAlias signingProps.getProperty('keyAlias', 'aaks')
+                // Most keystores use one password for both
+                keyPassword signingProps.getProperty('keyPassword',
+                                                     signingProps.getProperty('storePassword'))
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            resValue "string", "app_label", "Aaks"
+            resValue "string", "player_label", "Aaks"
+
+            // Debug-only renderer tuning properties and frame capture
+            externalNativeBuild {
+                ndkBuild {
+                    arguments "XR_DEBUG_KNOBS=1"
+                }
+            }
+
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                    'proguard-rules.pro', 'proguard-rules-debug.pro'
+        }
+        release {
+            resValue "string", "app_label", "Aaks"
+            resValue "string", "player_label", "Aaks"
+
+            if (canSign) {
+                signingConfig signingConfigs.release
+            }
+
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    externalNativeBuild {
+        ndkBuild {
+            path "src/main/jni/Android.mk"
+        }
+    }
+
+}
+
+dependencies {
+    // Khronos OpenXR loader, Apache 2.0
+    implementation 'org.khronos.openxr:openxr_loader_for_android:1.1.49'
+    // LiteRT runtime and GPU delegate, Apache 2.0
+    implementation 'com.google.ai.edge.litert:litert:1.4.2'
+    implementation 'com.google.ai.edge.litert:litert-gpu:1.4.2'
+    // Local file playback, Apache 2.0
+    implementation 'androidx.media3:media3-exoplayer:1.11.1'
+
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+
+    testImplementation 'junit:junit:4.13.2'
+}

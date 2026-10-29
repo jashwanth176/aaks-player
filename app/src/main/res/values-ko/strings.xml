@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preferences -->
+    <string name="vr_hand_hint_title">핸드 트래킹이 켜져 있습니다.</string>
+    <string name="vr_hand_hint_body">엄지와 검지를 빠르게 세 번 맞대면 손이 잠겨 실수로 한 핀치가 클릭되지 않습니다. 같은 트리플 핀치로 잠금이 풀립니다.</string>
+    <string name="vr_hand_hint_never">다시 표시 안 함</string>
+    <string name="vr_environment_passthrough">패스스루</string>
+    <string name="vr_environment_void">검은 공간</string>
+    <!-- %1$s is one of the vr_fail lines below, which say why -->
+    <string name="vr_fail_no_runtime">응답한 OpenXR 런타임이 없습니다</string>
+    <!-- %1$s is the names of the missing OpenXR extensions -->
+    <string name="vr_fail_extensions">OpenXR 런타임이 %1$s을(를) 제공하지 않습니다</string>
+    <!-- %1$s in the vr_fail lines is what the runtime answered, like XR_ERROR_RUNTIME_FAILURE -->
+    <string name="vr_fail_instance">런타임이 인스턴스를 거부했습니다 (%1$s)</string>
+    <string name="vr_fail_system">런타임이 준비된 헤드셋을 찾지 못했습니다 (%1$s)</string>
+    <string name="vr_fail_graphics">런타임이 OpenGL ES를 거부했습니다 (%1$s)</string>
+    <string name="vr_fail_egl">헤드셋의 그래픽 드라이버에 오류가 발생했습니다 (%1$s)</string>
+    <string name="vr_fail_session">런타임이 세션을 거부했습니다 (%1$s)</string>
+    <string name="vr_fail_space">런타임이 트래킹 공간을 거부했습니다 (%1$s)</string>
+    <string name="vr_fail_swapchain">런타임이 비디오 스왑체인을 거부했습니다 (%1$s)</string>
+    <string name="vr_fail_gl">렌더러의 셰이더를 빌드하지 못했습니다</string>
+    <!-- %1$s is a number of seconds -->
+    <string name="vr_fail_timeout">런타임이 %1$s초 안에 응답하지 않았습니다</string>
+    <string name="vr_fail_unknown">VR 세션을 시작할 수 없습니다</string>
+    <string name="vr_toast_rate">디스플레이 %1$d Hz</string>
+    <string name="vr_toast_hands_locked">손 잠김</string>
+    <string name="vr_toast_hands_unlocked">손 잠금 해제</string>
+    <string name="vr_toast_3d_off">3D 꺼짐</string>
+    <string name="vr_toast_3d_on">3D 켜짐</string>
+    <string name="vr_toast_head_aim_on">머리 조준 켜짐</string>
+    <string name="vr_toast_head_aim_on_more">고개를 돌리면 마우스가 움직입니다</string>
+    <string name="vr_toast_head_aim_off">머리 조준 꺼짐</string>
+    <string name="vr_toast_gamepad_mode">게임패드 모드</string>
+    <string name="vr_toast_gamepad_back_menu_grip">포인터로 돌아가려면 왼쪽 메뉴 버튼과 왼쪽 그립을 길게 누르세요</string>
+    <string name="vr_toast_gamepad_back_sticks">포인터로 돌아가려면 양쪽 썸스틱을 누르세요</string>
+    <string name="vr_toast_gamepad_back_triggers_grips">포인터로 돌아가려면 양쪽 트리거와 양쪽 그립을 쥐세요</string>
+    <string name="vr_toast_pointer_mode">포인터 모드</string>
+    <!-- The panels inside the session. They are drawn at a fixed size, so keep these short. -->
+    <string name="vr_panel_tab_screen">화면</string>
+    <string name="vr_panel_tab_display">표시</string>
+    <string name="vr_panel_3d">3D</string>
+    <string name="vr_panel_tab_picture">화질</string>
+    <string name="vr_panel_tab_about">정보</string>
+    <string name="vr_panel_tab_room">룸</string>
+    <string name="vr_panel_distance">거리</string>
+    <string name="vr_panel_height">높이</string>
+    <string name="vr_panel_tilt">기울기</string>
+    <string name="vr_panel_rotate">회전</string>
+    <string name="vr_panel_curve">곡률</string>
+    <string name="vr_panel_size">크기</string>
+    <string name="vr_panel_aim_sensitivity">머리 조준 감도</string>
+    <string name="vr_panel_aim_dead_zone">머리 조준 데드존</string>
+    <!-- Where head aim's rows are greyed out: the screen is not locked to the head. Names the Head locked row. -->
+    <string name="vr_panel_needs_head_lock">‘머리에 고정’ 필요</string>
+    <string name="vr_panel_not_in_room">룸에서는 사용 불가</string>
+    <string name="vr_panel_reset">초기화</string>
+    <string name="vr_panel_brightness">밝기</string>
+    <string name="vr_panel_glow">글로우</string>
+    <string name="vr_panel_screen_light">화면 조명</string>
+    <string name="vr_panel_light_level">조명 세기</string>
+    <string name="vr_panel_off">끔</string>
+    <string name="vr_panel_on">켬</string>
+    <string name="vr_panel_fixed_size">이 룸의 화면은 크기가 고정되어 있습니다</string>
+    <string name="vr_panel_sharpen">선명화</string>
+    <string name="vr_panel_supersample">슈퍼샘플링</string>
+    <string name="vr_panel_stats">통계</string>
+    <string name="vr_panel_head_locked">머리에 고정</string>
+    <string name="vr_panel_head_aim">머리 조준</string>
+    <string name="vr_panel_controllers">컨트롤러</string>
+    <string name="vr_panel_pointer_sleep">포인터 절전</string>
+    <string name="vr_panel_ray">광선</string>
+    <string name="vr_panel_controller_model">컨트롤러 모델</string>
+    <string name="vr_panel_click_sound">클릭음</string>
+    <string name="vr_panel_normal">보통</string>
+    <string name="vr_panel_quality">고품질</string>
+    <string name="vr_panel_pointer">포인터</string>
+    <string name="vr_panel_gamepad">게임패드</string>
+    <string name="vr_panel_glow_level">글로우 세기</string>
+    <string name="vr_panel_shortcut_menu_grip">단축키: 왼쪽 메뉴 + 그립</string>
+    <string name="vr_panel_shortcut_sticks">단축키: 양쪽 썸스틱</string>
+    <string name="vr_panel_shortcut_triggers_grips">단축키: 트리거 + 그립</string>
+    <string name="vr_panel_preset">프리셋</string>
+    <string name="vr_panel_comfort">편안함</string>
+    <string name="vr_panel_balanced">균형</string>
+    <string name="vr_panel_strong">강하게</string>
+    <string name="vr_panel_depth">깊이</string>
+    <string name="vr_panel_convergence">수렴</string>
+    <string name="vr_panel_harder_on_eyes">눈이 더 피로해짐</string>
+    <string name="vr_panel_3d_off_in_settings">설정에서 3D가 꺼져 있습니다</string>
+    <string name="vr_panel_contrast">대비</string>
+    <string name="vr_panel_gamma">감마</string>
+    <string name="vr_panel_saturation">채도</string>
+    <string name="vr_panel_version">버전 %1$s, 커밋 %2$s</string>
+    <string name="vr_panel_version_no_commit">버전 %1$s</string>
+    <!-- %1$s is where the log file is, like Download/Aaks/aaks.log -->
+    <string name="vr_panel_log_file">로그 파일: %1$s</string>
+    <string name="vr_panel_log_file_off">로그 파일: 꺼짐</string>
+    <string name="vr_panel_report_sends">헤드셋 정보, 설정, 로그와 함께 메모를 보냅니다</string>
+    <string name="vr_panel_rooms">룸</string>
+    <!-- Keys on the keyboard inside the session, one key wide: Shift one and a half, space four -->
+    <string name="vr_key_shift">Shift</string>
+    <string name="vr_key_space">스페이스</string>
+    <string name="vr_key_enter">Enter</string>
+    <string name="vr_key_hide">숨기기</string>
+    <string name="vr_key_ctrl">Ctrl</string>
+    <string name="vr_key_alt">Alt</string>
+    <string name="vr_key_win">Win</string>
+    <string name="vr_exit_question">스트림을 종료할까요?</string>
+    <string name="vr_exit">종료</string>
+    <!-- The report sheet inside the session -->
+    <string name="vr_report_note_hint">문제가 생겼을 때 무엇을 하고 있었나요?</string>
+    <string name="vr_report_optional">선택 사항</string>
+    <string name="vr_report_email_bad">올바른 이메일 주소가 아닌 것 같습니다</string>
+    <string name="vr_report_sends">메시지, 헤드셋과 빌드 정보, 설정, 앱 로그를 보냅니다. 로그에는 네트워크상 PC의 이름과 주소가 포함될 수 있습니다. ‘보내기’를 누르기 전에는 아무것도 보내지 않습니다.</string>
+    <string name="vr_report_not_written">보고서를 저장하지 못했습니다</string>
+    <string name="vr_battery">배터리 %1$d%%</string>
+    <string name="title_bug_report">문제 신고</string>
+    <!-- The About category at the end of the settings -->
+    <string name="bug_report_email_hint">답장을 받을 이메일 주소</string>
+    <string name="bug_report_message_hint">무슨 일이 있었나요?</string>
+    <string name="bug_report_send_direct">보내기</string>
+    <string name="bug_report_sending">보고서를 보내는 중…</string>
+    <string name="bug_report_sent">보고서를 보냈습니다</string>
+    <string name="bug_report_not_sent_at">보내지 못했습니다. 저장 위치:</string>
+    <string name="bug_report_busy_at">서버가 혼잡합니다. 저장 위치:</string>
+    <string name="bug_report_no_collector_at">수집 서버 없는 빌드. 저장 위치:</string>
+</resources>

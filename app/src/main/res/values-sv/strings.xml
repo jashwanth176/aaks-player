@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preferences -->
+    <string name="vr_hand_hint_title">Handspårning är på.</string>
+    <string name="vr_hand_hint_body">Nyp ihop tummen och pekfingret tre gånger snabbt för att låsa händerna, så att ett oavsiktligt nyp inte klickar; samma trippelnyp låser upp dem.</string>
+    <string name="vr_hand_hint_never">Visa inte igen</string>
+    <string name="vr_environment_passthrough">Passthrough</string>
+    <string name="vr_environment_void">Svart tomrum</string>
+    <!-- %1$s is one of the vr_fail lines below, which say why -->
+    <string name="vr_fail_no_runtime">Ingen OpenXR-runtime svarade</string>
+    <!-- %1$s is the names of the missing OpenXR extensions -->
+    <string name="vr_fail_extensions">OpenXR-runtimen erbjuder inte %1$s</string>
+    <!-- %1$s in the vr_fail lines is what the runtime answered, like XR_ERROR_RUNTIME_FAILURE -->
+    <string name="vr_fail_instance">Runtimen avvisade instansen (%1$s)</string>
+    <string name="vr_fail_system">Runtimen hittade inget headset som var redo (%1$s)</string>
+    <string name="vr_fail_graphics">Runtimen avvisade OpenGL ES (%1$s)</string>
+    <string name="vr_fail_egl">Headsetets grafikdrivrutin misslyckades (%1$s)</string>
+    <string name="vr_fail_session">Runtimen avvisade sessionen (%1$s)</string>
+    <string name="vr_fail_space">Runtimen avvisade ett spårningsutrymme (%1$s)</string>
+    <string name="vr_fail_swapchain">Runtimen avvisade videons swapchain (%1$s)</string>
+    <string name="vr_fail_gl">Renderarens shaders gick inte att bygga</string>
+    <!-- %1$s is a number of seconds -->
+    <string name="vr_fail_timeout">Runtimen svarade inte inom %1$s sekunder</string>
+    <string name="vr_fail_unknown">VR-sessionen kunde inte starta</string>
+    <string name="vr_toast_rate">Skärm %1$d Hz</string>
+    <string name="vr_toast_hands_locked">Händerna låsta</string>
+    <string name="vr_toast_hands_unlocked">Händerna upplåsta</string>
+    <string name="vr_toast_3d_off">3D av</string>
+    <string name="vr_toast_3d_on">3D på</string>
+    <string name="vr_toast_head_aim_on">Huvudstyrning på</string>
+    <string name="vr_toast_head_aim_on_more">När du vrider på huvudet flyttas musen</string>
+    <string name="vr_toast_head_aim_off">Huvudstyrning av</string>
+    <string name="vr_toast_gamepad_mode">Gamepadläge</string>
+    <string name="vr_toast_gamepad_back_menu_grip">Håll in vänster menyknapp och vänster grepp för att gå tillbaka till pekaren</string>
+    <string name="vr_toast_gamepad_back_sticks">Tryck in båda styrspakarna för att gå tillbaka till pekaren</string>
+    <string name="vr_toast_gamepad_back_triggers_grips">Kläm båda avtryckarna och båda greppen för att gå tillbaka till pekaren</string>
+    <string name="vr_toast_pointer_mode">Pekarläge</string>
+    <!-- The panels inside the session. They are drawn at a fixed size, so keep these short. -->
+    <string name="vr_panel_tab_screen">Skärm</string>
+    <string name="vr_panel_tab_display">Visning</string>
+    <string name="vr_panel_3d">3D</string>
+    <string name="vr_panel_tab_picture">Bild</string>
+    <string name="vr_panel_tab_about">Om</string>
+    <string name="vr_panel_tab_room">Rum</string>
+    <string name="vr_panel_distance">Avstånd</string>
+    <string name="vr_panel_height">Höjd</string>
+    <string name="vr_panel_tilt">Lutning</string>
+    <string name="vr_panel_rotate">Vridning</string>
+    <string name="vr_panel_curve">Krökning</string>
+    <string name="vr_panel_size">Storlek</string>
+    <string name="vr_panel_aim_sensitivity">Huvud: känslighet</string>
+    <string name="vr_panel_aim_dead_zone">Huvud: dödzon</string>
+    <!-- Where head aim's rows are greyed out: the screen is not locked to the head. Names the Head locked row. -->
+    <string name="vr_panel_needs_head_lock">kräver ”Låst vid huvudet”</string>
+    <string name="vr_panel_not_in_room">inte i ett rum</string>
+    <string name="vr_panel_reset">Återställ</string>
+    <string name="vr_panel_brightness">Ljusstyrka</string>
+    <string name="vr_panel_glow">Glöd</string>
+    <string name="vr_panel_screen_light">Skärmljus</string>
+    <string name="vr_panel_light_level">Ljusnivå</string>
+    <string name="vr_panel_off">Av</string>
+    <string name="vr_panel_on">På</string>
+    <string name="vr_panel_fixed_size">Det här rummets skärm har en fast storlek</string>
+    <string name="vr_panel_sharpen">Skärpa</string>
+    <string name="vr_panel_supersample">Supersampling</string>
+    <string name="vr_panel_stats">Statistik</string>
+    <string name="vr_panel_head_locked">Låst vid huvudet</string>
+    <string name="vr_panel_head_aim">Huvudstyrning</string>
+    <string name="vr_panel_controllers">Handkontroller</string>
+    <string name="vr_panel_pointer_sleep">Pekarvila</string>
+    <string name="vr_panel_ray">Stråle</string>
+    <string name="vr_panel_controller_model">Kontrollmodell</string>
+    <string name="vr_panel_click_sound">Klickljud</string>
+    <string name="vr_panel_normal">Normal</string>
+    <string name="vr_panel_quality">Kvalitet</string>
+    <string name="vr_panel_pointer">Pekare</string>
+    <string name="vr_panel_gamepad">Gamepad</string>
+    <string name="vr_panel_glow_level">Glödstyrka</string>
+    <string name="vr_panel_shortcut_menu_grip">Genväg: vänster meny + grepp</string>
+    <string name="vr_panel_shortcut_sticks">Genväg: båda styrspakarna</string>
+    <string name="vr_panel_shortcut_triggers_grips">Genväg: avtryckare + grepp</string>
+    <string name="vr_panel_preset">Förval</string>
+    <string name="vr_panel_comfort">Bekväm</string>
+    <string name="vr_panel_balanced">Balanserad</string>
+    <string name="vr_panel_strong">Stark</string>
+    <string name="vr_panel_depth">Djup</string>
+    <string name="vr_panel_convergence">Konvergens</string>
+    <string name="vr_panel_harder_on_eyes">tröttar ögonen mer</string>
+    <string name="vr_panel_3d_off_in_settings">3D är av i inställningarna</string>
+    <string name="vr_panel_contrast">Kontrast</string>
+    <string name="vr_panel_gamma">Gamma</string>
+    <string name="vr_panel_saturation">Färgmättnad</string>
+    <string name="vr_panel_version">Version %1$s, commit %2$s</string>
+    <string name="vr_panel_version_no_commit">Version %1$s</string>
+    <!-- %1$s is where the log file is, like Download/Aaks/aaks.log -->
+    <string name="vr_panel_log_file">Loggfil: %1$s</string>
+    <string name="vr_panel_log_file_off">Loggfil: av</string>
+    <string name="vr_panel_report_sends">Skickar en anteckning med headset, inställningar och logg</string>
+    <string name="vr_panel_rooms">Rum</string>
+    <!-- Keys on the keyboard inside the session, one key wide: Shift one and a half, space four -->
+    <string name="vr_key_shift">Shift</string>
+    <string name="vr_key_space">mellanslag</string>
+    <string name="vr_key_enter">Enter</string>
+    <string name="vr_key_hide">Dölj</string>
+    <string name="vr_key_ctrl">Ctrl</string>
+    <string name="vr_key_alt">Alt</string>
+    <string name="vr_key_win">Win</string>
+    <string name="vr_exit_question">Avsluta strömmen?</string>
+    <string name="vr_exit">Avsluta</string>
+    <!-- The report sheet inside the session -->
+    <string name="vr_report_note_hint">Vad gjorde du när det gick fel?</string>
+    <string name="vr_report_optional">Valfritt</string>
+    <string name="vr_report_email_bad">Det ser inte ut som en e-postadress</string>
+    <string name="vr_report_sends">Skickar ditt meddelande, uppgifter om headset och version, dina inställningar och appens logg, som kan innehålla datorns namn och adress i nätverket. Inget skickas förrän du trycker på ”Skicka”.</string>
+    <string name="vr_report_not_written">Rapporten kunde inte sparas</string>
+    <string name="vr_battery">Batteri %1$d%%</string>
+    <string name="title_bug_report">Rapportera ett problem</string>
+    <!-- The About category at the end of the settings -->
+    <string name="bug_report_email_hint">Din e-postadress, för ett svar</string>
+    <string name="bug_report_message_hint">Vad hände?</string>
+    <string name="bug_report_send_direct">Skicka</string>
+    <string name="bug_report_sending">Skickar rapporten…</string>
+    <string name="bug_report_sent">Rapporten skickad</string>
+    <string name="bug_report_not_sent_at">Kunde inte skicka, sparad i</string>
+    <string name="bug_report_busy_at">Servern är upptagen, sparad i</string>
+    <string name="bug_report_no_collector_at">Bygget saknar server, sparad i</string>
+</resources>

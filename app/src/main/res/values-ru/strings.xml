@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preferences -->
+    <string name="vr_hand_hint_title">Отслеживание рук включено.</string>
+    <string name="vr_hand_hint_body">Быстро сведите большой и указательный пальцы три раза, чтобы заблокировать руки и случайный жест не вызывал щелчок; тот же тройной жест их разблокирует.</string>
+    <string name="vr_hand_hint_never">Больше не показывать</string>
+    <string name="vr_environment_passthrough">Passthrough</string>
+    <string name="vr_environment_void">Чёрная пустота</string>
+    <!-- %1$s is one of the vr_fail lines below, which say why -->
+    <string name="vr_fail_no_runtime">Ни одна среда OpenXR не ответила</string>
+    <!-- %1$s is the names of the missing OpenXR extensions -->
+    <string name="vr_fail_extensions">Среда OpenXR не предоставляет %1$s</string>
+    <!-- %1$s in the vr_fail lines is what the runtime answered, like XR_ERROR_RUNTIME_FAILURE -->
+    <string name="vr_fail_instance">Среда отклонила экземпляр (%1$s)</string>
+    <string name="vr_fail_system">Среда не нашла готовый шлем (%1$s)</string>
+    <string name="vr_fail_graphics">Среда отклонила OpenGL ES (%1$s)</string>
+    <string name="vr_fail_egl">Сбой графического драйвера шлема (%1$s)</string>
+    <string name="vr_fail_session">Среда отклонила сеанс (%1$s)</string>
+    <string name="vr_fail_space">Среда отклонила пространство отслеживания (%1$s)</string>
+    <string name="vr_fail_swapchain">Среда отклонила видео-swapchain (%1$s)</string>
+    <string name="vr_fail_gl">Не удалось собрать шейдеры рендерера</string>
+    <!-- %1$s is a number of seconds -->
+    <string name="vr_fail_timeout">Среда не ответила за %1$s секунд</string>
+    <string name="vr_fail_unknown">Не удалось запустить сеанс VR</string>
+    <string name="vr_toast_rate">Дисплей %1$d Гц</string>
+    <string name="vr_toast_hands_locked">Руки заблокированы</string>
+    <string name="vr_toast_hands_unlocked">Руки разблокированы</string>
+    <string name="vr_toast_3d_off">3D выключено</string>
+    <string name="vr_toast_3d_on">3D включено</string>
+    <string name="vr_toast_head_aim_on">Управление головой включено</string>
+    <string name="vr_toast_head_aim_on_more">Поворот головы двигает мышь</string>
+    <string name="vr_toast_head_aim_off">Управление головой выключено</string>
+    <string name="vr_toast_gamepad_mode">Режим геймпада</string>
+    <string name="vr_toast_gamepad_back_menu_grip">Удерживайте левую кнопку меню и левый захват, чтобы вернуться к указателю</string>
+    <string name="vr_toast_gamepad_back_sticks">Нажмите оба стика, чтобы вернуться к указателю</string>
+    <string name="vr_toast_gamepad_back_triggers_grips">Сожмите оба курка и оба захвата, чтобы вернуться к указателю</string>
+    <string name="vr_toast_pointer_mode">Режим указателя</string>
+    <!-- The panels inside the session. They are drawn at a fixed size, so keep these short. -->
+    <string name="vr_panel_tab_screen">Экран</string>
+    <string name="vr_panel_tab_display">Вид</string>
+    <string name="vr_panel_3d">3D</string>
+    <string name="vr_panel_tab_picture">Картинка</string>
+    <string name="vr_panel_tab_about">Инфо</string>
+    <string name="vr_panel_tab_room">Комната</string>
+    <string name="vr_panel_distance">Расстояние</string>
+    <string name="vr_panel_height">Высота</string>
+    <string name="vr_panel_tilt">Наклон</string>
+    <string name="vr_panel_rotate">Поворот</string>
+    <string name="vr_panel_curve">Изгиб</string>
+    <string name="vr_panel_size">Размер</string>
+    <string name="vr_panel_aim_sensitivity">Чувствительность</string>
+    <string name="vr_panel_aim_dead_zone">Мёртвая зона</string>
+    <!-- Where head aim's rows are greyed out: the screen is not locked to the head. Names the Head locked row. -->
+    <string name="vr_panel_needs_head_lock">только с «Привязкой к голове»</string>
+    <string name="vr_panel_not_in_room">не в комнате</string>
+    <string name="vr_panel_reset">Сбросить</string>
+    <string name="vr_panel_brightness">Яркость</string>
+    <string name="vr_panel_glow">Свечение</string>
+    <string name="vr_panel_screen_light">Свет экрана</string>
+    <string name="vr_panel_light_level">Уровень света</string>
+    <string name="vr_panel_off">Выкл.</string>
+    <string name="vr_panel_on">Вкл.</string>
+    <string name="vr_panel_fixed_size">Экран в этой комнате фиксированного размера</string>
+    <string name="vr_panel_sharpen">Резкость</string>
+    <string name="vr_panel_supersample">Суперсэмплинг</string>
+    <string name="vr_panel_stats">Статистика</string>
+    <string name="vr_panel_head_locked">Привязка к голове</string>
+    <string name="vr_panel_head_aim">Управление головой</string>
+    <string name="vr_panel_controllers">Контроллеры</string>
+    <string name="vr_panel_pointer_sleep">Сон указателя</string>
+    <string name="vr_panel_ray">Луч</string>
+    <string name="vr_panel_controller_model">Модель контроллера</string>
+    <string name="vr_panel_click_sound">Звук щелчка</string>
+    <string name="vr_panel_normal">Обычный</string>
+    <string name="vr_panel_quality">Качество</string>
+    <string name="vr_panel_pointer">Указатель</string>
+    <string name="vr_panel_gamepad">Геймпад</string>
+    <string name="vr_panel_glow_level">Сила свечения</string>
+    <string name="vr_panel_shortcut_menu_grip">Сочетание: левые меню + захват</string>
+    <string name="vr_panel_shortcut_sticks">Сочетание: оба стика</string>
+    <string name="vr_panel_shortcut_triggers_grips">Сочетание: курки + захваты</string>
+    <string name="vr_panel_preset">Пресет</string>
+    <string name="vr_panel_comfort">Комфорт</string>
+    <string name="vr_panel_balanced">Баланс</string>
+    <string name="vr_panel_strong">Сильный</string>
+    <string name="vr_panel_depth">Глубина</string>
+    <string name="vr_panel_convergence">Конвергенция</string>
+    <string name="vr_panel_harder_on_eyes">утомляет глаза</string>
+    <string name="vr_panel_3d_off_in_settings">3D выключено в настройках</string>
+    <string name="vr_panel_contrast">Контраст</string>
+    <string name="vr_panel_gamma">Гамма</string>
+    <string name="vr_panel_saturation">Насыщенность</string>
+    <string name="vr_panel_version">Версия %1$s, коммит %2$s</string>
+    <string name="vr_panel_version_no_commit">Версия %1$s</string>
+    <!-- %1$s is where the log file is, like Download/Aaks/aaks.log -->
+    <string name="vr_panel_log_file">Файл журнала: %1$s</string>
+    <string name="vr_panel_log_file_off">Файл журнала: выключен</string>
+    <string name="vr_panel_report_sends">Отправляет заметку с данными шлема, настройками и журналом</string>
+    <string name="vr_panel_rooms">Комнаты</string>
+    <!-- Keys on the keyboard inside the session, one key wide: Shift one and a half, space four -->
+    <string name="vr_key_shift">Shift</string>
+    <string name="vr_key_space">пробел</string>
+    <string name="vr_key_enter">Ввод</string>
+    <string name="vr_key_hide">Скрыть</string>
+    <string name="vr_key_ctrl">Ctrl</string>
+    <string name="vr_key_alt">Alt</string>
+    <string name="vr_key_win">Win</string>
+    <string name="vr_exit_question">Завершить трансляцию?</string>
+    <string name="vr_exit">Завершить</string>
+    <!-- The report sheet inside the session -->
+    <string name="vr_report_note_hint">Что вы делали, когда возникла проблема?</string>
+    <string name="vr_report_optional">Необязательно</string>
+    <string name="vr_report_email_bad">Это не похоже на адрес эл. почты</string>
+    <string name="vr_report_sends">Отправляет ваше сообщение, сведения о шлеме и сборке, ваши настройки и журнал приложения, в котором могут быть имя и сетевой адрес вашего компьютера. Ничего не отправляется, пока вы не нажмёте «Отправить».</string>
+    <string name="vr_report_not_written">Не удалось сохранить отчёт</string>
+    <string name="vr_battery">Батарея %1$d%%</string>
+    <string name="title_bug_report">Сообщить о проблеме</string>
+    <!-- The About category at the end of the settings -->
+    <string name="bug_report_email_hint">Ваш адрес эл. почты, для ответа</string>
+    <string name="bug_report_message_hint">Что случилось?</string>
+    <string name="bug_report_send_direct">Отправить</string>
+    <string name="bug_report_sending">Отправка отчёта…</string>
+    <string name="bug_report_sent">Отчёт отправлен</string>
+    <string name="bug_report_not_sent_at">Не удалось отправить, сохранён в</string>
+    <string name="bug_report_busy_at">Сервер занят, сохранён в</string>
+    <string name="bug_report_no_collector_at">Сборка без сервера, сохранён в</string>
+</resources>

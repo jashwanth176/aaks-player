@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preferences -->
+
+    <string name="vr_hand_hint_title">Käsien seuranta on käytössä.</string>
+    <string name="vr_hand_hint_body">Nipistä peukalo ja etusormi yhteen kolme kertaa nopeasti lukitaksesi kädet, jottei vahingossa tehty nipistys napsauta; sama kolmoisnipistys avaa lukituksen.</string>
+    <string name="vr_hand_hint_never">Älä näytä uudelleen</string>
+    <string name="vr_environment_passthrough">Passthrough</string>
+    <string name="vr_environment_void">Musta tyhjyys</string>
+    <!-- %1$s is one of the vr_fail lines below, which say why -->
+    <string name="vr_fail_no_runtime">Mikään OpenXR-ajoympäristö ei vastannut</string>
+    <!-- %1$s is the names of the missing OpenXR extensions -->
+    <string name="vr_fail_extensions">OpenXR-ajoympäristöstä puuttuu %1$s</string>
+    <!-- %1$s in the vr_fail lines is what the runtime answered, like XR_ERROR_RUNTIME_FAILURE -->
+    <string name="vr_fail_instance">Ajoympäristö hylkäsi instanssin (%1$s)</string>
+    <string name="vr_fail_system">Ajoympäristö ei löytänyt valmiita laseja (%1$s)</string>
+    <string name="vr_fail_graphics">Ajoympäristö hylkäsi OpenGL ES:n (%1$s)</string>
+    <string name="vr_fail_egl">Lasien näytönohjaimen ajuri epäonnistui (%1$s)</string>
+    <string name="vr_fail_session">Ajoympäristö hylkäsi istunnon (%1$s)</string>
+    <string name="vr_fail_space">Ajoympäristö hylkäsi seurantatilan (%1$s)</string>
+    <string name="vr_fail_swapchain">Ajoympäristö hylkäsi videon swapchainin (%1$s)</string>
+    <string name="vr_fail_gl">Piirtäjän varjostimia ei voitu koota</string>
+    <!-- %1$s is a number of seconds -->
+    <string name="vr_fail_timeout">Ajoympäristö ei vastannut %1$s sekunnin kuluessa</string>
+    <string name="vr_fail_unknown">VR-istuntoa ei voitu käynnistää</string>
+    <string name="vr_toast_rate">Näyttö %1$d Hz</string>
+    <string name="vr_toast_hands_locked">Kädet lukittu</string>
+    <string name="vr_toast_hands_unlocked">Kätten lukitus avattu</string>
+    <string name="vr_toast_3d_off">3D pois</string>
+    <string name="vr_toast_3d_on">3D päällä</string>
+    <string name="vr_toast_head_aim_on">Pääohjaus päällä</string>
+    <string name="vr_toast_head_aim_on_more">Pään kääntäminen liikuttaa hiirtä</string>
+    <string name="vr_toast_head_aim_off">Pääohjaus pois</string>
+    <string name="vr_toast_gamepad_mode">Peliohjaintila</string>
+    <string name="vr_toast_gamepad_back_menu_grip">Pidä vasenta valikkopainiketta ja vasenta kahvaa pohjassa palataksesi osoittimeen</string>
+    <string name="vr_toast_gamepad_back_sticks">Paina molempia tikkuja palataksesi osoittimeen</string>
+    <string name="vr_toast_gamepad_back_triggers_grips">Purista molempia liipaisimia ja molempia kahvoja palataksesi osoittimeen</string>
+    <string name="vr_toast_pointer_mode">Osoitintila</string>
+    <!-- The panels inside the session. They are drawn at a fixed size, so keep these short. -->
+    <string name="vr_panel_tab_screen">Ruutu</string>
+    <string name="vr_panel_tab_display">Näkymä</string>
+    <string name="vr_panel_3d">3D</string>
+    <string name="vr_panel_tab_picture">Kuva</string>
+    <string name="vr_panel_tab_about">Tietoja</string>
+    <string name="vr_panel_tab_room">Huone</string>
+    <string name="vr_panel_distance">Etäisyys</string>
+    <string name="vr_panel_height">Korkeus</string>
+    <string name="vr_panel_tilt">Kallistus</string>
+    <string name="vr_panel_rotate">Kierto</string>
+    <string name="vr_panel_curve">Kaarevuus</string>
+    <string name="vr_panel_size">Koko</string>
+    <string name="vr_panel_aim_sensitivity">Pää: herkkyys</string>
+    <string name="vr_panel_aim_dead_zone">Pää: kuollut alue</string>
+    <!-- Where head aim's rows are greyed out: the screen is not locked to the head. Names the Head locked row. -->
+    <string name="vr_panel_needs_head_lock">vaatii ”Kiinni päässä”</string>
+    <string name="vr_panel_not_in_room">ei huoneessa</string>
+    <string name="vr_panel_reset">Palauta</string>
+    <string name="vr_panel_brightness">Kirkkaus</string>
+    <string name="vr_panel_glow">Hehku</string>
+    <string name="vr_panel_screen_light">Ruudun valo</string>
+    <string name="vr_panel_light_level">Valon määrä</string>
+    <string name="vr_panel_off">Pois</string>
+    <string name="vr_panel_on">Päällä</string>
+    <string name="vr_panel_fixed_size">Tämän huoneen ruudun koko on kiinteä</string>
+    <string name="vr_panel_sharpen">Terävöinti</string>
+    <string name="vr_panel_supersample">Ylinäytteistys</string>
+    <string name="vr_panel_stats">Tilastot</string>
+    <string name="vr_panel_head_locked">Kiinni päässä</string>
+    <string name="vr_panel_head_aim">Pääohjaus</string>
+    <string name="vr_panel_controllers">Ohjaimet</string>
+    <string name="vr_panel_pointer_sleep">Osoittimen lepo</string>
+    <string name="vr_panel_ray">Säde</string>
+    <string name="vr_panel_controller_model">Ohjaimen malli</string>
+    <string name="vr_panel_click_sound">Napsautusääni</string>
+    <string name="vr_panel_normal">Normaali</string>
+    <string name="vr_panel_quality">Laatu</string>
+    <string name="vr_panel_pointer">Osoitin</string>
+    <string name="vr_panel_gamepad">Peliohjain</string>
+    <string name="vr_panel_glow_level">Hehkun määrä</string>
+    <string name="vr_panel_shortcut_menu_grip">Pikakomento: valikko + kahva vas.</string>
+    <string name="vr_panel_shortcut_sticks">Pikakomento: molemmat tikut</string>
+    <string name="vr_panel_shortcut_triggers_grips">Pikakomento: liipaisimet + kahvat</string>
+    <string name="vr_panel_preset">Esiasetus</string>
+    <string name="vr_panel_comfort">Mukava</string>
+    <string name="vr_panel_balanced">Tasapaino</string>
+    <string name="vr_panel_strong">Voimakas</string>
+    <string name="vr_panel_depth">Syvyys</string>
+    <string name="vr_panel_convergence">Konvergenssi</string>
+    <string name="vr_panel_harder_on_eyes">rasittaa silmiä</string>
+    <string name="vr_panel_3d_off_in_settings">3D on pois päältä asetuksissa</string>
+    <string name="vr_panel_contrast">Kontrasti</string>
+    <string name="vr_panel_gamma">Gamma</string>
+    <string name="vr_panel_saturation">Värikylläisyys</string>
+    <string name="vr_panel_version">Versio %1$s, commit %2$s</string>
+    <string name="vr_panel_version_no_commit">Versio %1$s</string>
+    <!-- %1$s is where the log file is, like Download/Aaks/aaks.log -->
+    <string name="vr_panel_log_file">Lokitiedosto: %1$s</string>
+    <string name="vr_panel_log_file_off">Lokitiedosto: pois</string>
+    <string name="vr_panel_report_sends">Lähettää viestin, lasien tiedot, asetukset ja lokin</string>
+    <string name="vr_panel_rooms">Huoneet</string>
+    <!-- Keys on the keyboard inside the session, one key wide: Shift one and a half, space four -->
+    <string name="vr_key_shift">Shift</string>
+    <string name="vr_key_space">välilyönti</string>
+    <string name="vr_key_enter">Enter</string>
+    <string name="vr_key_hide">Piilota</string>
+    <string name="vr_key_ctrl">Ctrl</string>
+    <string name="vr_key_alt">Alt</string>
+    <string name="vr_key_win">Win</string>
+    <string name="vr_exit_question">Lopetetaanko suoratoisto?</string>
+    <string name="vr_exit">Lopeta</string>
+    <!-- The report sheet inside the session -->
+    <string name="vr_report_note_hint">Mitä olit tekemässä, kun ongelma ilmeni?</string>
+    <string name="vr_report_optional">Valinnainen</string>
+    <string name="vr_report_email_bad">Tämä ei näytä sähköpostiosoitteelta</string>
+    <string name="vr_report_sends">Lähettää viestisi, lasien ja version tiedot, asetuksesi ja sovelluksen lokin, jossa voi olla tietokoneesi nimi ja osoite verkossa. Mitään ei lähetetä, ennen kuin painat ”Lähetä”.</string>
+    <string name="vr_report_not_written">Raporttia ei voitu tallentaa</string>
+    <string name="vr_battery">Akku %1$d %%</string>
+    <string name="title_bug_report">Ilmoita ongelmasta</string>
+    <!-- The About category at the end of the settings -->
+    <string name="bug_report_email_hint">Sähköpostiosoitteesi vastausta varten</string>
+    <string name="bug_report_message_hint">Mitä tapahtui?</string>
+    <string name="bug_report_send_direct">Lähetä</string>
+    <string name="bug_report_sending">Lähetetään raporttia…</string>
+    <string name="bug_report_sent">Raportti lähetetty</string>
+    <string name="bug_report_not_sent_at">Lähetys epäonnistui, tallennettu:</string>
+    <string name="bug_report_busy_at">Palvelin ruuhkautunut, tallennettu:</string>
+    <string name="bug_report_no_collector_at">Versio ilman palvelinta, tallennettu:</string>
+</resources>

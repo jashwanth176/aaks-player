@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preferences -->
+    <string name="vr_hand_hint_title">Handtracking staat aan.</string>
+    <string name="vr_hand_hint_body">Knijp drie keer snel duim en wijsvinger samen om uw handen te vergrendelen, zodat een onbedoelde knijp niet klikt; dezelfde drievoudige knijp ontgrendelt ze.</string>
+    <string name="vr_hand_hint_never">Niet meer tonen</string>
+    <string name="vr_environment_passthrough">Passthrough</string>
+    <string name="vr_environment_void">Zwarte leegte</string>
+    <!-- %1$s is one of the vr_fail lines below, which say why -->
+    <string name="vr_fail_no_runtime">Geen OpenXR-runtime gaf antwoord</string>
+    <!-- %1$s is the names of the missing OpenXR extensions -->
+    <string name="vr_fail_extensions">De OpenXR-runtime biedt %1$s niet aan</string>
+    <!-- %1$s in the vr_fail lines is what the runtime answered, like XR_ERROR_RUNTIME_FAILURE -->
+    <string name="vr_fail_instance">De runtime weigerde de instantie (%1$s)</string>
+    <string name="vr_fail_system">De runtime vond geen gereede headset (%1$s)</string>
+    <string name="vr_fail_graphics">De runtime weigerde OpenGL ES (%1$s)</string>
+    <string name="vr_fail_egl">Het grafische stuurprogramma van de headset faalde (%1$s)</string>
+    <string name="vr_fail_session">De runtime weigerde de sessie (%1$s)</string>
+    <string name="vr_fail_space">De runtime weigerde een trackingruimte (%1$s)</string>
+    <string name="vr_fail_swapchain">De runtime weigerde de video-swapchain (%1$s)</string>
+    <string name="vr_fail_gl">De shaders van de renderer konden niet worden gebouwd</string>
+    <!-- %1$s is a number of seconds -->
+    <string name="vr_fail_timeout">De runtime antwoordde niet binnen %1$s seconden</string>
+    <string name="vr_fail_unknown">De VR-sessie kon niet starten</string>
+    <string name="vr_toast_rate">Scherm %1$d Hz</string>
+    <string name="vr_toast_hands_locked">Handen vergrendeld</string>
+    <string name="vr_toast_hands_unlocked">Handen ontgrendeld</string>
+    <string name="vr_toast_3d_off">3D uit</string>
+    <string name="vr_toast_3d_on">3D aan</string>
+    <string name="vr_toast_head_aim_on">Hoofdbesturing aan</string>
+    <string name="vr_toast_head_aim_on_more">Uw hoofd draaien beweegt de muis</string>
+    <string name="vr_toast_head_aim_off">Hoofdbesturing uit</string>
+    <string name="vr_toast_gamepad_mode">Gamepadmodus</string>
+    <string name="vr_toast_gamepad_back_menu_grip">Houd de linker menuknop en linker grip ingedrukt om terug te gaan naar de aanwijzer</string>
+    <string name="vr_toast_gamepad_back_sticks">Druk beide thumbsticks in om terug te gaan naar de aanwijzer</string>
+    <string name="vr_toast_gamepad_back_triggers_grips">Knijp beide triggers en beide grips in om terug te gaan naar de aanwijzer</string>
+    <string name="vr_toast_pointer_mode">Aanwijzermodus</string>
+    <!-- The panels inside the session. They are drawn at a fixed size, so keep these short. -->
+    <string name="vr_panel_tab_screen">Scherm</string>
+    <string name="vr_panel_tab_display">Weergave</string>
+    <string name="vr_panel_3d">3D</string>
+    <string name="vr_panel_tab_picture">Beeld</string>
+    <string name="vr_panel_tab_about">Info</string>
+    <string name="vr_panel_tab_room">Ruimte</string>
+    <string name="vr_panel_distance">Afstand</string>
+    <string name="vr_panel_height">Hoogte</string>
+    <string name="vr_panel_tilt">Kanteling</string>
+    <string name="vr_panel_rotate">Draaiing</string>
+    <string name="vr_panel_curve">Kromming</string>
+    <string name="vr_panel_size">Grootte</string>
+    <string name="vr_panel_aim_sensitivity">Hoofd: gevoeligheid</string>
+    <string name="vr_panel_aim_dead_zone">Hoofd: dode zone</string>
+    <!-- Where head aim's rows are greyed out: the screen is not locked to the head. Names the Head locked row. -->
+    <string name="vr_panel_needs_head_lock">vereist ‘Vast aan hoofd’</string>
+    <string name="vr_panel_not_in_room">niet in een ruimte</string>
+    <string name="vr_panel_reset">Herstellen</string>
+    <string name="vr_panel_brightness">Helderheid</string>
+    <string name="vr_panel_glow">Gloed</string>
+    <string name="vr_panel_screen_light">Schermlicht</string>
+    <string name="vr_panel_light_level">Lichtsterkte</string>
+    <string name="vr_panel_off">Uit</string>
+    <string name="vr_panel_on">Aan</string>
+    <string name="vr_panel_fixed_size">Het scherm van deze ruimte heeft een vaste grootte</string>
+    <string name="vr_panel_sharpen">Verscherpen</string>
+    <string name="vr_panel_supersample">Supersampling</string>
+    <string name="vr_panel_stats">Statistieken</string>
+    <string name="vr_panel_head_locked">Vast aan hoofd</string>
+    <string name="vr_panel_head_aim">Hoofdbesturing</string>
+    <string name="vr_panel_controllers">Controllers</string>
+    <string name="vr_panel_pointer_sleep">Aanwijzerpauze</string>
+    <string name="vr_panel_ray">Straal</string>
+    <string name="vr_panel_controller_model">Controllermodel</string>
+    <string name="vr_panel_click_sound">Klikgeluid</string>
+    <string name="vr_panel_normal">Normaal</string>
+    <string name="vr_panel_quality">Kwaliteit</string>
+    <string name="vr_panel_pointer">Aanwijzer</string>
+    <string name="vr_panel_gamepad">Gamepad</string>
+    <string name="vr_panel_glow_level">Gloedsterkte</string>
+    <string name="vr_panel_shortcut_menu_grip">Sneltoets: menu + grip links</string>
+    <string name="vr_panel_shortcut_sticks">Sneltoets: beide thumbsticks</string>
+    <string name="vr_panel_shortcut_triggers_grips">Sneltoets: triggers + grips</string>
+    <string name="vr_panel_preset">Voorinstelling</string>
+    <string name="vr_panel_comfort">Comfort</string>
+    <string name="vr_panel_balanced">Balans</string>
+    <string name="vr_panel_strong">Sterk</string>
+    <string name="vr_panel_depth">Diepte</string>
+    <string name="vr_panel_convergence">Convergentie</string>
+    <string name="vr_panel_harder_on_eyes">zwaarder voor de ogen</string>
+    <string name="vr_panel_3d_off_in_settings">3D staat uit in de instellingen</string>
+    <string name="vr_panel_contrast">Contrast</string>
+    <string name="vr_panel_gamma">Gamma</string>
+    <string name="vr_panel_saturation">Verzadiging</string>
+    <string name="vr_panel_version">Versie %1$s, commit %2$s</string>
+    <string name="vr_panel_version_no_commit">Versie %1$s</string>
+    <!-- %1$s is where the log file is, like Download/Aaks/aaks.log -->
+    <string name="vr_panel_log_file">Logbestand: %1$s</string>
+    <string name="vr_panel_log_file_off">Logbestand: uit</string>
+    <string name="vr_panel_report_sends">Verstuurt een notitie met de headset, uw instellingen en het log</string>
+    <string name="vr_panel_rooms">Ruimtes</string>
+    <!-- Keys on the keyboard inside the session, one key wide: Shift one and a half, space four -->
+    <string name="vr_key_shift">Shift</string>
+    <string name="vr_key_space">spatie</string>
+    <string name="vr_key_enter">Enter</string>
+    <string name="vr_key_hide">Verberg</string>
+    <string name="vr_key_ctrl">Ctrl</string>
+    <string name="vr_key_alt">Alt</string>
+    <string name="vr_key_win">Win</string>
+    <string name="vr_exit_question">Stream beëindigen?</string>
+    <string name="vr_exit">Beëindigen</string>
+    <!-- The report sheet inside the session -->
+    <string name="vr_report_note_hint">Wat deed u toen het misging?</string>
+    <string name="vr_report_optional">Optioneel</string>
+    <string name="vr_report_email_bad">Dat lijkt geen e-mailadres</string>
+    <string name="vr_report_sends">Verstuurt uw bericht, gegevens over de headset en de build, uw instellingen en het log van de app, dat de naam en het netwerkadres van uw pc kan bevatten. Er wordt niets verstuurd tot u op ‘Versturen’ drukt.</string>
+    <string name="vr_report_not_written">Het rapport kon niet worden opgeslagen</string>
+    <string name="vr_battery">Batterij %1$d%%</string>
+    <string name="title_bug_report">Een probleem melden</string>
+    <!-- The About category at the end of the settings -->
+    <string name="bug_report_email_hint">Uw e-mailadres, voor een antwoord</string>
+    <string name="bug_report_message_hint">Wat is er gebeurd?</string>
+    <string name="bug_report_send_direct">Versturen</string>
+    <string name="bug_report_sending">Rapport wordt verstuurd…</string>
+    <string name="bug_report_sent">Rapport verstuurd</string>
+    <string name="bug_report_not_sent_at">Versturen mislukt, opgeslagen in</string>
+    <string name="bug_report_busy_at">Server bezet, opgeslagen in</string>
+    <string name="bug_report_no_collector_at">Build zonder server, opgeslagen in</string>
+</resources>

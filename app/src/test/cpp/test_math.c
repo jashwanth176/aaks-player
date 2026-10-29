@@ -1,0 +1,423 @@
+// Tests for xr_math: vectors, quaternions, filters and screen geometry.
+#include "check.h"
+#include "xr_math.h"
+
+static const float HALF_PI = 1.5707963f;
+
+static XrQuaternionf identity(void) {
+    XrQuaternionf q = { 0.0f, 0.0f, 0.0f, 1.0f };
+    return q;
+}
+
+static void testVectors(void) {
+    Vec3 a = { 1.0f, 2.0f, 3.0f };
+    Vec3 b = { 0.5f, 0.5f, 0.5f };
+    Vec3 d = vecSub(a, b);
+    CHECK_NEAR(d.x, 0.5f, 1e-6);
+    CHECK_NEAR(d.y, 1.5f, 1e-6);
+    CHECK_NEAR(d.z, 2.5f, 1e-6);
+
+    Vec3 x = { 1.0f, 0.0f, 0.0f };
+    Vec3 y = { 0.0f, 1.0f, 0.0f };
+    Vec3 z = vecCross(x, y);
+    CHECK_NEAR(z.x, 0.0f, 1e-6);
+    CHECK_NEAR(z.y, 0.0f, 1e-6);
+    CHECK_NEAR(z.z, 1.0f, 1e-6);
+    CHECK_NEAR(vecDot(a, b), 3.0f, 1e-6);
+
+    Vec3 n = vecNorm(a);
+    CHECK_NEAR(sqrtf(vecDot(n, n)), 1.0f, 1e-6);
+    Vec3 zero = { 0.0f, 0.0f, 0.0f };
+    Vec3 nz = vecNorm(zero);
+    CHECK(nz.x == 0.0f && nz.y == 0.0f && nz.z == 0.0f);
+}
+
+static void testQuaternions(void) {
+    // A quarter turn about +y takes forward (-z) to -x.
+    Vec3 up = { 0.0f, 1.0f, 0.0f };
+    Vec3 forward = { 0.0f, 0.0f, -1.0f };
+    Vec3 turned = quatRotate(axisAngleQuat(up, HALF_PI), forward);
+    CHECK_NEAR(turned.x, -1.0f, 1e-5);
+    CHECK_NEAR(turned.y, 0.0f, 1e-5);
+    CHECK_NEAR(turned.z, 0.0f, 1e-5);
+
+    // q * conj(q) is identity.
+    XrQuaternionf q = axisAngleQuat(up, 0.7f);
+    XrQuaternionf back = quatMul(q, quatConj(q));
+    CHECK_NEAR(back.w, 1.0f, 1e-5);
+    CHECK_NEAR(back.x, 0.0f, 1e-5);
+
+    XrQuaternionf stretched = { 0.0f, 0.0f, 0.0f, 4.0f };
+    XrQuaternionf unit = quatNorm(stretched);
+    CHECK_NEAR(unit.w, 1.0f, 1e-6);
+    XrQuaternionf nothing = { 0.0f, 0.0f, 0.0f, 0.0f };
+    XrQuaternionf safe = quatNorm(nothing);
+    CHECK_NEAR(safe.w, 1.0f, 1e-6);
+
+    // A rotated basis gives back the rotation that made it.
+    Vec3 bx = { 1.0f, 0.0f, 0.0f };
+    Vec3 by = { 0.0f, 1.0f, 0.0f };
+    Vec3 bz = { 0.0f, 0.0f, 1.0f };
+    XrQuaternionf fromBasis = quatFromBasis(bx, by, bz);
+    CHECK_NEAR(fromBasis.w, 1.0f, 1e-6);
+    XrQuaternionf rot = axisAngleQuat(up, 0.4f);
+    XrQuaternionf rebuilt = quatFromBasis(quatRotate(rot, bx), quatRotate(rot, by),
+                                          quatRotate(rot, bz));
+    CHECK_NEAR(rebuilt.y, rot.y, 1e-5);
+    CHECK_NEAR(rebuilt.w, rot.w, 1e-5);
+}
+
+static void testEuroFilter(void) {
+    EuroState s = { 0 };
+    // First sample passes through.
+    CHECK_NEAR(euroFilter(&s, 3.0f, 0.01f, 1.0f, 0.0f), 3.0f, 1e-6);
+    // Constant input converges.
+    float v = 0.0f;
+    for (int i = 0; i < 500; i++) {
+        v = euroFilter(&s, 5.0f, 0.01f, 1.0f, 0.0f);
+    }
+    CHECK_NEAR(v, 5.0f, 1e-3);
+    // A step is smoothed.
+    float jumped = euroFilter(&s, 50.0f, 0.01f, 1.0f, 0.0f);
+    CHECK(jumped > 5.0f && jumped < 50.0f);
+
+    EuroQuatState qs = { 0 };
+    Vec3 up = { 0.0f, 1.0f, 0.0f };
+    XrQuaternionf target = axisAngleQuat(up, 1.0f);
+    XrQuaternionf out = identity();
+    for (int i = 0; i < 500; i++) {
+        out = euroFilterQuat(&qs, target, 0.01f, 1.0f, 0.0f);
+    }
+    CHECK_NEAR(out.y, target.y, 1e-3);
+    CHECK_NEAR(out.w, target.w, 1e-3);
+}
+
+static void testMatrices(void) {
+    float id[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+    float m[16];
+    for (int i = 0; i < 16; i++) {
+        m[i] = (float)i;
+    }
+    float out[16];
+    matMul(out, id, m);
+    for (int i = 0; i < 16; i++) {
+        CHECK_NEAR(out[i], m[i], 1e-6);
+    }
+
+    XrPosef pose;
+    pose.orientation = identity();
+    pose.position.x = pose.position.y = pose.position.z = 0.0f;
+    float view[16];
+    viewFromPose(view, pose);
+    for (int i = 0; i < 16; i++) {
+        CHECK_NEAR(view[i], id[i], 1e-6);
+    }
+
+    // Symmetric frustum: no off-centre terms.
+    XrFovf fov = { -0.5f, 0.5f, 0.4f, -0.4f };
+    float proj[16];
+    projectionFromFov(proj, fov, 0.1f, 10.0f);
+    CHECK_NEAR(proj[8], 0.0f, 1e-6);
+    CHECK_NEAR(proj[9], 0.0f, 1e-6);
+    CHECK_NEAR(proj[11], -1.0f, 1e-6);
+}
+
+// screenPoint -> aim from origin -> screenProject round-trips, flat and curved.
+static void testScreenRoundTrip(int curved) {
+    const float width = 3.0f;
+    const float height = 1.6875f;
+    const float radius = 6.0f;
+    XrPosef screen;
+    screen.orientation = identity();
+    screen.position.x = 0.0f;
+    screen.position.y = 0.0f;
+    screen.position.z = -3.0f;
+
+    const float points[][2] = { { 0.5f, 0.5f }, { 0.1f, 0.2f }, { 0.9f, 0.8f }, { 0.0f, 1.0f } };
+    for (size_t i = 0; i < sizeof(points) / sizeof(points[0]); i++) {
+        Vec3 target = screenPoint(points[i][0], points[i][1], screen, width, height,
+                                  radius, curved);
+        Vec3 dir = vecNorm(target);
+        Vec3 minusZ = { 0.0f, 0.0f, -1.0f };
+        Vec3 axis = vecCross(minusZ, dir);
+        float angle = acosf(vecDot(minusZ, dir));
+        XrPosef aim;
+        aim.position.x = aim.position.y = aim.position.z = 0.0f;
+        aim.orientation = angle < 1e-6f ? identity() : axisAngleQuat(vecNorm(axis), angle);
+
+        float u = -1.0f, v = -1.0f;
+        CHECK(screenProject(aim, screen, width, height, radius, curved, &u, &v));
+        CHECK_NEAR(u, points[i][0], 1e-3);
+        CHECK_NEAR(v, points[i][1], 1e-3);
+    }
+
+    // Aiming away misses the quad. The viewer is inside the cylinder, so it always
+    // hits, but far outside [0, 1].
+    XrPosef away;
+    away.position.x = away.position.y = away.position.z = 0.0f;
+    Vec3 up = { 0.0f, 1.0f, 0.0f };
+    away.orientation = axisAngleQuat(up, 3.1415927f);
+    float u = 0.5f, v = 0.5f;
+    int hit = screenProject(away, screen, width, height, radius, curved, &u, &v);
+    if (curved) {
+        CHECK(hit && (u < -1.0f || u > 2.0f));
+    }
+    else {
+        CHECK(!hit);
+    }
+}
+
+// Arcs beyond CYLINDER_MAX_ANGLE (just under a full turn) are scaled down to fit.
+static void testCylinderClamp(void) {
+    const float turn = 2.0f * 3.14159265f;
+    // Under the limit: unchanged.
+    CHECK_NEAR(cylinderAngle(3.0f, 3.55f), 3.0f / 3.55f, 1e-6);
+    CHECK(cylinderFit(3.0f, 3.55f) == 1.0f);
+    // 3 m wide at 0.2 m radius asks for 15 rad.
+    float angle = cylinderAngle(3.0f, 0.2f);
+    CHECK(angle < turn);
+    CHECK(angle > turn - 0.02f);
+    CHECK(angle == CYLINDER_MAX_ANGLE);
+    CHECK_NEAR(cylinderFit(3.0f, 0.2f), 0.2 * CYLINDER_MAX_ANGLE / 3.0, 1e-6);
+    CHECK_NEAR(cylinderFit(3.0f, 0.2f), 0.418, 1e-3);
+    // Zero radius still gives a valid angle.
+    CHECK(cylinderAngle(3.0f, 0.0f) == CYLINDER_MAX_ANGLE);
+    CHECK(cylinderFit(0.0f, 0.2f) == 1.0f);
+
+    // Sweep the panel's distance/width/curve ranges (radius computed as the panel does).
+    const float distances[] = { 0.2f, 0.3f, 0.5f, 1.0f, 2.0f, 3.0f, 8.0f };
+    const float widths[] = { 0.8f, 1.5f, 3.0f, 5.0f, 8.0f };
+    const float curves[] = { 0.02f, 0.25f, 0.5f, 0.75f, 1.0f };
+    int over = 0, wrong = 0, held = 0;
+    for (int i = 0; i < (int)(sizeof(distances) / sizeof(distances[0])); i++) {
+        for (int j = 0; j < (int)(sizeof(widths) / sizeof(widths[0])); j++) {
+            for (int k = 0; k < (int)(sizeof(curves) / sizeof(curves[0])); k++) {
+                float r = distances[i] * (1.0f + 3.0f * (1.0f - curves[k]));
+                float w = widths[j];
+                float a = cylinderAngle(w, r);
+                float fit = cylinderFit(w, r);
+                if (!(a > 0.0f && a < turn) || !(fit > 0.0f && fit <= 1.0f)) {
+                    over++;
+                }
+                // Arc length == width * fit.
+                if (fabsf(a * r - w * fit) > 1e-4f * w) {
+                    wrong++;
+                }
+                if (w / r < CYLINDER_MAX_ANGLE) {
+                    if (a != w / r || fit != 1.0f) wrong++;
+                }
+                else {
+                    held++;
+                }
+            }
+        }
+    }
+    CHECK(over == 0);
+    CHECK(wrong == 0);
+    CHECK(held > 10);
+
+    // Clamped cylinder still round-trips, edges included (viewer on the axis).
+    const float width = 3.0f;
+    const float height = 1.6875f;
+    const float radius = 0.2f;
+    XrPosef screen;
+    screen.orientation = identity();
+    screen.position.x = 0.0f;
+    screen.position.y = 0.0f;
+    screen.position.z = -radius;
+    const float points[][2] = { { 0.5f, 0.5f }, { 0.1f, 0.2f }, { 0.9f, 0.8f }, { 0.0f, 0.0f },
+                                { 1.0f, 1.0f } };
+    for (size_t p = 0; p < sizeof(points) / sizeof(points[0]); p++) {
+        Vec3 target = screenPoint(points[p][0], points[p][1], screen, width, height, radius, 1);
+        CHECK_NEAR(sqrtf(target.x * target.x + target.z * target.z), radius, 1e-5);
+        CHECK_NEAR(target.y, (0.5f - points[p][1]) * height * cylinderFit(width, radius), 1e-5);
+        Vec3 dir = vecNorm(target);
+        Vec3 minusZ = { 0.0f, 0.0f, -1.0f };
+        Vec3 axis = vecCross(minusZ, dir);
+        float turnTo = acosf(fmaxf(-1.0f, fminf(1.0f, vecDot(minusZ, dir))));
+        XrPosef aim;
+        aim.position.x = aim.position.y = aim.position.z = 0.0f;
+        aim.orientation = vecDot(axis, axis) < 1e-12f ? identity()
+                                                      : axisAngleQuat(vecNorm(axis), turnTo);
+        float u = -1.0f, v = -1.0f;
+        CHECK(screenProject(aim, screen, width, height, radius, 1, &u, &v));
+        CHECK_NEAR(u, points[p][0], 1e-3);
+        CHECK_NEAR(v, points[p][1], 1e-3);
+    }
+    // Edges at +/- half the clamped angle.
+    Vec3 right = screenPoint(1.0f, 0.5f, screen, width, height, radius, 1);
+    CHECK_NEAR(atan2f(right.x, -right.z), 0.5f * CYLINDER_MAX_ANGLE, 1e-4);
+}
+
+static void testCurveLocal(void) {
+    Vec3 flat = { 1.0f, 0.5f, 0.02f };
+    float yaw = 1.0f;
+    curveLocal(&flat, 6.0f, 0, &yaw);
+    CHECK_NEAR(flat.x, 1.0f, 1e-6);
+    CHECK_NEAR(flat.z, 0.02f, 1e-6);
+    CHECK_NEAR(yaw, 0.0f, 1e-6);
+
+    // Offset from the surface is kept as distance from the axis; the arc centre stays put.
+    Vec3 middle = { 0.0f, 0.0f, 0.01f };
+    curveLocal(&middle, 6.0f, 1, &yaw);
+    CHECK_NEAR(middle.x, 0.0f, 1e-6);
+    CHECK_NEAR(middle.z, 0.01f, 1e-6);
+    Vec3 edge = { 1.5f, 0.0f, 0.01f };
+    curveLocal(&edge, 6.0f, 1, &yaw);
+    float fromAxis = sqrtf(edge.x * edge.x + (edge.z - 6.0f) * (edge.z - 6.0f));
+    CHECK_NEAR(fromAxis, 6.0f - 0.01f, 1e-4);
+    CHECK_NEAR(yaw, -1.5f / 6.0f, 1e-6);
+}
+
+// Head yaw relative to the screen (drives virtual surround).
+static void testYawBetween(void) {
+    Vec3 up = { 0.0f, 1.0f, 0.0f };
+    Vec3 right = { 1.0f, 0.0f, 0.0f };
+    Vec3 forward = { 0.0f, 0.0f, -1.0f };
+    const float DEG = 3.1415927f / 180.0f;
+
+    CHECK_NEAR(yawBetween(identity(), identity()), 0.0f, 1e-6);
+
+    // Left positive, right negative.
+    CHECK_NEAR(yawBetween(axisAngleQuat(up, HALF_PI), identity()), HALF_PI, 1e-5);
+    CHECK_NEAR(yawBetween(axisAngleQuat(up, -30.0f * DEG), identity()), -30.0f * DEG, 1e-5);
+
+    // Relative to the screen's own yaw.
+    XrQuaternionf both = axisAngleQuat(up, 0.8f);
+    CHECK_NEAR(yawBetween(both, both), 0.0f, 1e-5);
+    XrQuaternionf screenLeft = axisAngleQuat(up, 40.0f * DEG);
+    CHECK_NEAR(yawBetween(identity(), screenLeft), -40.0f * DEG, 1e-5);
+
+    // Wraps the short way: 20 degrees, not 340.
+    XrQuaternionf screen = axisAngleQuat(up, 170.0f * DEG);
+    XrQuaternionf head = axisAngleQuat(up, -170.0f * DEG);
+    CHECK_NEAR(yawBetween(head, screen), 20.0f * DEG, 1e-4);
+    CHECK_NEAR(yawBetween(screen, head), -20.0f * DEG, 1e-4);
+
+    // Pitch and roll do not count as yaw.
+    CHECK_NEAR(yawBetween(axisAngleQuat(right, 30.0f * DEG), identity()), 0.0f, 1e-5);
+    CHECK_NEAR(yawBetween(axisAngleQuat(forward, 30.0f * DEG), identity()), 0.0f, 1e-5);
+    XrQuaternionf turned = quatMul(axisAngleQuat(up, 25.0f * DEG),
+                                   axisAngleQuat(right, -20.0f * DEG));
+    CHECK_NEAR(yawBetween(turned, identity()), 25.0f * DEG, 1e-4);
+}
+
+// Head-locked input: a pose 40 cm ahead of the head comes out at (0, 0, -0.4) in head space.
+static void testPoseInFrame(void) {
+    Vec3 up = { 0.0f, 1.0f, 0.0f };
+    Vec3 right = { 1.0f, 0.0f, 0.0f };
+    XrPosef head;
+    head.orientation = quatMul(axisAngleQuat(up, 1.2f), axisAngleQuat(right, -0.3f));
+    head.position.x = 0.5f;
+    head.position.y = 1.6f;
+    head.position.z = -0.2f;
+
+    Vec3 ahead = { 0.0f, 0.0f, -0.4f };
+    Vec3 off = quatRotate(head.orientation, ahead);
+    XrPosef aim;
+    aim.orientation = head.orientation;
+    aim.position.x = head.position.x + off.x;
+    aim.position.y = head.position.y + off.y;
+    aim.position.z = head.position.z + off.z;
+
+    XrPosef seen = poseInFrame(head, aim);
+    CHECK_NEAR(seen.position.x, 0.0, 1e-5);
+    CHECK_NEAR(seen.position.y, 0.0, 1e-5);
+    CHECK_NEAR(seen.position.z, -0.4, 1e-5);
+    CHECK_NEAR(fabsf(seen.orientation.w), 1.0, 1e-5);
+
+    XrPosef self = poseInFrame(head, head);
+    CHECK_NEAR(self.position.x, 0.0, 1e-6);
+    CHECK_NEAR(self.position.z, 0.0, 1e-6);
+    CHECK_NEAR(fabsf(self.orientation.w), 1.0, 1e-6);
+
+    XrPosef origin = { { 0.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, 0.0f } };
+    XrPosef same = poseInFrame(origin, aim);
+    CHECK_NEAR(same.position.x, aim.position.x, 1e-6);
+    CHECK_NEAR(same.position.y, aim.position.y, 1e-6);
+    CHECK_NEAR(same.orientation.y, aim.orientation.y, 1e-6);
+
+    XrPosef screen = { { 0.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, -3.0f } };
+    float u = 0.0f, v = 0.0f;
+    CHECK(screenProject(seen, screen, 3.0f, 1.6875f, 0.0f, 0, &u, &v));
+    CHECK_NEAR(u, 0.5, 1e-5);
+    CHECK_NEAR(v, 0.5, 1e-5);
+}
+
+// Yaw, then pitch, then roll, as the screen orientation is built.
+static XrQuaternionf screenAngles(float yaw, float pitch, float roll) {
+    Vec3 up = { 0.0f, 1.0f, 0.0f };
+    Vec3 right = { 1.0f, 0.0f, 0.0f };
+    Vec3 fwd = { 0.0f, 0.0f, 1.0f };
+    XrQuaternionf q = quatMul(axisAngleQuat(up, yaw), axisAngleQuat(right, -pitch));
+    return quatNorm(quatMul(q, axisAngleQuat(fwd, roll)));
+}
+
+// |dot|, since q and -q are the same rotation.
+static double quatAgreement(XrQuaternionf a, XrQuaternionf b) {
+    return fabs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w);
+}
+
+static void testRecentre(void) {
+    // 40 deg left, 2 m out, 0.3 m up, pitched 10 deg and rolled 5.
+    float turn = 40.0f * (float)M_PI / 180.0f;
+    float tilt = 10.0f * (float)M_PI / 180.0f;
+    float roll = 5.0f * (float)M_PI / 180.0f;
+    XrPosef swung;
+    swung.position.x = -2.0f * sinf(turn);
+    swung.position.y = 0.3f;
+    swung.position.z = -2.0f * cosf(turn);
+    swung.orientation = screenAngles(turn, tilt, roll);
+    XrPosef back = poseRecentred(swung);
+    CHECK_NEAR(back.position.x, 0.0, 1e-6);
+    CHECK_NEAR(back.position.y, 0.3, 1e-6);
+    CHECK_NEAR(back.position.z, -2.0, 1e-5);
+    // Yaw removed; pitch and roll kept.
+    CHECK_NEAR(quatAgreement(back.orientation, screenAngles(0.0f, tilt, roll)), 1.0, 1e-5);
+    float before = sqrtf(swung.position.x * swung.position.x + swung.position.y * swung.position.y
+                         + swung.position.z * swung.position.z);
+    float after = sqrtf(back.position.x * back.position.x + back.position.y * back.position.y
+                        + back.position.z * back.position.z);
+    CHECK_NEAR(after, before, 1e-5);
+
+    XrPosef ahead = { { 0.0f, 0.0f, 0.0f, 1.0f }, { 0.0f, 0.0f, -1.5f } };
+    XrPosef same = poseRecentred(ahead);
+    CHECK_NEAR(same.position.x, 0.0, 1e-6);
+    CHECK_NEAR(same.position.z, -1.5, 1e-6);
+    CHECK_NEAR(quatAgreement(same.orientation, ahead.orientation), 1.0, 1e-6);
+
+    // Behind the viewer comes round to the front.
+    XrPosef behind;
+    behind.position.x = 0.0f;
+    behind.position.y = -0.2f;
+    behind.position.z = 2.5f;
+    behind.orientation = screenAngles((float)M_PI, 0.0f, 0.0f);
+    XrPosef front = poseRecentred(behind);
+    CHECK_NEAR(front.position.x, 0.0, 1e-6);
+    CHECK_NEAR(front.position.y, -0.2, 1e-6);
+    CHECK_NEAR(front.position.z, -2.5, 1e-5);
+    CHECK_NEAR(quatAgreement(front.orientation, ahead.orientation), 1.0, 1e-5);
+
+    // Off to the side: ends facing the viewer at the same horizontal distance.
+    XrPosef carried = { { 0.0f, 0.0f, 0.0f, 1.0f }, { 1.0f, 0.1f, -1.0f } };
+    XrPosef squared = poseRecentred(carried);
+    CHECK_NEAR(squared.position.x, 0.0, 1e-6);
+    CHECK_NEAR(squared.position.y, 0.1, 1e-6);
+    CHECK_NEAR(squared.position.z, -sqrt(2.0), 1e-5);
+    CHECK_NEAR(quatAgreement(squared.orientation, ahead.orientation), 1.0, 1e-6);
+}
+
+int main(void) {
+    testVectors();
+    testQuaternions();
+    testEuroFilter();
+    testMatrices();
+    testScreenRoundTrip(0);
+    testScreenRoundTrip(1);
+    testCylinderClamp();
+    testCurveLocal();
+    testYawBetween();
+    testPoseInFrame();
+    testRecentre();
+    return checksDone("xr_math");
+}
