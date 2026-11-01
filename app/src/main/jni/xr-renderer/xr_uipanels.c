@@ -88,10 +88,10 @@ int uiPanelAt(XrCtx* ctx, XrPosef aim, float* outU, float* outV) {
         return -1;
     }
     // Subtitles are not hit tested
-    static const int order[4] = {
-        UI_PANEL_SHEET, UI_PANEL_CONTROLS, UI_PANEL_TOP, UI_PANEL_RAIL
+    static const int order[5] = {
+        UI_PANEL_DIALOG, UI_PANEL_SHEET, UI_PANEL_CONTROLS, UI_PANEL_TOP, UI_PANEL_RAIL
     };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         int id = order[i];
         if (!ctx->ui[id].ready || !ctx->ui[id].visible || ctx->ui[id].level < 0.5f) {
             continue;

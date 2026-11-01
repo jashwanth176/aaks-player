@@ -174,7 +174,9 @@
 #define UI_PANEL_SUBS 4
 // Spinner over the screen while a film's first frame is late; shown by the renderer
 #define UI_PANEL_LOADING 5
-#define UI_PANEL_COUNT 6
+// A dialog over the sheet (delete confirmation), floated in front of it
+#define UI_PANEL_DIALOG 6
+#define UI_PANEL_COUNT 7
 // Fixed-size panels: radians per pixel
 #define UI_PX_ANGLE 0.0004f
 // Panel anchors. The gap is away from the edge, or towards the viewer for FRONT.

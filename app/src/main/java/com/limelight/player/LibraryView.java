@@ -92,8 +92,9 @@ final class LibraryView {
     private int dragFrom;
     private float glideY, glideVelocity;
     private long glideLastMs;
-    // Delete confirmation, over the whole panel
+    // Delete confirmation: a dim over the whole panel, and the dialog in its own panel
     private final View confirm;
+    private final ViewGroup dialog;
     private final TextView confirmName, confirmInfo;
     private File pendingDelete;
 
@@ -223,7 +224,7 @@ final class LibraryView {
         LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 84);
         rowLp.topMargin = 36;
         dialog.addView(buttons, rowLp);
-        scrim.addView(dialog, new FrameLayout.LayoutParams(640, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        this.dialog = UiKit.wrap(context, dialog);
         scrim.setVisibility(View.GONE);
         root.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
@@ -284,6 +285,15 @@ final class LibraryView {
                 host.onChanged();
             });
         }, "LibraryView delete").start();
+    }
+
+    /** The delete dialog, drawn in its own panel while confirming(). */
+    ViewGroup dialog() {
+        return dialog;
+    }
+
+    boolean confirming() {
+        return pendingDelete != null;
     }
 
     /** Hides Done when there is nothing to return to. */

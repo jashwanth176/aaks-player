@@ -35,6 +35,7 @@ import static com.limelight.binding.video.XrShared.UI_ANCHOR_FRONT;
 import static com.limelight.binding.video.XrShared.UI_ANCHOR_LEFT;
 import static com.limelight.binding.video.XrShared.UI_PANEL_CONTROLS;
 import static com.limelight.binding.video.XrShared.UI_PANEL_COUNT;
+import static com.limelight.binding.video.XrShared.UI_PANEL_DIALOG;
 import static com.limelight.binding.video.XrShared.UI_PANEL_LOADING;
 import static com.limelight.binding.video.XrShared.UI_PANEL_RAIL;
 import static com.limelight.binding.video.XrShared.UI_PANEL_SHEET;
@@ -160,8 +161,9 @@ final class PlayerUi implements XrRenderer.UiListener {
     // Sheets float toward the viewer, except in browse mode where they take the library's place
     private static final int SHEET_GAP = 190;
     private static final int LOADING_SIZE = 160;
+    private static final int DIALOG_W = 640, DIALOG_H = 600, DIALOG_GAP = 60;
     // How far panels float toward the viewer, as a share of the distance to the screen
-    private static final float CHROME_DEPTH = 0.06f, SHEET_DEPTH = 0.1f;
+    private static final float CHROME_DEPTH = 0.06f, SHEET_DEPTH = 0.1f, DIALOG_DEPTH = 0.16f;
     // Subtitles belong to the picture, so they scale with it: width and gaps as fractions of
     // the screen width. They sit above the bottom edge, raised further while the controls show.
     private static final float SUBS_FRAC = 0.8f;
@@ -339,10 +341,17 @@ final class PlayerUi implements XrRenderer.UiListener {
             public void onChanged() {
                 if (sheet == SHEET_LIBRARY) {
                     markDirty(UI_PANEL_SHEET);
+                    markDirty(UI_PANEL_DIALOG);
                     renderDirty();
+                    applyVisibility(true);
                 }
             }
         });
+        panels[UI_PANEL_DIALOG] = new Panel(UI_PANEL_DIALOG, library.dialog(), DIALOG_W, DIALOG_H,
+                UI_ANCHOR_FRONT, DIALOG_GAP);
+        panels[UI_PANEL_DIALOG].wrap = true;
+        panels[UI_PANEL_DIALOG].dirty = false;
+        renderer.setUiPanelDepth(UI_PANEL_DIALOG, DIALOG_DEPTH);
         sheetRoots[SHEET_LIBRARY] = library.root();
         panels[UI_PANEL_SHEET] = new Panel(UI_PANEL_SHEET, sheetRoots[SHEET_SETTINGS],
                 SHEET_W, SHEET_H, UI_ANCHOR_FRONT, SHEET_GAP);
@@ -376,8 +385,10 @@ final class PlayerUi implements XrRenderer.UiListener {
         for (View row : filmRows) {
             row.setVisibility(View.GONE);
         }
-        // The library window is what the handles frame, so it stays on the screen plane
+        // The library window is what the handles frame, so it and the rail beside it stay on
+        // the screen plane; only the dialog floats
         renderer.setUiPanelDepth(UI_PANEL_SHEET, 0.0f);
+        renderer.setUiPanelDepth(UI_PANEL_RAIL, 0.0f);
         // Shrink the rail to the remaining icons
         panels[UI_PANEL_RAIL].height = railHeight(3);
         markDirty(UI_PANEL_RAIL);
@@ -395,6 +406,7 @@ final class PlayerUi implements XrRenderer.UiListener {
                 row.setVisibility(View.VISIBLE);
             }
             renderer.setUiPanelDepth(UI_PANEL_SHEET, SHEET_DEPTH);
+            renderer.setUiPanelDepth(UI_PANEL_RAIL, CHROME_DEPTH);
             panels[UI_PANEL_RAIL].height = RAIL_H;
             markDirty(UI_PANEL_RAIL);
         }
@@ -818,6 +830,10 @@ final class PlayerUi implements XrRenderer.UiListener {
                     visible = subsVisible;
                     p.gap = (show ? SUBS_GAP_RAISED : SUBS_GAP_LOW) - subStyle.lift();
                     break;
+                case UI_PANEL_DIALOG:
+                    visible = sheet == SHEET_LIBRARY && library.confirming();
+                    p.gap = browse ? DIALOG_GAP : SHEET_GAP + DIALOG_GAP;
+                    break;
                 default:
                     visible = show;
                     break;
@@ -902,8 +918,11 @@ final class PlayerUi implements XrRenderer.UiListener {
         for (Panel p : panels) {
             if (p != null && p.dirty) {
                 p.dirty = false;
-                // A closed sheet is redrawn when it next opens
+                // A closed sheet or dialog is redrawn when it next opens
                 if (p.id == UI_PANEL_SHEET && sheet == SHEET_NONE) {
+                    continue;
+                }
+                if (p.id == UI_PANEL_DIALOG && !library.confirming()) {
                     continue;
                 }
                 render(p);
