@@ -264,29 +264,62 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         }
     }
 
-    // Another film or the library, in the running session
+    // Counts opens, so a probe that finishes after the next open is dropped
+    private int openToken;
+    // The screen's size per eye as last configured
+    private int eyeW = 1920, eyeH = 1080;
+
+    // Another film or the library, in the running session. Probing a big file takes seconds,
+    // so it runs off the main thread while the film's chrome and the spinner are already up.
     private void reload() {
         PlaybackEngine old = engine;
         engine = null;
         if (old != null) {
             old.release();
         }
-        Film f = plan();
+        final int token = ++openToken;
+        final Uri uri = getIntent().getData();
+        boolean probed = uri != null && !("file".equals(uri.getScheme()) && uri.getPath() != null
+                && VideoLibrary.isDisc(new File(uri.getPath())));
+        if (!probed) {
+            show(plan());
+            return;
+        }
+        renderer.setVideoColour(XrShared.VIDEO_TRANSFER_CODE_SDR, 0.0f, 0.0f);
+        renderer.setPlayerContent(0.0f, 0.0f);
+        renderer.reconfigure(eyeW, eyeH, 24, XrShared.DEPTH_MODE_OFF, false, false, true);
+        ui.startFilm(titleFor(uri));
+        new Thread(() -> {
+            VideoProbe read = VideoProbe.read(PlayerXR.this, uri);
+            main.post(() -> {
+                if (token == openToken && !finishing) {
+                    show(plan(read));
+                }
+            });
+        }, "PlayerXR probe").start();
+    }
+
+    private void show(Film f) {
         renderer.setVideoColour(XrShared.VIDEO_TRANSFER_CODE_SDR, 0.0f, 0.0f);
         renderer.setPlayerContent(f.known.barsKnown ? f.known.barTop : 0.0f,
                 f.known.barsKnown ? f.known.barBottom : 0.0f);
-        renderer.reconfigure(f.eyeWidth, f.eyeHeight, f.probe.fps, f.depthMode, browse, false, !f.flat);
+        configure(f, false);
         beginFilm(f, false);
+    }
+
+    private void configure(Film f, boolean sameFilm) {
+        eyeW = f.eyeWidth;
+        eyeH = f.eyeHeight;
+        renderer.reconfigure(f.eyeWidth, f.eyeHeight, f.probe.fps, f.depthMode, browse, sameFilm, !f.flat);
     }
 
     // A new layout or 2D-to-3D setting for the film playing: the decoder runs on and only the
     // screen changes, so the picture never stops
     private void relayout() {
-        if (browse) {
+        if (browse || probe == null) {
             return;
         }
-        Film f = plan(probe);
-        renderer.reconfigure(f.eyeWidth, f.eyeHeight, f.probe.fps, f.depthMode, false, true, !f.flat);
+        configure(plan(probe), true);
     }
 
     private void createUi() {
