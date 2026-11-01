@@ -8,8 +8,6 @@
 // The spinner shows once a film's first frame is this late, and turns once a second
 #define UI_LOADING_DELAY_NS 400000000LL
 #define UI_LOADING_TURN_NS 1000000000LL
-// The back button stays this long after the bar or the button was last hovered
-#define UI_BACK_HOLD_NS 700000000LL
 
 static int validId(int id) {
     return id >= 0 && id < UI_PANEL_COUNT;
@@ -20,7 +18,7 @@ static int validId(int id) {
 float uiMetresPerPx(const XrCtx* ctx) {
     XrVector3f p = ctx->screenPose.position;
     float d = sqrtf(p.x * p.x + p.y * p.y + p.z * p.z);
-    return UI_PX_ANGLE * fmaxf(d, 0.5f);
+    return fmaxf(UI_PX_ANGLE * fmaxf(d, 0.5f), UI_PX_SHARE * ctx->screenWidth);
 }
 
 XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
@@ -122,11 +120,10 @@ void stepUiPanels(XrCtx* ctx, int64_t nowNs) {
     }
     ctx->ui[UI_PANEL_LOADING].visible = ctx->playerMode && !ctx->playerScreenHidden
             && !ctx->videoReady && nowNs - ctx->videoWaitNs > UI_LOADING_DELAY_NS;
-    if (ctx->hoverKind == HOVER_BAR || ctx->backHover) {
-        ctx->backHoverNs = nowNs;
-    }
+    // With the bar, and as abruptly as the bar
     ctx->ui[UI_PANEL_BACK].visible = ctx->playerMode && ctx->backWanted
-            && nowNs - ctx->backHoverNs < UI_BACK_HOLD_NS;
+            && (ctx->hoverKind == HOVER_BAR || ctx->backHover);
+    ctx->ui[UI_PANEL_BACK].level = ctx->ui[UI_PANEL_BACK].visible ? 1.0f : 0.0f;
     for (int id = 0; id < UI_PANEL_COUNT; id++) {
         float target = ctx->ui[id].visible ? 1.0f : 0.0f;
         float level = ctx->ui[id].level;

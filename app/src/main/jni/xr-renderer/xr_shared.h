@@ -179,8 +179,10 @@
 // Back button beside the move bar
 #define UI_PANEL_BACK 7
 #define UI_PANEL_COUNT 8
-// Fixed-size panels: radians per pixel
+// Fixed-size panels: radians per pixel, with a floor as a share of the screen's width so
+// a screen brought close and large does not dwarf its menus
 #define UI_PX_ANGLE 0.0004f
+#define UI_PX_SHARE (1.0f / 2800.0f)
 // Panel anchors. The gap is away from the edge, or towards the viewer for FRONT.
 #define UI_ANCHOR_ABOVE 0
 #define UI_ANCHOR_LEFT 1

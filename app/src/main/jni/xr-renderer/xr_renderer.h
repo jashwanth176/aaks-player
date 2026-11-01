@@ -786,7 +786,6 @@ typedef struct {
     // when the bar or the button was last hovered (it stays a moment so the ray can cross)
     int backWanted;
     int backHover;
-    int64_t backHoverNs;
     // Frames submitted while focused; passthrough waits for the first (see nativeEndFrame).
     int focusedFrames;
     int passthroughBlendSaid;

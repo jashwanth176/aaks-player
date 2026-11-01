@@ -1424,7 +1424,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     view.barArea = !ctx->pickerOpen && !ctx->cogOpen && !ctx->kbOpen
             && !ctx->exitConfirmOpen && !ctx->reportOpen && !ctx->hintOpen && !ctx->kofiOpen
             && !ctx->panelFadingOut
-            && (ctx->hoverKind == HOVER_BAR || ctx->hoverKind == HOVER_ENVBUTTON
+            && (ctx->hoverKind == HOVER_BAR || ctx->backHover || ctx->hoverKind == HOVER_ENVBUTTON
                 || ctx->hoverKind == HOVER_COGBUTTON
                 || ctx->hoverKind == HOVER_KBBUTTON
                 || ctx->hoverKind == HOVER_EXITBUTTON
