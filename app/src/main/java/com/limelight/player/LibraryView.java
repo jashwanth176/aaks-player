@@ -471,8 +471,22 @@ final class LibraryView {
         }
 
         @Override
+        protected void onMeasure(int widthSpec, int heightSpec) {
+            super.onMeasure(widthSpec, heightSpec);
+            View child = getChildAt(0);
+            if (child != null) {
+                // The content keeps its full height, whatever the viewport's
+                child.measure(MeasureSpec.makeMeasureSpec(getMeasuredWidth(), MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
+            }
+        }
+
+        @Override
         protected void onLayout(boolean changed, int l, int t, int r, int b) {
-            super.onLayout(changed, l, t, r, b);
+            View child = getChildAt(0);
+            if (child != null) {
+                child.layout(0, 0, r - l, child.getMeasuredHeight());
+            }
             set(offset);
         }
 

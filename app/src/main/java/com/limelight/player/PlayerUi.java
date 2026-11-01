@@ -388,6 +388,9 @@ final class PlayerUi implements XrRenderer.UiListener {
         for (View row : filmRows) {
             row.setVisibility(View.GONE);
         }
+        for (Pages pages : pageSets) {
+            pages.showAll(true);
+        }
         // The library window is what the handles frame, so it and the rail beside it stay on
         // the screen plane; only the dialog floats
         renderer.setUiPanelDepth(UI_PANEL_SHEET, 0.0f);
@@ -407,6 +410,9 @@ final class PlayerUi implements XrRenderer.UiListener {
             tracksButton.setVisibility(View.VISIBLE);
             for (View row : filmRows) {
                 row.setVisibility(View.VISIBLE);
+            }
+            for (Pages pages : pageSets) {
+                pages.showAll(false);
             }
             renderer.setUiPanelDepth(UI_PANEL_SHEET, SHEET_DEPTH);
             renderer.setUiPanelDepth(UI_PANEL_RAIL, CHROME_DEPTH);
@@ -1202,12 +1208,15 @@ final class PlayerUi implements XrRenderer.UiListener {
     private final class Pages {
         final LinearLayout first = column();
         final LinearLayout second = column();
+        private TextView more, back;
+        // Both pages at once, with no page buttons (the library has the room)
+        private boolean all;
 
         Pages(LinearLayout box) {
-            FrameLayout holder = new FrameLayout(context);
-            holder.addView(first, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            LinearLayout holder = column();
+            holder.addView(first, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT));
-            holder.addView(second, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+            holder.addView(second, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT));
             second.setVisibility(View.GONE);
             box.addView(holder, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -1217,8 +1226,19 @@ final class PlayerUi implements XrRenderer.UiListener {
 
         /** Adds the page navigation buttons; call after adding the rows. */
         void finish() {
-            first.addView(nav("More options  \u203A", true));
-            second.addView(nav("\u2039  Back", false));
+            more = nav("More options  \u203A", true);
+            back = nav("\u2039  Back", false);
+            first.addView(more);
+            second.addView(back);
+        }
+
+        void showAll(boolean on) {
+            all = on;
+            if (more != null) {
+                more.setVisibility(on ? View.GONE : View.VISIBLE);
+                back.setVisibility(on ? View.GONE : View.VISIBLE);
+            }
+            reset();
         }
 
         private TextView nav(String text, boolean toSecond) {
@@ -1230,6 +1250,9 @@ final class PlayerUi implements XrRenderer.UiListener {
         }
 
         void show(boolean secondPage) {
+            if (all) {
+                return;
+            }
             first.setVisibility(secondPage ? View.GONE : View.VISIBLE);
             second.setVisibility(secondPage ? View.VISIBLE : View.GONE);
             markDirty(UI_PANEL_SHEET);
@@ -1238,7 +1261,7 @@ final class PlayerUi implements XrRenderer.UiListener {
 
         void reset() {
             first.setVisibility(View.VISIBLE);
-            second.setVisibility(View.GONE);
+            second.setVisibility(all ? View.VISIBLE : View.GONE);
         }
     }
 
