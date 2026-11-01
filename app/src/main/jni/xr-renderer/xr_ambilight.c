@@ -79,6 +79,7 @@ int initAmbilight(XrCtx* ctx) {
     ctx->glowIntensityUniform = glGetUniformLocation(ctx->glowProgram, "u_intensity");
     ctx->glowBlurUniform = glGetUniformLocation(ctx->glowProgram, "u_blur");
     ctx->glowScaleUniform = glGetUniformLocation(ctx->glowProgram, "u_scale");
+    ctx->glowRoomUniform = glGetUniformLocation(ctx->glowProgram, "u_room");
     ctx->glowFrameUniform = glGetUniformLocation(ctx->glowProgram, "u_frame");
     ctx->glowFrameLookUniform = glGetUniformLocation(ctx->glowProgram, "u_frameLook");
     glUseProgram(ctx->glowProgram);
@@ -415,6 +416,8 @@ void runGlowRender(XrCtx* ctx) {
     glUniform1f(ctx->glowIntensityUniform, level);
     glUniform1f(ctx->glowBlurUniform, norm ? 1.0f : 0.0f);
     glUniform1f(ctx->glowScaleUniform, glowScaleFor(ctx));
+    glUniform2f(ctx->glowRoomUniform, relightCover(ctx->relightAmbient),
+                relightReach(ctx->relightAmbient));
     // Same frame crop as the eye so they line up
     setFrameUniforms(ctx, ctx->glowFrameUniform, ctx->glowFrameLookUniform,
                      ctx->stereoMode == DEPTH_MODE_NATIVE_SBS || ctx->stereoMode == DEPTH_MODE_NATIVE_OU
@@ -456,7 +459,7 @@ void redrawGlow(XrCtx* ctx, const float* texMatrix) {
 
 // Glow size relative to the screen; larger in player mode
 float glowScaleFor(XrCtx* ctx) {
-    return ctx->playerMode ? RELIGHT_GLOW_SCALE : GLOW_SCALE;
+    return ctx->playerMode ? relightGlowScale(ctx->relightAmbient) : GLOW_SCALE;
 }
 
 void setFrameUniforms(XrCtx* ctx, GLint frame, GLint look, float crop, float shift) {

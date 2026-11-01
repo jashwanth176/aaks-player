@@ -12,7 +12,7 @@ TESTS := $(OUT)/test_math $(OUT)/test_depthmap $(OUT)/test_atlas $(OUT)/test_roo
          $(OUT)/test_layout $(OUT)/test_rate $(OUT)/test_gate \
          $(OUT)/test_pinch $(OUT)/test_notice $(OUT)/test_glow $(OUT)/test_grade \
          $(OUT)/test_keys $(OUT)/test_controller $(OUT)/test_headaim $(OUT)/test_gamepad \
-         $(OUT)/test_videocolour $(OUT)/test_palm
+         $(OUT)/test_videocolour $(OUT)/test_palm $(OUT)/test_relight
 
 .PHONY: test clean
 
@@ -110,3 +110,8 @@ $(OUT)/test_palm: test_palm.c check.h $(SRC)/xr_palm.c $(SRC)/xr_palm.h $(SRC)/x
                   $(SRC)/xr_math.h
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_palm.c $(SRC)/xr_palm.c $(SRC)/xr_math.c -lm
+
+# Immersion: glow size, room cover and light reach.
+$(OUT)/test_relight: test_relight.c check.h $(SRC)/xr_relight.c $(SRC)/xr_relight.h
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_relight.c $(SRC)/xr_relight.c -lm

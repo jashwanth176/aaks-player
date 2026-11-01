@@ -420,7 +420,7 @@ static void testFlatGlowHidesBehindACloseCurve(void) {
 
     // The cylinder glow's fade midpoint is well past the edge.
     GlowCylinder g;
-    CHECK(glowCylinderFor(w, w * 9.0f / 16.0f, r, &g));
+    CHECK(glowCylinderFor(w, w * 9.0f / 16.0f, r, GLOW_SCALE, &g));
     float half = HALF_FADE * g.centralAngle * GLOW_TEX / g.rectWidth;
     CHECK(azimuthOnCylinder(half, g.radius, r - d) > edge + 20.0f);
 
@@ -445,7 +445,7 @@ static void testCylinderFollowsTheScreen(void) {
                 float r = radiusFor(d, curves[k]);
                 float screenAngle = w / r;
                 GlowCylinder g;
-                if (!glowCylinderFor(w, h, r, &g)) {
+                if (!glowCylinderFor(w, h, r, GLOW_SCALE, &g)) {
                     bad++;
                     continue;
                 }
@@ -501,29 +501,29 @@ static void testCylinderFollowsTheScreen(void) {
 static void testCylinderEdgeCases(void) {
     GlowCylinder g;
     g.rectWidth = -7;
-    CHECK(!glowCylinderFor(3.0f, 1.7f, 0.0f, &g));
-    CHECK(!glowCylinderFor(0.0f, 1.7f, 3.0f, &g));
-    CHECK(!glowCylinderFor(3.0f, 0.0f, 3.0f, &g));
+    CHECK(!glowCylinderFor(3.0f, 1.7f, 0.0f, GLOW_SCALE, &g));
+    CHECK(!glowCylinderFor(0.0f, 1.7f, 3.0f, GLOW_SCALE, &g));
+    CHECK(!glowCylinderFor(3.0f, 0.0f, 3.0f, GLOW_SCALE, &g));
     CHECK(g.rectWidth == -7);
     // Picture already wrapping fully: a sliver, within GLOW_MAX_ANGLE.
-    CHECK(glowCylinderFor(8.0f, 4.5f, 0.2f, &g));
+    CHECK(glowCylinderFor(8.0f, 4.5f, 0.2f, GLOW_SCALE, &g));
     CHECK(g.rectWidth >= 2);
     CHECK(g.centralAngle <= GLOW_MAX_ANGLE);
     // Radius too small to subtract the offset is kept as is.
-    CHECK(glowCylinderFor(0.08f, 0.045f, 0.08f, &g));
+    CHECK(glowCylinderFor(0.08f, 0.045f, 0.08f, GLOW_SCALE, &g));
     CHECK_NEAR(g.radius, 0.08, 1e-6);
     // 3 m at 0.2 m radius is clamped to CYLINDER_MAX_ANGLE; the glow stays under a turn
     // by cropping to its middle columns.
     float held = 0.2f * CYLINDER_MAX_ANGLE;
-    CHECK(glowCylinderFor(held, held * 9.0f / 16.0f, 0.2f, &g));
+    CHECK(glowCylinderFor(held, held * 9.0f / 16.0f, 0.2f, GLOW_SCALE, &g));
     CHECK(g.centralAngle <= GLOW_MAX_ANGLE && g.centralAngle < 2.0f * PI_F);
     CHECK(g.rectWidth < GLOW_TEX && g.rectWidth >= 2);
     // Same for the unclamped size.
-    CHECK(glowCylinderFor(3.0f, 3.0f * 9.0f / 16.0f, 0.2f, &g));
+    CHECK(glowCylinderFor(3.0f, 3.0f * 9.0f / 16.0f, 0.2f, GLOW_SCALE, &g));
     CHECK(g.centralAngle <= GLOW_MAX_ANGLE && g.centralAngle < 2.0f * PI_F);
     CHECK(GLOW_MAX_ANGLE < CYLINDER_MAX_ANGLE);
     // Default screen at full curve, 3 m: 1 rad of picture, 1.7 rad of glow.
-    CHECK(glowCylinderFor(3.0f, 3.0f * 9.0f / 16.0f, 3.0f, &g));
+    CHECK(glowCylinderFor(3.0f, 3.0f * 9.0f / 16.0f, 3.0f, GLOW_SCALE, &g));
     CHECK_NEAR(g.centralAngle, 1.7, 1e-5);
     CHECK_NEAR(g.radius, 2.95, 1e-5);
     CHECK(g.rectX == 0 && g.rectWidth == GLOW_TEX);

@@ -434,6 +434,8 @@ const char* const GLOW_FRAGMENT_SRC =
     "out vec4 fragColor;\n"
     // Glow scale; 32.0 must match AMBI_SAMPLE_TEX
     "uniform float u_scale;\n"
+    // Player mode: x how much of the room the glow covers, y how far its light reaches
+    "uniform vec2 u_room;\n"
     FRAME_GLSL
     "const float size = 32.0;\n"
     // Cubic B-spline as four bilinear fetches (plain bilinear shows creases)
@@ -508,14 +510,18 @@ const char* const GLOW_FRAGMENT_SRC =
     "    float s = t * t * (3.0 - 2.0 * t);\n"
     "    float fall = (1.0 - s) * (1.0 - s);\n"
     "    float a = fall * u_intensity;\n"
-    // Player mode: glow weight at this distance, faded out near the rim
+    "    float cover = a;\n"
+    // Player mode: glow weight at this distance, faded out near the rim, over a
+    // dark cover that hides the room
     "    if (u_frame.x > 0.5) {\n"
     "        vec2 p = (uv - 0.5) * scale * vec2(u_frame.y, 1.0);\n"
     "        vec2 rim = 1.0 - smoothstep(vec2(0.38), vec2(0.5), abs(uv - 0.5));\n"
-    "        a = frameWeights(frameDist(p)).y * rim.x * rim.y;\n"
+    "        float dist = frameDist(p);\n"
+    "        a = frameWeights(dist > 0.0 ? dist / u_room.y : dist).y * rim.x * rim.y;\n"
+    "        cover = a + (1.0 - a) * u_room.x * rim.x * rim.y;\n"
     "    }\n"
     // Premultiplied, as the compositor expects
-    "    fragColor = vec4(color * a, a);\n"
+    "    fragColor = vec4(color * a, cover);\n"
     "}\n";
 
 // 3D room. Screen light is per vertex to keep the fragment shader cheap.

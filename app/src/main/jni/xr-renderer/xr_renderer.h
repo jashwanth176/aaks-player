@@ -607,6 +607,8 @@ typedef struct {
     GLint glowIntensityUniform;
     GLint glowBlurUniform;
     GLint glowScaleUniform;
+    // Room cover and light reach, from the immersion
+    GLint glowRoomUniform;
     GLint glowFrameUniform;
     GLint glowFrameLookUniform;
     GLuint glowFbo;

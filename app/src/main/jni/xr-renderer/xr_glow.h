@@ -49,8 +49,9 @@ typedef struct {
     int rectWidth;
 } GlowCylinder;
 
-// Returns 0 and writes nothing if no cylinder applies
-int glowCylinderFor(float screenWidth, float screenHeight, float screenRadius,
+// Glow `scale` times the screen per axis. Returns 0 and writes nothing if no
+// cylinder applies.
+int glowCylinderFor(float screenWidth, float screenHeight, float screenRadius, float scale,
                     GlowCylinder* out);
 
 // Rec. 709 luma

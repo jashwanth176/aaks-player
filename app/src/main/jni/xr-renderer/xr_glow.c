@@ -89,12 +89,12 @@ int glowRingIndex(int x, int y) {
     return -1;
 }
 
-int glowCylinderFor(float screenWidth, float screenHeight, float screenRadius,
+int glowCylinderFor(float screenWidth, float screenHeight, float screenRadius, float scale,
                     GlowCylinder* out) {
     if (screenRadius <= 1e-3f || screenWidth <= 0.0f || screenHeight <= 0.0f) {
         return 0;
     }
-    float wanted = GLOW_SCALE * screenWidth / screenRadius;
+    float wanted = scale * screenWidth / screenRadius;
     int columns = GLOW_TEX;
     if (wanted > GLOW_MAX_ANGLE) {
         // Even, so the cut is symmetric
@@ -108,6 +108,6 @@ int glowCylinderFor(float screenWidth, float screenHeight, float screenRadius,
     // From whole columns, so a cut glow matches what it shows
     out->centralAngle = wanted * columns / GLOW_TEX;
     out->radius = screenRadius > 2.0f * GLOW_PROUD_M ? screenRadius - GLOW_PROUD_M : screenRadius;
-    out->aspectRatio = out->radius * out->centralAngle / (GLOW_SCALE * screenHeight);
+    out->aspectRatio = out->radius * out->centralAngle / (scale * screenHeight);
     return 1;
 }

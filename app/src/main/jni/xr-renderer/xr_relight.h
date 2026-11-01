@@ -13,8 +13,13 @@
 #define RELIGHT_NEUTRAL_RETURN 0.01f
 // Ambient light fade rate, per second
 #define RELIGHT_AMBIENT_RATE 3.0f
-// Glow size relative to the screen, per axis
+// Glow size relative to the screen, per axis, with no immersion and at full
 #define RELIGHT_GLOW_SCALE 5.0f
+#define RELIGHT_GLOW_SCALE_FULL 8.0f
+// At full immersion the room around the screen is covered this much, and the
+// screen's light carries this many times further
+#define RELIGHT_COVER_FULL 0.8f
+#define RELIGHT_REACH_FULL 1.8f
 // Edge feather width and corner radius, in screen heights (0.084 m and
 // 0.08 m on a 1.08 m high screen)
 #define RELIGHT_FEATHER (0.084f / 1.08f)
@@ -34,5 +39,11 @@ void relightFollow(float current[3], const float target[3], float keep);
 
 // Eases the ambient light toward its target over dt seconds
 float relightEaseAmbient(float current, float target, float dt);
+
+// Glow size, room cover 0..1 and light reach for an immersion 0..1. Each grows
+// with its square, so the top of the slider does the most.
+float relightGlowScale(float immersion);
+float relightCover(float immersion);
+float relightReach(float immersion);
 
 #endif

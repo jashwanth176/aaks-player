@@ -90,3 +90,18 @@ float relightEaseAmbient(float current, float target, float dt) {
     if (step < 0.0f) step = 0.0f;
     return current + (target - current) * step;
 }
+
+float relightGlowScale(float immersion) {
+    float i = clamp01(immersion);
+    return RELIGHT_GLOW_SCALE + (RELIGHT_GLOW_SCALE_FULL - RELIGHT_GLOW_SCALE) * i * i;
+}
+
+float relightCover(float immersion) {
+    float i = clamp01(immersion);
+    return RELIGHT_COVER_FULL * i * i;
+}
+
+float relightReach(float immersion) {
+    float i = clamp01(immersion);
+    return 1.0f + (RELIGHT_REACH_FULL - 1.0f) * i * i;
+}

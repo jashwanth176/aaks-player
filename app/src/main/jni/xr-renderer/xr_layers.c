@@ -325,7 +325,7 @@ static void addGlowLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layers)
         float fit = cylinderFit(view->screenWidth, ctx->screenRadius);
         if (view->screenCurved
                 && glowCylinderFor(view->screenWidth * fit, view->screenHeight * fit,
-                                   ctx->screenRadius, &shape)) {
+                                   ctx->screenRadius, glowScaleFor(ctx), &shape)) {
             XrCompositionLayerCylinderKHR* cyl = &layers->glowCylinder;
             memset(cyl, 0, sizeof(*cyl));
             cyl->type = XR_TYPE_COMPOSITION_LAYER_CYLINDER_KHR;
