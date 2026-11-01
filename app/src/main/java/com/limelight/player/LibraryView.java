@@ -13,6 +13,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -25,8 +26,9 @@ import android.widget.TextView;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 
 import static com.limelight.player.UiKit.BUTTON;
 import static com.limelight.player.UiKit.BUTTON_HOVER;
@@ -35,7 +37,8 @@ import static com.limelight.player.UiKit.TEXT_SOFT;
 
 /**
  * Library panel with three tabs: Continue (in progress), Films (all found, newest first) and
- * Folders (file browser). Paged rather than scrolled, since the panel is rendered to a texture.
+ * Folders (file browser). The grid and the file list scroll under the pointer and glide a
+ * little after a release; each tab and folder keeps its place.
  */
 final class LibraryView {
 
@@ -50,11 +53,14 @@ final class LibraryView {
 
     static final int WIDTH = 1200, HEIGHT = 900;
 
-    private static final int COLUMNS = 3, GRID_ROWS = 2, PER_PAGE = COLUMNS * GRID_ROWS;
-    private static final int LIST_ROWS = 6;
-    private static final int CARD_HEIGHT = 276;
-    private static final int ROW_HEIGHT = 72;
+    private static final int COLUMNS = 3;
+    private static final int CARD_HEIGHT = 276, CARD_GAP = 10;
+    private static final int ROW_HEIGHT = 72, ROW_GAP = 8;
     private static final int BAR_HEIGHT = 84;
+    // Glide after a release: the velocity's time constant, the speed it stops at, and the
+    // speed a thumbstick click gives
+    private static final float GLIDE_TAU_S = 0.3f, GLIDE_STOP = 30.0f, NUDGE_SPEED = 2400.0f;
+    private static final long GLIDE_TICK_MS = 16;
 
     private enum Tab { CONTINUE, FILMS, FOLDERS }
 
@@ -68,24 +74,30 @@ final class LibraryView {
     private final TextView note;
     private TextView doneButton;
     private final TextView empty;
+    private final Pane gridPane, listPane;
     private final LinearLayout gridBox;
     private final LinearLayout listBox;
     private final LinearLayout crumbBar;
     private File crumbsFor;
     private final ImageView upButton;
-    private final TextView pageText;
-    private final ImageView prevButton, nextButton;
     private final TextView[] tabButtons = new TextView[Tab.values().length];
+    // Grid rows, cells, cards and trash buttons, made as the list grows
+    private final List<LinearLayout> lines = new ArrayList<>();
+    private final List<FrameLayout> cells = new ArrayList<>();
     private final List<Card> cards = new ArrayList<>();
     private final List<ImageView> trashButtons = new ArrayList<>();
     private final List<Row> rows = new ArrayList<>();
+    // Scroll position per tab and folder
+    private final Map<String, Integer> places = new HashMap<>();
+    private int dragFrom;
+    private float glideY, glideVelocity;
+    private long glideLastMs;
     // Delete confirmation, over the whole panel
     private final View confirm;
     private final TextView confirmName, confirmInfo;
     private File pendingDelete;
 
     private Tab tab = Tab.FILMS;
-    private int page;
     private List<VideoLibrary.Film> films;
     private boolean scanning;
     private File dir = VideoLibrary.storageRoot();
@@ -134,48 +146,18 @@ final class LibraryView {
 
         FrameLayout body = new FrameLayout(context);
 
-        // Card grid
+        // Card grid, rows added as needed
         gridBox = new LinearLayout(context);
         gridBox.setOrientation(LinearLayout.VERTICAL);
-        for (int r = 0; r < GRID_ROWS; r++) {
-            LinearLayout line = new LinearLayout(context);
-            line.setOrientation(LinearLayout.HORIZONTAL);
-            for (int c = 0; c < COLUMNS; c++) {
-                final int slot = r * COLUMNS + c;
-                FrameLayout cell = new FrameLayout(context);
-                Card card = new Card(context);
-                card.setOnClickListener(v -> open(slot));
-                cards.add(card);
-                cell.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT));
-                // Delete, in the thumbnail's top right corner
-                ImageView trash = new ImageView(context);
-                trash.setImageResource(com.limelight.R.drawable.player_ic_delete);
-                trash.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                trash.setPadding(15, 15, 15, 15);
-                GradientDrawable dot = new GradientDrawable();
-                dot.setShape(GradientDrawable.OVAL);
-                trash.setBackground(UiKit.states(dot, 0, 0x8C000000, DANGER, DANGER));
-                trash.setClickable(true);
-                trash.setOnClickListener(v -> askDelete(slot));
-                trashButtons.add(trash);
-                FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(64, 64, Gravity.TOP | Gravity.END);
-                tp.topMargin = 20;
-                tp.rightMargin = 20;
-                cell.addView(trash, tp);
-                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, CARD_HEIGHT, 1);
-                lp.leftMargin = 8;
-                lp.rightMargin = 8;
-                line.addView(cell, lp);
-            }
-            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, CARD_HEIGHT);
-            rowLp.bottomMargin = 10;
-            gridBox.addView(line, rowLp);
-        }
-        body.addView(gridBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+        gridPane = new Pane(context);
+        gridPane.addView(gridBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
+        body.addView(gridPane, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // File browser: up button, breadcrumbs, rows
+        // File browser: up button and breadcrumbs over the scrolling rows
+        LinearLayout browser = new LinearLayout(context);
+        browser.setOrientation(LinearLayout.VERTICAL);
         listBox = new LinearLayout(context);
         listBox.setOrientation(LinearLayout.VERTICAL);
         LinearLayout bar = new LinearLayout(context);
@@ -188,37 +170,21 @@ final class LibraryView {
         crumbBar.setGravity(Gravity.CENTER_VERTICAL);
         crumbBar.setPadding(16, 0, 0, 0);
         bar.addView(crumbBar, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
-        listBox.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, BAR_HEIGHT));
-        for (int i = 0; i < LIST_ROWS; i++) {
-            Row row = new Row(context);
-            final int slot = i;
-            row.setOnClickListener(v -> open(slot));
-            rows.add(row);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ROW_HEIGHT);
-            lp.topMargin = 8;
-            listBox.addView(row, lp);
-        }
-        body.addView(listBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+        browser.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, BAR_HEIGHT));
+        listPane = new Pane(context);
+        listPane.addView(listBox, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        browser.addView(listPane, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        body.addView(browser, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
         empty = UiKit.text(context, "", 34, false, TEXT_SOFT);
         empty.setGravity(Gravity.CENTER);
         body.addView(empty, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
-        sheet.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
-
-        // Pager
-        LinearLayout pager = new LinearLayout(context);
-        pager.setOrientation(LinearLayout.HORIZONTAL);
-        pager.setGravity(Gravity.CENTER);
-        prevButton = UiKit.iconButton(context, com.limelight.R.drawable.player_ic_prev, 80, v -> turn(-1));
-        nextButton = UiKit.iconButton(context, com.limelight.R.drawable.player_ic_next, 80, v -> turn(1));
-        pageText = UiKit.text(context, "", 30, false, TEXT_SOFT);
-        pageText.setGravity(Gravity.CENTER);
-        pager.addView(prevButton);
-        pager.addView(pageText, new LinearLayout.LayoutParams(180, ViewGroup.LayoutParams.WRAP_CONTENT));
-        pager.addView(nextButton);
-        sheet.addView(pager, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 88));
+        LinearLayout.LayoutParams bodyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1);
+        bodyLp.bottomMargin = 8;
+        sheet.addView(body, bodyLp);
 
         root = UiKit.wrap(context, sheet);
 
@@ -270,8 +236,7 @@ final class LibraryView {
 
     private static final int DANGER = 0xFFD84B4B, DANGER_HOVER = 0xFFEA6262;
 
-    private void askDelete(int slot) {
-        int index = page * perPage() + slot;
+    private void askDelete(int index) {
         if (index >= items.size()) {
             return;
         }
@@ -353,9 +318,9 @@ final class LibraryView {
         refresh();
     }
 
-    /** Current tab, page and folder, for restoring after playback. */
+    /** Current tab, scroll position and folder, for restoring after playback. */
     String place() {
-        return tab.name() + "|" + page + "|" + dir.getAbsolutePath();
+        return tab.name() + "|" + pane().offset + "|" + dir.getAbsolutePath();
     }
 
     /** Restores a place() string. Call before onOpened. */
@@ -364,9 +329,10 @@ final class LibraryView {
         if (parts.length != 3) {
             return;
         }
+        int offset;
         try {
             tab = Tab.valueOf(parts[0]);
-            page = Integer.parseInt(parts[1]);
+            offset = Integer.parseInt(parts[1]);
         }
         catch (IllegalArgumentException e) {
             return;
@@ -375,8 +341,145 @@ final class LibraryView {
         if (d.isDirectory()) {
             dir = d;
         }
+        places.put(placeKey(), offset);
         // Keep the restored tab rather than switching to Continue
         openedBefore = true;
+    }
+
+    // ---- scrolling --------------------------------------------------------------------
+
+    private Pane pane() {
+        return tab == Tab.FOLDERS ? listPane : gridPane;
+    }
+
+    private String placeKey() {
+        return tab == Tab.FOLDERS ? "F:" + dir.getAbsolutePath() : tab.name();
+    }
+
+    /** The pointer went down: a drag from here scrolls. Main thread. */
+    void dragBegin() {
+        stopGlide();
+        dragFrom = pane().offset;
+    }
+
+    /** The pointer moved `dy` panel pixels up since it went down. Main thread. */
+    void dragTo(float dy) {
+        scrollTo(Math.round(dragFrom + dy));
+    }
+
+    /** The pointer let go while moving `velocity` panel pixels per second up. Main thread. */
+    void release(float velocity) {
+        if (Math.abs(velocity) > GLIDE_STOP) {
+            glide(velocity);
+        }
+    }
+
+    /** Thumbstick: a screenful down (1) or up (-1), gliding. Main thread. */
+    void nudge(int direction) {
+        glide(direction * NUDGE_SPEED);
+    }
+
+    private void glide(float velocity) {
+        glideVelocity = velocity;
+        glideY = pane().offset;
+        glideLastMs = SystemClock.uptimeMillis();
+        main.removeCallbacks(glideTick);
+        main.postDelayed(glideTick, GLIDE_TICK_MS);
+    }
+
+    private void stopGlide() {
+        main.removeCallbacks(glideTick);
+    }
+
+    private final Runnable glideTick = new Runnable() {
+        @Override
+        public void run() {
+            long now = SystemClock.uptimeMillis();
+            float dt = Math.min(0.1f, (now - glideLastMs) / 1000.0f);
+            glideLastMs = now;
+            glideY += glideVelocity * dt;
+            glideVelocity *= (float) Math.exp(-dt / GLIDE_TAU_S);
+            int wanted = Math.round(glideY);
+            scrollTo(wanted);
+            if (Math.abs(glideVelocity) > GLIDE_STOP && pane().offset == wanted) {
+                main.postDelayed(this, GLIDE_TICK_MS);
+            }
+        }
+    };
+
+    private void scrollTo(int y) {
+        Pane pane = pane();
+        if (pane.set(y)) {
+            places.put(placeKey(), pane.offset);
+            wantThumbs();
+            host.onChanged();
+        }
+    }
+
+    // Thumbnails for the cards near the viewport only, so a long list does not queue them all
+    private void wantThumbs() {
+        if (tab == Tab.FOLDERS) {
+            return;
+        }
+        int top = gridPane.offset;
+        int viewport = gridPane.getHeight() > 0 ? gridPane.getHeight() : HEIGHT;
+        for (int i = 0; i < items.size() && i < cards.size(); i++) {
+            int rowTop = (i / COLUMNS) * (CARD_HEIGHT + CARD_GAP);
+            if (rowTop < top + viewport + CARD_HEIGHT && rowTop + CARD_HEIGHT > top - CARD_HEIGHT) {
+                Card card = cards.get(i);
+                if (card.thumb == null) {
+                    card.thumb = thumbs.get(items.get(i));
+                }
+            }
+        }
+    }
+
+    /** A clipped viewport whose content scrolls, with a thin bar at its right edge. */
+    private static final class Pane extends FrameLayout {
+        // Wanted scroll, clamped to the content once it is laid out
+        int offset;
+        private final Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        Pane(Context context) {
+            super(context);
+            setWillNotDraw(false);
+            bar.setColor(0x55FFFFFF);
+        }
+
+        private int range() {
+            View child = getChildAt(0);
+            return child == null ? 0 : Math.max(0, child.getHeight() - getHeight());
+        }
+
+        /** Scrolls to y (clamped when laid out); whether the view moved. */
+        boolean set(int y) {
+            int to = getHeight() > 0 ? Math.max(0, Math.min(range(), y)) : Math.max(0, y);
+            boolean moved = to != offset;
+            offset = to;
+            scrollTo(0, to);
+            return moved;
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int l, int t, int r, int b) {
+            super.onLayout(changed, l, t, r, b);
+            set(offset);
+        }
+
+        @Override
+        protected void dispatchDraw(Canvas canvas) {
+            super.dispatchDraw(canvas);
+            View child = getChildAt(0);
+            int h = getHeight();
+            if (child == null || child.getHeight() <= h || h <= 0) {
+                return;
+            }
+            float thumb = Math.max(40.0f, h * (float) h / child.getHeight());
+            float top = (h - thumb) * (float) offset / range();
+            float x = getWidth() - 10;
+            // In scrolled coordinates, so the bar stays put
+            canvas.drawRoundRect(x, getScrollY() + top, x + 6, getScrollY() + top + thumb, 3, 3, bar);
+        }
     }
 
     private void scan() {
@@ -397,8 +500,8 @@ final class LibraryView {
     }
 
     private void selectTab(Tab t) {
+        stopGlide();
         tab = t;
-        page = 0;
         note.setText("");
         refresh();
         host.onChanged();
@@ -412,8 +515,8 @@ final class LibraryView {
     }
 
     private void goTo(File folder) {
+        stopGlide();
         dir = folder;
-        page = 0;
         refresh();
         host.onChanged();
     }
@@ -486,31 +589,7 @@ final class LibraryView {
         crumbBar.addView(sep, new LinearLayout.LayoutParams(CRUMB_GAP, 60));
     }
 
-    /** Turns pages from a scroll or drag. Main thread. */
-    void scroll(int pages) {
-        turn(pages);
-    }
-
-    private void turn(int step) {
-        int pages = pageCount();
-        int p = page + step;
-        if (p >= 0 && p < pages) {
-            page = p;
-            refresh();
-            host.onChanged();
-        }
-    }
-
-    private int perPage() {
-        return tab == Tab.FOLDERS ? LIST_ROWS : PER_PAGE;
-    }
-
-    private int pageCount() {
-        return Math.max(1, (items.size() + perPage() - 1) / perPage());
-    }
-
-    private void open(int slot) {
-        int index = page * perPage() + slot;
+    private void open(int index) {
         if (index >= items.size()) {
             return;
         }
@@ -545,37 +624,43 @@ final class LibraryView {
                 items = VideoLibrary.list(dir);
                 break;
         }
-        page = Math.min(page, pageCount() - 1);
-
         for (Tab t : Tab.values()) {
             tabButtons[t.ordinal()].setSelected(t == tab);
         }
         boolean folders = tab == Tab.FOLDERS;
-        gridBox.setVisibility(folders ? View.INVISIBLE : View.VISIBLE);
-        listBox.setVisibility(folders ? View.VISIBLE : View.INVISIBLE);
+        gridPane.setVisibility(folders ? View.INVISIBLE : View.VISIBLE);
+        ((View) listPane.getParent()).setVisibility(folders ? View.VISIBLE : View.INVISIBLE);
 
-        int start = page * perPage();
-        for (int i = 0; i < cards.size(); i++) {
-            Card c = cards.get(i);
-            int index = start + i;
-            boolean shown = !folders && index < items.size();
-            if (shown) {
-                fill(c, items.get(index));
+        if (!folders) {
+            growGrid(items.size());
+            for (int i = 0; i < cards.size(); i++) {
+                boolean shown = i < items.size();
+                if (shown) {
+                    fill(cards.get(i), items.get(i));
+                }
+                cells.get(i).setVisibility(shown ? View.VISIBLE : View.INVISIBLE);
+                trashButtons.get(i).setVisibility(shown ? View.VISIBLE : View.INVISIBLE);
             }
-            c.setVisibility(shown ? View.VISIBLE : View.INVISIBLE);
-            trashButtons.get(i).setVisibility(shown ? View.VISIBLE : View.INVISIBLE);
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            Row r = rows.get(i);
-            int index = start + i;
-            if (folders && index < items.size()) {
-                fill(r, items.get(index));
-                r.setVisibility(View.VISIBLE);
-            }
-            else {
-                r.setVisibility(View.INVISIBLE);
+            int linesShown = (items.size() + COLUMNS - 1) / COLUMNS;
+            for (int i = 0; i < lines.size(); i++) {
+                lines.get(i).setVisibility(i < linesShown ? View.VISIBLE : View.GONE);
             }
         }
+        else {
+            growList(items.size());
+            for (int i = 0; i < rows.size(); i++) {
+                if (i < items.size()) {
+                    fill(rows.get(i), items.get(i));
+                    rows.get(i).setVisibility(View.VISIBLE);
+                }
+                else {
+                    rows.get(i).setVisibility(View.GONE);
+                }
+            }
+        }
+        Integer kept = places.get(placeKey());
+        pane().set(kept != null ? kept : 0);
+        wantThumbs();
 
         buildCrumbs();
         upButton.setEnabled(!dir.equals(VideoLibrary.storageRoot()));
@@ -595,11 +680,64 @@ final class LibraryView {
             }
         }
         empty.setText(message);
-        pageText.setText(items.isEmpty() ? "" : String.format(Locale.ROOT, "%d / %d", page + 1, pageCount()));
-        prevButton.setEnabled(page > 0);
-        nextButton.setEnabled(page < pageCount() - 1);
-        prevButton.setAlpha(prevButton.isEnabled() ? 1.0f : 0.3f);
-        nextButton.setAlpha(nextButton.isEnabled() ? 1.0f : 0.3f);
+    }
+
+    // Enough grid rows and cells for `count` films
+    private void growGrid(int count) {
+        while (cards.size() < count) {
+            int index = cards.size();
+            if (index % COLUMNS == 0) {
+                LinearLayout line = new LinearLayout(context);
+                line.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, CARD_HEIGHT);
+                rowLp.bottomMargin = CARD_GAP;
+                gridBox.addView(line, rowLp);
+                lines.add(line);
+            }
+            FrameLayout cell = new FrameLayout(context);
+            Card card = new Card(context);
+            card.setOnClickListener(v -> open(index));
+            cards.add(card);
+            cell.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+            // Delete, in the thumbnail's top right corner
+            ImageView trash = new ImageView(context);
+            trash.setImageResource(com.limelight.R.drawable.player_ic_delete);
+            trash.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            trash.setPadding(15, 15, 15, 15);
+            GradientDrawable dot = new GradientDrawable();
+            dot.setShape(GradientDrawable.OVAL);
+            trash.setBackground(UiKit.states(dot, 0, 0x8C000000, DANGER, DANGER));
+            trash.setClickable(true);
+            trash.setOnClickListener(v -> askDelete(index));
+            trashButtons.add(trash);
+            FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(64, 64, Gravity.TOP | Gravity.END);
+            tp.topMargin = 20;
+            tp.rightMargin = 20;
+            cell.addView(trash, tp);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, CARD_HEIGHT, 1);
+            lp.leftMargin = 8;
+            lp.rightMargin = 8;
+            lines.get(lines.size() - 1).addView(cell, lp);
+            cells.add(cell);
+        }
+        // The last row keeps three columns so its cards are the same width
+        int short_ = cards.size() % COLUMNS;
+        if (short_ != 0) {
+            growGrid(cards.size() + COLUMNS - short_);
+        }
+    }
+
+    private void growList(int count) {
+        while (rows.size() < count) {
+            int index = rows.size();
+            Row row = new Row(context);
+            row.setOnClickListener(v -> open(index));
+            rows.add(row);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ROW_HEIGHT);
+            lp.topMargin = ROW_GAP;
+            listBox.addView(row, lp);
+        }
     }
 
     private void fill(Card card, File f) {
@@ -612,7 +750,7 @@ final class LibraryView {
         sub.append(VideoLibrary.sizeText(f.length()));
         card.sub = sub.toString();
         card.disc = VideoLibrary.isDisc(f);
-        card.thumb = card.disc ? null : thumbs.get(f);
+        card.thumb = thumbs.peek(f);
         card.progress = e.inProgress() ? e.progress() : 0.0f;
         card.badge = card.disc ? "3D DISC" : (StereoLayout.resolve(null, f.getName(), 1, 1) != StereoLayout.MONO ? "3D" : "");
     }

@@ -61,6 +61,11 @@ final class ThumbnailLoader {
         worker.shutdownNow();
     }
 
+    /** The thumbnail if it is in memory, without asking for it. Main thread. */
+    Bitmap peek(File file) {
+        return memory.get(file.getAbsolutePath());
+    }
+
     /** The thumbnail, or null if not ready yet or unavailable. Main thread. */
     Bitmap get(File file) {
         String key = file.getAbsolutePath();

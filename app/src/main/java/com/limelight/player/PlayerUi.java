@@ -207,11 +207,14 @@ final class PlayerUi implements XrRenderer.UiListener {
     private View pressView;
     private SeekLine dragLine;
     private int dragPanel = -1;
-    // Vertical drag on the library pages it
+    // Vertical drag on the library scrolls it, once it has moved DRAG_START_PX
     private float pressV = -1;
+    private float lastV;
+    private long lastMoveMs;
+    private float dragVelocity;
     private boolean dragScrolled;
     private long lastScrollMs;
-    private static final float DRAG_PAGE = 0.12f;
+    private static final float DRAG_START_PX = 12.0f;
     private static final long SCROLL_GAP_MS = 300;
 
     private ImageView backButton;
@@ -422,17 +425,15 @@ final class PlayerUi implements XrRenderer.UiListener {
         }
     }
 
-    /** Thumbstick scroll: one library page per SCROLL_GAP_MS regardless of magnitude. Main thread. */
+    /** Thumbstick scroll: a screenful per SCROLL_GAP_MS regardless of magnitude. Main thread. */
     void onScroll(int clicks) {
         long now = SystemClock.uptimeMillis();
         if (sheet != SHEET_LIBRARY || clicks == 0 || now - lastScrollMs < SCROLL_GAP_MS) {
             return;
         }
         lastScrollMs = now;
-        // Stick forward = previous page
-        library.scroll(clicks > 0 ? -1 : 1);
-        markDirty(UI_PANEL_SHEET);
-        renderDirty();
+        // Stick forward = up
+        library.nudge(clicks > 0 ? -1 : 1);
     }
 
     /** Whether a sheet is open. Main thread. */
@@ -596,7 +597,13 @@ final class PlayerUi implements XrRenderer.UiListener {
         else if (pressed && !wasPressed) {
             pressView = target;
             pressV = panelId == UI_PANEL_SHEET && sheet == SHEET_LIBRARY ? v : -1;
+            lastV = v;
+            lastMoveMs = SystemClock.uptimeMillis();
+            dragVelocity = 0.0f;
             dragScrolled = false;
+            if (pressV >= 0) {
+                library.dragBegin();
+            }
             if (target instanceof SeekLine) {
                 dragLine = (SeekLine) target;
                 dragPanel = panelId;
@@ -604,19 +611,29 @@ final class PlayerUi implements XrRenderer.UiListener {
             }
         }
         else if (pressed && pressV >= 0 && panelId == UI_PANEL_SHEET) {
-            // Drag up = next page; a drag cancels the click
-            float moved = pressV - v;
-            if (Math.abs(moved) > DRAG_PAGE) {
-                library.scroll(moved > 0 ? 1 : -1);
-                pressV = v;
+            // The list follows the pointer; a drag cancels the click
+            float moved = (pressV - v) * panel.drawn;
+            long now = SystemClock.uptimeMillis();
+            if (now > lastMoveMs) {
+                float speed = (lastV - v) * panel.drawn * 1000.0f / (now - lastMoveMs);
+                dragVelocity = dragVelocity * 0.5f + speed * 0.5f;
+            }
+            lastV = v;
+            lastMoveMs = now;
+            if (!dragScrolled && Math.abs(moved) > DRAG_START_PX) {
                 dragScrolled = true;
                 pressView = null;
-                markDirty(UI_PANEL_SHEET);
+            }
+            if (dragScrolled) {
+                library.dragTo(moved);
             }
         }
         else if (!pressed && wasPressed) {
             if (pressView != null && pressView == target && !dragScrolled) {
                 pressView.performClick();
+            }
+            if (dragScrolled) {
+                library.release(dragVelocity);
             }
             pressView = null;
             pressV = -1;
@@ -662,8 +679,8 @@ final class PlayerUi implements XrRenderer.UiListener {
         }
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
-            float cx = x - view.getLeft();
-            float cy = y - view.getTop();
+            float cx = x - view.getLeft() + group.getScrollX();
+            float cy = y - view.getTop() + group.getScrollY();
             for (int i = group.getChildCount() - 1; i >= 0; i--) {
                 View hit = clickableAt(group.getChildAt(i), cx, cy);
                 if (hit != null) {
