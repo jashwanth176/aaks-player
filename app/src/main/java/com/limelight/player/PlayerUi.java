@@ -209,14 +209,17 @@ final class PlayerUi implements XrRenderer.UiListener {
     private View pressView;
     private SeekLine dragLine;
     private int dragPanel = -1;
-    // Vertical drag on the library scrolls it, once it has moved DRAG_START_PX
+    // Vertical drag on the library scrolls it, once it has moved DRAG_START_PX. A release
+    // within CLICK_SLOP_PX of the press clicks even if the pinch drifted off the view.
     private float pressV = -1;
+    private float pressX, pressY;
     private float lastV;
     private long lastMoveMs;
     private float dragVelocity;
     private boolean dragScrolled;
     private long lastScrollMs;
-    private static final float DRAG_START_PX = 12.0f;
+    private static final float DRAG_START_PX = 40.0f;
+    private static final float CLICK_SLOP_PX = 48.0f;
     private static final long SCROLL_GAP_MS = 300;
 
     private ImageView backButton;
@@ -608,6 +611,8 @@ final class PlayerUi implements XrRenderer.UiListener {
         }
         else if (pressed && !wasPressed) {
             pressView = target;
+            pressX = x;
+            pressY = y;
             pressV = panelId == UI_PANEL_SHEET && sheet == SHEET_LIBRARY ? v : -1;
             lastV = v;
             lastMoveMs = SystemClock.uptimeMillis();
@@ -641,8 +646,10 @@ final class PlayerUi implements XrRenderer.UiListener {
             }
         }
         else if (!pressed && wasPressed) {
-            if (pressView != null && pressView == target && !dragScrolled) {
-                pressView.performClick();
+            boolean near = panel != null && Math.hypot(x - pressX, y - pressY) <= CLICK_SLOP_PX;
+            View clicked = pressView != null ? pressView : (near ? target : null);
+            if (clicked != null && (clicked == target || near) && !dragScrolled) {
+                clicked.performClick();
             }
             if (dragScrolled) {
                 library.release(dragVelocity);
