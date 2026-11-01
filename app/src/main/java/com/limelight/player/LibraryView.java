@@ -44,6 +44,8 @@ final class LibraryView {
         void onClose();
         /** The panel needs redrawing. */
         void onChanged();
+        /** Whether this file is the film open in the player now. */
+        boolean isPlaying(File file);
     }
 
     static final int WIDTH = 1200, HEIGHT = 900;
@@ -75,7 +77,12 @@ final class LibraryView {
     private final ImageView prevButton, nextButton;
     private final TextView[] tabButtons = new TextView[Tab.values().length];
     private final List<Card> cards = new ArrayList<>();
+    private final List<ImageView> trashButtons = new ArrayList<>();
     private final List<Row> rows = new ArrayList<>();
+    // Delete confirmation, over the whole panel
+    private final View confirm;
+    private final TextView confirmName, confirmInfo;
+    private File pendingDelete;
 
     private Tab tab = Tab.FILMS;
     private int page;
@@ -134,14 +141,32 @@ final class LibraryView {
             LinearLayout line = new LinearLayout(context);
             line.setOrientation(LinearLayout.HORIZONTAL);
             for (int c = 0; c < COLUMNS; c++) {
-                Card card = new Card(context);
                 final int slot = r * COLUMNS + c;
+                FrameLayout cell = new FrameLayout(context);
+                Card card = new Card(context);
                 card.setOnClickListener(v -> open(slot));
                 cards.add(card);
+                cell.addView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT));
+                // Delete, in the thumbnail's top right corner
+                ImageView trash = new ImageView(context);
+                trash.setImageResource(com.limelight.R.drawable.player_ic_delete);
+                trash.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                trash.setPadding(15, 15, 15, 15);
+                GradientDrawable dot = new GradientDrawable();
+                dot.setShape(GradientDrawable.OVAL);
+                trash.setBackground(UiKit.states(dot, 0, 0x8C000000, DANGER, DANGER));
+                trash.setClickable(true);
+                trash.setOnClickListener(v -> askDelete(slot));
+                trashButtons.add(trash);
+                FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(64, 64, Gravity.TOP | Gravity.END);
+                tp.topMargin = 20;
+                tp.rightMargin = 20;
+                cell.addView(trash, tp);
                 LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, CARD_HEIGHT, 1);
                 lp.leftMargin = 8;
                 lp.rightMargin = 8;
-                line.addView(card, lp);
+                line.addView(cell, lp);
             }
             LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, CARD_HEIGHT);
             rowLp.bottomMargin = 10;
@@ -196,7 +221,104 @@ final class LibraryView {
         sheet.addView(pager, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 88));
 
         root = UiKit.wrap(context, sheet);
+
+        // Delete confirmation: a dimmed panel with a small dialog. A click on the dim cancels.
+        FrameLayout scrim = new FrameLayout(context);
+        GradientDrawable dim = new GradientDrawable();
+        dim.setCornerRadius(56);
+        dim.setColor(0xB30C0C10);
+        scrim.setBackground(dim);
+        scrim.setClickable(true);
+        scrim.setOnClickListener(v -> cancelDelete());
+        LinearLayout dialog = new LinearLayout(context);
+        dialog.setOrientation(LinearLayout.VERTICAL);
+        dialog.setBackground(UiKit.frost(40));
+        dialog.setPadding(48, 40, 48, 40);
+        dialog.setClickable(true);
+        dialog.addView(UiKit.text(context, "Delete this film?", 40, true, TEXT));
+        confirmName = UiKit.text(context, "", 30, false, TEXT);
+        confirmName.setMaxLines(2);
+        confirmName.setEllipsize(TextUtils.TruncateAt.END);
+        confirmName.setPadding(0, 18, 0, 6);
+        dialog.addView(confirmName);
+        confirmInfo = UiKit.text(context, "", 26, false, TEXT_SOFT);
+        dialog.addView(confirmInfo);
+        LinearLayout buttons = new LinearLayout(context);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        TextView cancel = UiKit.segment(context, "Cancel", v -> cancelDelete());
+        TextView delete = UiKit.segment(context, "Delete", v -> confirmDelete());
+        GradientDrawable red = new GradientDrawable();
+        delete.setBackground(UiKit.states(red, 44, DANGER, DANGER_HOVER, DANGER_HOVER));
+        delete.setTextColor(TEXT);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(0, 84, 1);
+        bl.rightMargin = 16;
+        buttons.addView(cancel, bl);
+        buttons.addView(delete, new LinearLayout.LayoutParams(0, 84, 1));
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 84);
+        rowLp.topMargin = 36;
+        dialog.addView(buttons, rowLp);
+        scrim.addView(dialog, new FrameLayout.LayoutParams(640, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        scrim.setVisibility(View.GONE);
+        root.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        confirm = scrim;
+
+        // The list from the last scan shows at once; a fresh scan replaces it when done
+        films = VideoLibrary.cached(context);
         refresh();
+    }
+
+    private static final int DANGER = 0xFFD84B4B, DANGER_HOVER = 0xFFEA6262;
+
+    private void askDelete(int slot) {
+        int index = page * perPage() + slot;
+        if (index >= items.size()) {
+            return;
+        }
+        File f = items.get(index);
+        if (host.isPlaying(f)) {
+            note.setText("Close the film before deleting it.");
+            host.onChanged();
+            return;
+        }
+        pendingDelete = f;
+        confirmName.setText(PlayerXR.titleFor(Uri.fromFile(f)));
+        confirmInfo.setText(VideoLibrary.sizeText(f.length()) + "  ·  removed from the headset for good");
+        confirm.setVisibility(View.VISIBLE);
+        host.onChanged();
+    }
+
+    private void cancelDelete() {
+        pendingDelete = null;
+        confirm.setVisibility(View.GONE);
+        host.onChanged();
+    }
+
+    private void confirmDelete() {
+        File f = pendingDelete;
+        cancelDelete();
+        if (f == null) {
+            return;
+        }
+        String title = PlayerXR.titleFor(Uri.fromFile(f));
+        thumbs.forget(f);
+        new Thread(() -> {
+            boolean ok = VideoLibrary.delete(context, f);
+            main.post(() -> {
+                if (ok) {
+                    store.forget(f.getAbsolutePath());
+                    if (films != null) {
+                        List<VideoLibrary.Film> left = new ArrayList<>(films);
+                        left.removeIf(film -> film.file.equals(f));
+                        films = left;
+                        new Thread(() -> VideoLibrary.saveCache(context, left), "LibraryView cache").start();
+                    }
+                }
+                note.setText(ok ? "Deleted “" + title + "”." : "Couldn't delete “" + title + "”.");
+                refresh();
+                host.onChanged();
+            });
+        }, "LibraryView delete").start();
     }
 
     /** Hides Done when there is nothing to return to. */
@@ -217,6 +339,8 @@ final class LibraryView {
     /** Rescans; on first open, starts on Continue if anything is in progress. */
     void onOpened() {
         note.setText("");
+        pendingDelete = null;
+        confirm.setVisibility(View.GONE);
         boolean anyInProgress = !store.inProgress().isEmpty();
         if (!openedBefore && anyInProgress) {
             tab = Tab.CONTINUE;
@@ -262,6 +386,7 @@ final class LibraryView {
         scanning = true;
         new Thread(() -> {
             List<VideoLibrary.Film> found = VideoLibrary.scan(context);
+            VideoLibrary.saveCache(context, found);
             main.post(() -> {
                 scanning = false;
                 films = found;
@@ -433,13 +558,12 @@ final class LibraryView {
         for (int i = 0; i < cards.size(); i++) {
             Card c = cards.get(i);
             int index = start + i;
-            if (!folders && index < items.size()) {
+            boolean shown = !folders && index < items.size();
+            if (shown) {
                 fill(c, items.get(index));
-                c.setVisibility(View.VISIBLE);
             }
-            else {
-                c.setVisibility(View.INVISIBLE);
-            }
+            c.setVisibility(shown ? View.VISIBLE : View.INVISIBLE);
+            trashButtons.get(i).setVisibility(shown ? View.VISIBLE : View.INVISIBLE);
         }
         for (int i = 0; i < rows.size(); i++) {
             Row r = rows.get(i);

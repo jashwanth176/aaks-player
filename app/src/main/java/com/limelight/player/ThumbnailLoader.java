@@ -74,9 +74,23 @@ final class ThumbnailLoader {
         return null;
     }
 
+    /** Drops a file's thumbnail from both caches; call before deleting the file. Main thread. */
+    void forget(File file) {
+        String key = file.getAbsolutePath();
+        memory.remove(key);
+        asked.remove(key);
+        failed.remove(key);
+        cacheFile(file).delete();
+    }
+
+    private File cacheFile(File file) {
+        String key = file.getAbsolutePath();
+        return new File(dir, Integer.toHexString((key + file.lastModified() + file.length()).hashCode()) + ".jpg");
+    }
+
     private void load(File file) {
         String key = file.getAbsolutePath();
-        File cached = new File(dir, Integer.toHexString((key + file.lastModified() + file.length()).hashCode()) + ".jpg");
+        File cached = cacheFile(file);
         Bitmap b = cached.isFile() ? BitmapFactory.decodeFile(cached.getAbsolutePath()) : null;
         if (b == null) {
             b = make(file);

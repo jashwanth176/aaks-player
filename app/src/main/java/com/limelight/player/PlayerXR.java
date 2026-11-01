@@ -355,6 +355,11 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             }
 
             @Override
+            public String filmPath() {
+                return browse ? null : filmKey;
+            }
+
+            @Override
             public void onDepth(String name) {
                 depth = name;
                 renderer.setPlayerDepth(cropFor(name));

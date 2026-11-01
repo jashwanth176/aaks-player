@@ -106,6 +106,11 @@ final class PlaybackStore {
         put(key, e);
     }
 
+    /** Drops everything kept about a file, for when it is deleted. */
+    void forget(String key) {
+        prefs.edit().remove(PREFIX + norm(key)).apply();
+    }
+
     /** Keys of files in progress, most recently played first. */
     List<String> inProgress() {
         List<String> keys = new ArrayList<>();

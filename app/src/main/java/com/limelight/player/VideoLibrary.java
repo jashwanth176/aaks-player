@@ -1,9 +1,16 @@
 package com.limelight.player;
 
 import android.content.Context;
+import android.media.MediaScannerConnection;
 import android.os.Environment;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -105,6 +112,78 @@ final class VideoLibrary {
                 found.add(new Film(f, isDisc(f)));
             }
         }
+    }
+
+    private static final String CACHE = "library.txt";
+
+    /** The list from the last scan, to show at once while a new scan runs; null if none yet. */
+    static List<Film> cached(Context context) {
+        File cache = new File(context.getFilesDir(), CACHE);
+        if (!cache.isFile()) {
+            return null;
+        }
+        List<Film> out = new ArrayList<>();
+        try (BufferedReader r = new BufferedReader(new FileReader(cache))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                if (!line.isEmpty()) {
+                    File f = new File(line);
+                    out.add(new Film(f, isDisc(f)));
+                }
+            }
+        }
+        catch (IOException e) {
+            return null;
+        }
+        return out;
+    }
+
+    static void saveCache(Context context, List<Film> films) {
+        File cache = new File(context.getFilesDir(), CACHE);
+        File tmp = new File(cache.getPath() + ".tmp");
+        try (Writer w = new BufferedWriter(new FileWriter(tmp))) {
+            for (Film film : films) {
+                w.write(film.file.getAbsolutePath());
+                w.write('\n');
+            }
+        }
+        catch (IOException e) {
+            tmp.delete();
+            return;
+        }
+        if (!tmp.renameTo(cache)) {
+            tmp.delete();
+        }
+    }
+
+    // A film's own subtitle files: "Film.srt", "Film.en.srt", "Film.en.forced.srt"
+    private static final String SUBTITLE_TAIL = "([._ -][a-z]{2,3}([._ -](forced|sdh|cc))?)?\\.(srt|ass|ssa|vtt)";
+
+    /**
+     * Deletes a film and its subtitle files, then tells the media index. False if the film
+     * itself could not be deleted.
+     */
+    static boolean delete(Context context, File film) {
+        if (!film.delete()) {
+            return false;
+        }
+        List<String> gone = new ArrayList<>();
+        gone.add(film.getAbsolutePath());
+        String name = film.getName();
+        int dot = name.lastIndexOf('.');
+        String base = (dot > 0 ? name.substring(0, dot) : name).toLowerCase(Locale.ROOT);
+        String pattern = java.util.regex.Pattern.quote(base) + SUBTITLE_TAIL;
+        File parent = film.getParentFile();
+        File[] siblings = parent == null ? null : parent.listFiles();
+        if (siblings != null) {
+            for (File f : siblings) {
+                if (f.isFile() && f.getName().toLowerCase(Locale.ROOT).matches(pattern) && f.delete()) {
+                    gone.add(f.getAbsolutePath());
+                }
+            }
+        }
+        MediaScannerConnection.scanFile(context, gone.toArray(new String[0]), null, null);
+        return true;
     }
 
     /** Folder contents for the file browser: subfolders, then videos, each sorted by name. */

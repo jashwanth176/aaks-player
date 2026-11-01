@@ -79,6 +79,8 @@ final class PlayerUi implements XrRenderer.UiListener {
 
     /** Callbacks from the panels. Main thread. */
     interface Actions {
+        /** Path of the film open in the player, or null in the library. */
+        String filmPath();
         void onBack();
         void onTogglePlay();
         void onSeek(float fraction);
@@ -305,6 +307,13 @@ final class PlayerUi implements XrRenderer.UiListener {
             @Override
             public void onClose() {
                 openSheet(SHEET_NONE);
+            }
+
+            @Override
+            public boolean isPlaying(File file) {
+                String playing = actions.filmPath();
+                return playing != null
+                        && PlaybackStore.norm(playing).equals(PlaybackStore.norm(file.getAbsolutePath()));
             }
 
             @Override
