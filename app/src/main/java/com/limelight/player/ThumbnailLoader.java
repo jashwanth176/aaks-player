@@ -22,8 +22,8 @@ import java.util.concurrent.Executors;
 
 /**
  * Library thumbnails, generated one at a time on a background thread and cached on disk; also
- * records each file's duration. Stereo files show one eye. get() returns null and queues the
- * work if not ready; the callback fires when it is.
+ * records each file's duration. Stereo files and discs show one eye. get() returns null and
+ * queues the work if not ready; the callback fires when it is.
  */
 final class ThumbnailLoader {
 
@@ -121,7 +121,12 @@ final class ThumbnailLoader {
 
     private Bitmap make(File file) {
         if (VideoLibrary.isDisc(file)) {
-            return null;
+            long[] duration90 = new long[1];
+            Bitmap eye = DiscThumbnail.grab(file, duration90);
+            if (duration90[0] > 0) {
+                store.saveDuration(file.getAbsolutePath(), duration90[0] / 90);
+            }
+            return eye == null ? null : fit(eye, new Rect(0, 0, eye.getWidth(), eye.getHeight()));
         }
         MediaMetadataRetriever r = new MediaMetadataRetriever();
         try {
@@ -153,10 +158,7 @@ final class ThumbnailLoader {
             else if (layout == StereoLayout.OU) {
                 from.bottom = frame.getHeight() / 2;
             }
-            Bitmap out = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888);
-            new Canvas(out).drawBitmap(frame, from, new Rect(0, 0, WIDTH, HEIGHT), null);
-            frame.recycle();
-            return out;
+            return fit(frame, from);
         }
         catch (RuntimeException e) {
             return null;
@@ -168,6 +170,14 @@ final class ThumbnailLoader {
             catch (Exception ignored) {
             }
         }
+    }
+
+    // The region of the frame scaled to the thumbnail size; the frame is recycled
+    private static Bitmap fit(Bitmap frame, Rect from) {
+        Bitmap out = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888);
+        new Canvas(out).drawBitmap(frame, from, new Rect(0, 0, WIDTH, HEIGHT), null);
+        frame.recycle();
+        return out;
     }
 
     private static long parse(String s) {
