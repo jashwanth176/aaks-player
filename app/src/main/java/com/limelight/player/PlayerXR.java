@@ -273,7 +273,8 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     // so it runs off the main thread while the film's chrome and the spinner are already up.
     private void reload() {
         PlaybackEngine old = engine;
-        engine = null;
+        // A stand-in until the next engine starts: the panels ask it for state meanwhile
+        engine = new NullEngine();
         if (old != null) {
             old.release();
         }
