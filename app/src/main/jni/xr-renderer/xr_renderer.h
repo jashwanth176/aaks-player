@@ -778,6 +778,11 @@ typedef struct {
     // The video swapchain holds a frame of the current film; when the wait for it began
     int videoReady;
     int64_t videoWaitNs;
+    // Back button beside the bar: whether Java wants it, whether the ray is on it, and
+    // when the bar or the button was last hovered (it stays a moment so the ray can cross)
+    int backWanted;
+    int backHover;
+    int64_t backHoverNs;
     // Frames submitted while focused; passthrough waits for the first (see nativeEndFrame).
     int focusedFrames;
     int passthroughBlendSaid;

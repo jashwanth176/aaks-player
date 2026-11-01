@@ -327,7 +327,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             @Override
             public void onBack() {
                 if (browse) {
-                    finish();
+                    leave();
                 }
                 else {
                     backToLibrary();
@@ -841,6 +841,9 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             renderer = null;
         }
         super.onDestroy();
+        if (leaving) {
+            android.os.Process.killProcess(android.os.Process.myPid());
+        }
     }
 
     // ---- input ------------------------------------------------------------
@@ -975,7 +978,16 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
 
     @Override
     public void onVrExit() {
-        main.post(this::finish);
+        main.post(this::leave);
+    }
+
+    // Out of the app for good: the task goes too, and the process once the session is down,
+    // so nothing of the app lingers in the headset's shell
+    private boolean leaving;
+
+    private void leave() {
+        leaving = true;
+        finishAndRemoveTask();
     }
 
     @Override

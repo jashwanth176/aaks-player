@@ -166,10 +166,11 @@ final class PlayerUi implements XrRenderer.UiListener {
     // Back button to the right of the move bar, scaling with the screen like the bar does:
     // its size, drop below the bottom edge and offset, as shares of the screen width. The bar
     // is 0.14 wide with a hover zone twice that, centred 0.0416 below the edge (xr_layout.h).
-    private static final int BACK_PX = 112;
+    // The circle is drawn smaller than the panel, which is the hit area.
+    private static final int BACK_PX = 112, BACK_CIRCLE_PX = 76;
     private static final float BACK_FRAC = 0.05f;
     private static final float BACK_GAP = 0.0416f - BACK_FRAC / 2.0f;
-    private static final float BACK_X = 0.14f + 0.015f + BACK_FRAC / 2.0f;
+    private static final float BACK_X = 0.14f + 0.01f + BACK_FRAC / 2.0f;
     // How far panels float toward the viewer, as a share of the distance to the screen
     private static final float CHROME_DEPTH = 0.06f, SHEET_DEPTH = 0.1f, DIALOG_DEPTH = 0.16f;
     // Subtitles belong to the picture, so they scale with it: width and gaps as fractions of
@@ -1158,11 +1159,30 @@ final class PlayerUi implements XrRenderer.UiListener {
     }
 
     // Subtitle strip: styled text or a bitmap
-    // Round back button: to the library from a film, out of the app from the library
+    // Round back button in the bar's white: to the library from a film, out of the app from
+    // the library. The renderer shows it while the bar is hovered.
     private ViewGroup buildBack() {
         FrameLayout root = new FrameLayout(context);
-        root.addView(UiKit.iconButton(context, com.limelight.R.drawable.player_ic_back, BACK_PX,
-                v -> actions.onBack()), new FrameLayout.LayoutParams(BACK_PX, BACK_PX));
+        View button = new View(context) {
+            private final android.graphics.Paint paint = new android.graphics.Paint(
+                    android.graphics.Paint.ANTI_ALIAS_FLAG);
+            private final android.graphics.drawable.Drawable arrow =
+                    context.getDrawable(com.limelight.R.drawable.player_ic_back).mutate();
+
+            @Override
+            protected void onDraw(Canvas canvas) {
+                float cx = getWidth() / 2.0f, cy = getHeight() / 2.0f;
+                paint.setColor(isHovered() ? 0xFFFFFFFF : 0xEBFFFFFF);
+                canvas.drawCircle(cx, cy, BACK_CIRCLE_PX / 2.0f, paint);
+                int r = BACK_CIRCLE_PX * 5 / 16;
+                arrow.setTint(0xFF14141A);
+                arrow.setBounds((int) cx - r, (int) cy - r, (int) cx + r, (int) cy + r);
+                arrow.draw(canvas);
+            }
+        };
+        button.setClickable(true);
+        button.setOnClickListener(v -> actions.onBack());
+        root.addView(button, new FrameLayout.LayoutParams(BACK_PX, BACK_PX));
         return root;
     }
 

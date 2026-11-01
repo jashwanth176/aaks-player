@@ -3703,6 +3703,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     else {
         ctx->hoverKind = f.hover;
     }
+    ctx->backHover = f.hand >= 0 && f.hover == HOVER_UIPANEL && ctx->uiHover[f.hand] == UI_PANEL_BACK;
 
     ctx->screenOrientation = f.screenPose.orientation;
     ctx->beamVisible = 0;

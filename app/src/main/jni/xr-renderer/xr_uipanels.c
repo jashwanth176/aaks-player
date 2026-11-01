@@ -8,6 +8,8 @@
 // The spinner shows once a film's first frame is this late, and turns once a second
 #define UI_LOADING_DELAY_NS 400000000LL
 #define UI_LOADING_TURN_NS 1000000000LL
+// The back button stays this long after the bar or the button was last hovered
+#define UI_BACK_HOLD_NS 700000000LL
 
 static int validId(int id) {
     return id >= 0 && id < UI_PANEL_COUNT;
@@ -120,6 +122,11 @@ void stepUiPanels(XrCtx* ctx, int64_t nowNs) {
     }
     ctx->ui[UI_PANEL_LOADING].visible = ctx->playerMode && !ctx->playerScreenHidden
             && !ctx->videoReady && nowNs - ctx->videoWaitNs > UI_LOADING_DELAY_NS;
+    if (ctx->hoverKind == HOVER_BAR || ctx->backHover) {
+        ctx->backHoverNs = nowNs;
+    }
+    ctx->ui[UI_PANEL_BACK].visible = ctx->playerMode && ctx->backWanted
+            && nowNs - ctx->backHoverNs < UI_BACK_HOLD_NS;
     for (int id = 0; id < UI_PANEL_COUNT; id++) {
         float target = ctx->ui[id].visible ? 1.0f : 0.0f;
         float level = ctx->ui[id].level;
@@ -203,8 +210,11 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetUiPanel(JNIEnv* env, jobjec
     if (ctx == NULL || !validId(id)) {
         return;
     }
-    // The renderer decides when the spinner shows
-    if (id != UI_PANEL_LOADING) {
+    // The renderer decides when the spinner and the back button show
+    if (id == UI_PANEL_BACK) {
+        ctx->backWanted = visible ? 1 : 0;
+    }
+    else if (id != UI_PANEL_LOADING) {
         ctx->ui[id].visible = visible ? 1 : 0;
     }
     ctx->ui[id].anchor = anchor;
