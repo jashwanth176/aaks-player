@@ -719,8 +719,8 @@ static void addKofiLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers
 // Player panels, back to front.
 static void addUiPanelLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
     static const int order[UI_PANEL_COUNT] = {
-        UI_PANEL_LOADING, UI_PANEL_SUBS, UI_PANEL_RAIL, UI_PANEL_TOP, UI_PANEL_CONTROLS,
-        UI_PANEL_SHEET, UI_PANEL_DIALOG
+        UI_PANEL_LOADING, UI_PANEL_SUBS, UI_PANEL_BACK, UI_PANEL_RAIL, UI_PANEL_TOP,
+        UI_PANEL_CONTROLS, UI_PANEL_SHEET, UI_PANEL_DIALOG
     };
     for (int i = 0; i < UI_PANEL_COUNT; i++) {
         int id = order[i];

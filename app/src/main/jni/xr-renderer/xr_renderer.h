@@ -1326,6 +1326,8 @@ typedef struct {
         int fixed;
         float widthFrac;
         float gapFrac;
+        // Sideways from the screen's centre line, in the gap's units
+        float xOff;
         // Fraction of the distance toward the viewer the panel floats off the screen.
         float depthK;
         float level;

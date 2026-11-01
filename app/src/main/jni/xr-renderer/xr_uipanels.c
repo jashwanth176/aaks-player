@@ -24,15 +24,17 @@ float uiMetresPerPx(const XrCtx* ctx) {
 XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
     float screenW = ctx->screenWidth;
     float screenH = screenW * screenAspect(ctx);
-    float w, gap;
+    float w, gap, xOff;
     if (ctx->ui[id].fixed) {
         float perPx = uiMetresPerPx(ctx);
         w = (float)ctx->ui[id].texW * perPx;
         gap = ctx->ui[id].gapFrac * perPx;
+        xOff = ctx->ui[id].xOff * perPx;
     }
     else {
         w = ctx->ui[id].widthFrac * screenW;
         gap = ctx->ui[id].gapFrac * screenW;
+        xOff = ctx->ui[id].xOff * screenW;
     }
     float h = ctx->ui[id].texW > 0 ? w * (float)ctx->ui[id].texH / (float)ctx->ui[id].texW : 0.0f;
     *outWidth = w;
@@ -55,6 +57,7 @@ XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
             local.z = gap;
             break;
     }
+    local.x += xOff;
     Vec3 offset = quatRotate(ctx->screenPose.orientation, local);
     XrPosef pose;
     pose.orientation = ctx->screenPose.orientation;
@@ -88,10 +91,11 @@ int uiPanelAt(XrCtx* ctx, XrPosef aim, float* outU, float* outV) {
         return -1;
     }
     // Subtitles are not hit tested
-    static const int order[5] = {
-        UI_PANEL_DIALOG, UI_PANEL_SHEET, UI_PANEL_CONTROLS, UI_PANEL_TOP, UI_PANEL_RAIL
+    static const int order[6] = {
+        UI_PANEL_DIALOG, UI_PANEL_SHEET, UI_PANEL_CONTROLS, UI_PANEL_TOP, UI_PANEL_RAIL,
+        UI_PANEL_BACK
     };
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 6; i++) {
         int id = order[i];
         if (!ctx->ui[id].ready || !ctx->ui[id].visible || ctx->ui[id].level < 0.5f) {
             continue;
@@ -194,7 +198,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetUiPanel(JNIEnv* env, jobjec
                                                              jlong handle, jint id,
                                                              jboolean visible, jint anchor,
                                                              jboolean fixed, jfloat widthFrac,
-                                                             jfloat gapFrac) {
+                                                             jfloat gapFrac, jfloat xOff) {
     XrCtx* ctx = (XrCtx*)(intptr_t)handle;
     if (ctx == NULL || !validId(id)) {
         return;
@@ -207,4 +211,5 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetUiPanel(JNIEnv* env, jobjec
     ctx->ui[id].fixed = fixed ? 1 : 0;
     ctx->ui[id].widthFrac = widthFrac;
     ctx->ui[id].gapFrac = gapFrac;
+    ctx->ui[id].xOff = xOff;
 }

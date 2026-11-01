@@ -450,18 +450,18 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     /**
      * Where a panel hangs off the screen and whether it shows: a UI_ANCHOR_, and its gap from
      * that edge (or towards the viewer, for the front). A fixed panel keeps its size whatever the
-     * screen's, with the gap in its pixels; otherwise width and gap are shares of the screen's
-     * width. Any thread.
+     * screen, with the gap in its pixels; otherwise width and gap are shares of the screen's
+     * width. xOff moves it sideways from the centre line, in the gap's units. Any thread.
      */
     public void setUiPanel(int panel, boolean visible, int anchor, boolean fixed, float widthFrac,
-                           float gap) {
+                           float gap, float xOff) {
         if (panel < 0 || panel >= UI_PANEL_COUNT) {
             return;
         }
         // Applied on the frame loop after any new picture, so a panel never shows the old picture
         // at the new size
         pendingUiPlacements.set(panel, new float[] { visible ? 1 : 0, anchor, fixed ? 1 : 0,
-                widthFrac, gap });
+                widthFrac, gap, xOff });
     }
 
     /**
@@ -519,7 +519,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             float[] place = pendingUiPlacements.getAndSet(i, null);
             if (place != null) {
                 nativeSetUiPanel(nativeCtx, i, place[0] != 0, (int) place[1], place[2] != 0,
-                        place[3], place[4]);
+                        place[3], place[4], place[5]);
             }
         }
     }
@@ -675,7 +675,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private native void nativeSetVideoColour(long ctx, int transfer, float maxCll, float masteringNits);
     private native void nativeUploadUiPanel(long ctx, int panel, ByteBuffer sheet, int width, int height);
     private native void nativeSetUiPanel(long ctx, int panel, boolean visible, int anchor,
-                                         boolean fixed, float widthFrac, float gapFrac);
+                                         boolean fixed, float widthFrac, float gapFrac, float xOff);
     private native void nativeSetUiPanelDepth(long ctx, int panel, float k);
     private native void nativeUploadStereoButton(long ctx, ByteBuffer off, ByteBuffer on);
     private native void nativeUploadRayButton(long ctx, ByteBuffer off, ByteBuffer on);

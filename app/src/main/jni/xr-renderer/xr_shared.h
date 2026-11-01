@@ -176,7 +176,9 @@
 #define UI_PANEL_LOADING 5
 // A dialog over the sheet (delete confirmation), floated in front of it
 #define UI_PANEL_DIALOG 6
-#define UI_PANEL_COUNT 7
+// Back button beside the move bar
+#define UI_PANEL_BACK 7
+#define UI_PANEL_COUNT 8
 // Fixed-size panels: radians per pixel
 #define UI_PX_ANGLE 0.0004f
 // Panel anchors. The gap is away from the edge, or towards the viewer for FRONT.

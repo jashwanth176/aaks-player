@@ -35,6 +35,7 @@ import static com.limelight.binding.video.XrShared.UI_ANCHOR_FRONT;
 import static com.limelight.binding.video.XrShared.UI_ANCHOR_LEFT;
 import static com.limelight.binding.video.XrShared.UI_PANEL_CONTROLS;
 import static com.limelight.binding.video.XrShared.UI_PANEL_COUNT;
+import static com.limelight.binding.video.XrShared.UI_PANEL_BACK;
 import static com.limelight.binding.video.XrShared.UI_PANEL_DIALOG;
 import static com.limelight.binding.video.XrShared.UI_PANEL_LOADING;
 import static com.limelight.binding.video.XrShared.UI_PANEL_RAIL;
@@ -162,6 +163,13 @@ final class PlayerUi implements XrRenderer.UiListener {
     private static final int SHEET_GAP = 190;
     private static final int LOADING_SIZE = 160;
     private static final int DIALOG_W = 640, DIALOG_H = 600, DIALOG_GAP = 60;
+    // Back button to the right of the move bar, scaling with the screen like the bar does:
+    // its size, drop below the bottom edge and offset, as shares of the screen width. The bar
+    // is 0.14 wide with a hover zone twice that, centred 0.0416 below the edge (xr_layout.h).
+    private static final int BACK_PX = 112;
+    private static final float BACK_FRAC = 0.05f;
+    private static final float BACK_GAP = 0.0416f - BACK_FRAC / 2.0f;
+    private static final float BACK_X = 0.14f + 0.015f + BACK_FRAC / 2.0f;
     // How far panels float toward the viewer, as a share of the distance to the screen
     private static final float CHROME_DEPTH = 0.06f, SHEET_DEPTH = 0.1f, DIALOG_DEPTH = 0.16f;
     // Subtitles belong to the picture, so they scale with it: width and gaps as fractions of
@@ -270,6 +278,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         boolean fixed = true;
         float widthFrac;
         float gap;
+        float xOff;
         // Height from the content, up to `height`; the height last drawn
         boolean wrap;
         int drawn;
@@ -311,6 +320,11 @@ final class PlayerUi implements XrRenderer.UiListener {
         panels[UI_PANEL_SUBS].widthFrac = SUBS_FRAC;
         panels[UI_PANEL_LOADING] = new Panel(UI_PANEL_LOADING, buildLoading(), LOADING_SIZE,
                 LOADING_SIZE, UI_ANCHOR_FRONT, 4);
+        panels[UI_PANEL_BACK] = new Panel(UI_PANEL_BACK, buildBack(), BACK_PX, BACK_PX,
+                UI_ANCHOR_BELOW, BACK_GAP);
+        panels[UI_PANEL_BACK].fixed = false;
+        panels[UI_PANEL_BACK].widthFrac = BACK_FRAC;
+        panels[UI_PANEL_BACK].xOff = BACK_X;
         sheetRoots[SHEET_LIGHT] = buildLight();
         sheetRoots[SHEET_SETTINGS] = buildSettings();
         sheetRoots[SHEET_TRACKS] = buildTracks();
@@ -847,11 +861,14 @@ final class PlayerUi implements XrRenderer.UiListener {
                     visible = sheet == SHEET_LIBRARY && library.confirming();
                     p.gap = browse ? DIALOG_GAP : SHEET_GAP + DIALOG_GAP;
                     break;
+                case UI_PANEL_BACK:
+                    visible = browse || show;
+                    break;
                 default:
                     visible = show;
                     break;
             }
-            renderer.setUiPanel(p.id, visible, p.anchor, p.fixed, p.widthFrac, p.gap);
+            renderer.setUiPanel(p.id, visible, p.anchor, p.fixed, p.widthFrac, p.gap, p.xOff);
         }
     }
 
@@ -1141,6 +1158,14 @@ final class PlayerUi implements XrRenderer.UiListener {
     }
 
     // Subtitle strip: styled text or a bitmap
+    // Round back button: to the library from a film, out of the app from the library
+    private ViewGroup buildBack() {
+        FrameLayout root = new FrameLayout(context);
+        root.addView(UiKit.iconButton(context, com.limelight.R.drawable.player_ic_back, BACK_PX,
+                v -> actions.onBack()), new FrameLayout.LayoutParams(BACK_PX, BACK_PX));
+        return root;
+    }
+
     // A faint ring with a bright arc; the renderer turns it
     private ViewGroup buildLoading() {
         FrameLayout root = new FrameLayout(context);
