@@ -1355,8 +1355,12 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
 
     updateControllerModels(ctx);
 
-    // A 3D switch redraws the latched frame, since the decoder sends nothing while paused.
-    int redraw = ctx->warpRedraw && ctx->everRendered;
+    // A 3D switch redraws the latched frame, since the decoder sends nothing while paused;
+    // never the last film's frame on a new film's screen.
+    if (newFrame) {
+        ctx->videoStale = 0;
+    }
+    int redraw = ctx->warpRedraw && ctx->everRendered && !ctx->videoStale;
     if ((newFrame || redraw) && ctx->shouldRender) {
         int64_t startNs = nowNs();
 

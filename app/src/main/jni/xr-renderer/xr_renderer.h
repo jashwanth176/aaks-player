@@ -778,6 +778,8 @@ typedef struct {
     // The video swapchain holds a frame of the current film; when the wait for it began
     int videoReady;
     int64_t videoWaitNs;
+    // The latched frame is the last film's, so it is never redrawn onto the new screen
+    int videoStale;
     // Back button beside the bar: whether Java wants it, whether the ray is on it, and
     // when the bar or the button was last hovered (it stays a moment so the ray can cross)
     int backWanted;

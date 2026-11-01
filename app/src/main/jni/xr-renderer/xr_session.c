@@ -650,9 +650,11 @@ Java_com_limelight_binding_video_XrRenderer_nativeReconfigure(JNIEnv* env, jobje
     ctx->videoWaitNs = nowNs();
     ctx->glowRendered = 0;
     if (sameFilm) {
+        ctx->warpRedraw = 1;
         LOGI("new layout: %dx%d per eye, stereo mode %d", width, height, stereoMode);
         return JNI_TRUE;
     }
+    ctx->videoStale = 1;
     ctx->relightAvgValid = 0;
     ctx->streamFps = fps;
     displayContentChanged(ctx);
