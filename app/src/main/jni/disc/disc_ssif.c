@@ -13,6 +13,11 @@
 // Seek reads start this far before the guess: the dependent view's interleave
 // extent precedes the base view's.
 #define SEEK_BACKOFF (6 << 20)
+// Audio is muxed up to a second or two ahead of the picture it goes with, so a seek
+// re-reads this long before the landed GOP and keeps the other streams' packets from
+// PREROLL_KEEP90 before its time
+#define PREROLL_SEC 2.0
+#define PREROLL_KEEP90 (90000 / 2)
 #define SEEK_ITERATIONS 10
 
 typedef struct Node {
@@ -720,6 +725,7 @@ int ds_seek(DiscSource *s, int64_t time90, int64_t *landed90) {
     // Walk forward to the last GOP at or before the target, then re-read from it,
     // to minimise decoding before the target.
     int64_t best_off = found->off;
+    int64_t best_pts = found->pts;
     free_node(found);
     found = NULL;
     int64_t budget = 80 << 20;
@@ -739,6 +745,7 @@ int ds_seek(DiscSource *s, int64_t time90, int64_t *landed90) {
                 }
                 else {
                     best_off = n->off;
+                    best_pts = n->pts;
                 }
             }
             free_node(n);
@@ -747,11 +754,56 @@ int ds_seek(DiscSource *s, int64_t time90, int64_t *landed90) {
             }
         }
     }
-    Node *again = scan_to_gop(s, clip, best_off - PKT * 64, 96 << 20);
+    // Re-read from before that GOP: pairs before it are dropped, the other streams'
+    // packets from just before its time are kept, in order, ahead of it
+    int64_t preroll = (int64_t)(PREROLL_SEC * (double)s->fsize
+                                / ((double)(last - first) / 90000.0));
+    if (preroll < (2 << 20)) {
+        preroll = 2 << 20;
+    }
+    if (preroll > (24 << 20)) {
+        preroll = 24 << 20;
+    }
+    reset_stream_state(s);
+    s->pos = best_off > preroll ? best_off - preroll : 0;
+    s->pos -= s->pos % PKT;
+    s->clip = clip;
+    Queue kept = { NULL, NULL, 0 };
+    Node *again = NULL;
+    int64_t left = preroll + (96 << 20);
+    while (again == NULL && left > 0) {
+        int64_t before = s->bytes;
+        if (!fill(s)) {
+            break;
+        }
+        left -= s->bytes - before;
+        Node *n;
+        while (again == NULL && (n = pop(&s->out)) != NULL) {
+            if (n->type == DS_PAIR && n->gop && n->pts >= best_pts) {
+                again = n;
+            }
+            else if (n->type == DS_PES && n->pts >= best_pts - PREROLL_KEEP90) {
+                push(&kept, n);
+            }
+            else {
+                free_node(n);
+            }
+        }
+    }
     if (again == NULL) {
+        Node *n;
+        while ((n = pop(&kept)) != NULL) {
+            free_node(n);
+        }
         return -1;
     }
-    push_front(&s->out, again);
+    push(&kept, again);
+    if (s->out.head != NULL) {
+        kept.tail->next = s->out.head;
+        kept.tail = s->out.tail;
+        kept.count += s->out.count;
+    }
+    s->out = kept;
     if (landed90 != NULL) {
         *landed90 = again->pts;
     }
