@@ -524,6 +524,16 @@ final class LibraryView {
         }, "LibraryView scan").start();
     }
 
+    /** On the Films or Continue page, where back leaves the app. */
+    boolean atHome() {
+        return tab != Tab.FOLDERS;
+    }
+
+    /** Back from the folders: to the Films page. */
+    void goHome() {
+        selectTab(Tab.FILMS);
+    }
+
     private void selectTab(Tab t) {
         stopGlide();
         tab = t;

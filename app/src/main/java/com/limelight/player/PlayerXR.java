@@ -326,12 +326,20 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         ui = new PlayerUi(this, renderer, new PlayerUi.Actions() {
             @Override
             public void onBack() {
+                if (ui != null && ui.onBackPressed()) {
+                    return;
+                }
                 if (browse) {
                     leave();
                 }
                 else {
                     backToLibrary();
                 }
+            }
+
+            @Override
+            public void onLeave() {
+                leave();
             }
 
             @Override

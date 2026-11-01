@@ -84,7 +84,10 @@ final class PlayerUi implements XrRenderer.UiListener {
     interface Actions {
         /** Path of the film open in the player, or null in the library. */
         String filmPath();
+        /** Back from a film: to the library. The UI handles sheets and the library itself. */
         void onBack();
+        /** Out of the app, confirmed. */
+        void onLeave();
         void onTogglePlay();
         void onSeek(float fraction);
         void onTogglePassthrough();
@@ -170,7 +173,7 @@ final class PlayerUi implements XrRenderer.UiListener {
     private static final int BACK_PX = 112, BACK_CIRCLE_PX = 76;
     private static final float BACK_FRAC = 0.05f;
     private static final float BACK_GAP = 0.0416f - BACK_FRAC / 2.0f;
-    private static final float BACK_X = 0.14f + 0.01f + BACK_FRAC / 2.0f;
+    private static final float BACK_X = -(0.07f + 0.012f + BACK_FRAC / 2.0f);
     // How far panels float toward the viewer, as a share of the distance to the screen
     private static final float CHROME_DEPTH = 0.06f, SHEET_DEPTH = 0.1f, DIALOG_DEPTH = 0.16f;
     // Subtitles belong to the picture, so they scale with it: width and gaps as fractions of
@@ -245,6 +248,9 @@ final class PlayerUi implements XrRenderer.UiListener {
     private TextView convertOn, convertOff;
     // Settings that only apply to a playing film, hidden in the library
     private View[] filmRows;
+    // "Leave?" dialog, in the dialog panel in place of the library's
+    private ViewGroup exitDialog;
+    private boolean exitAsking;
     private TextView colourNatural, colourVivid;
     private TextView handHide, handAlways;
     private TextView jumpText;
@@ -359,12 +365,16 @@ final class PlayerUi implements XrRenderer.UiListener {
             public void onChanged() {
                 if (sheet == SHEET_LIBRARY) {
                     markDirty(UI_PANEL_SHEET);
-                    markDirty(UI_PANEL_DIALOG);
+                    if (!exitAsking) {
+                        panels[UI_PANEL_DIALOG].root = library.dialog();
+                        markDirty(UI_PANEL_DIALOG);
+                    }
                     renderDirty();
                     applyVisibility(true);
                 }
             }
         });
+        exitDialog = buildExitDialog();
         panels[UI_PANEL_DIALOG] = new Panel(UI_PANEL_DIALOG, library.dialog(), DIALOG_W, DIALOG_H,
                 UI_ANCHOR_FRONT, DIALOG_GAP);
         panels[UI_PANEL_DIALOG].wrap = true;
@@ -470,6 +480,67 @@ final class PlayerUi implements XrRenderer.UiListener {
         lastScrollMs = now;
         // Stick forward = up
         library.nudge(clicks > 0 ? -1 : 1);
+    }
+
+    /**
+     * Back: closes an open sheet, returns the library to its Films page, or asks before leaving.
+     * False when the caller should leave the film for the library. Main thread.
+     */
+    boolean onBackPressed() {
+        if (exitAsking) {
+            return true;
+        }
+        if (sheet != SHEET_NONE && !(browse && sheet == SHEET_LIBRARY)) {
+            openSheet(SHEET_NONE);
+            return true;
+        }
+        if (!browse) {
+            return false;
+        }
+        if (!library.atHome()) {
+            library.goHome();
+            return true;
+        }
+        askExit();
+        return true;
+    }
+
+    private void askExit() {
+        exitAsking = true;
+        panels[UI_PANEL_DIALOG].root = exitDialog;
+        markDirty(UI_PANEL_DIALOG);
+        renderDirty();
+        applyVisibility(true);
+    }
+
+    private void cancelExit() {
+        exitAsking = false;
+        panels[UI_PANEL_DIALOG].root = library.dialog();
+        markDirty(UI_PANEL_DIALOG);
+        applyVisibility(true);
+    }
+
+    private ViewGroup buildExitDialog() {
+        LinearLayout dialog = new LinearLayout(context);
+        dialog.setOrientation(LinearLayout.VERTICAL);
+        dialog.setBackground(UiKit.frost(40));
+        dialog.setPadding(48, 40, 48, 40);
+        dialog.setClickable(true);
+        dialog.addView(UiKit.text(context, "Leave AaksVR?", 40, true, TEXT));
+        TextView note = UiKit.text(context, "Where you stopped is saved.", 28, false, TEXT_SOFT);
+        note.setPadding(0, 14, 0, 0);
+        dialog.addView(note);
+        LinearLayout buttons = new LinearLayout(context);
+        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams left = new LinearLayout.LayoutParams(0, 84, 1);
+        left.rightMargin = 16;
+        buttons.addView(UiKit.segment(context, "Stay", v -> cancelExit()), left);
+        buttons.addView(UiKit.segment(context, "Leave", v -> actions.onLeave()),
+                new LinearLayout.LayoutParams(0, 84, 1));
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 84);
+        rowLp.topMargin = 36;
+        dialog.addView(buttons, rowLp);
+        return UiKit.wrap(context, dialog);
     }
 
     /** Whether a sheet is open. Main thread. */
@@ -859,7 +930,7 @@ final class PlayerUi implements XrRenderer.UiListener {
                     p.gap = (show ? SUBS_GAP_RAISED : SUBS_GAP_LOW) - subStyle.lift();
                     break;
                 case UI_PANEL_DIALOG:
-                    visible = sheet == SHEET_LIBRARY && library.confirming();
+                    visible = exitAsking || (sheet == SHEET_LIBRARY && library.confirming());
                     p.gap = browse ? DIALOG_GAP : SHEET_GAP + DIALOG_GAP;
                     break;
                 case UI_PANEL_BACK:
@@ -953,7 +1024,7 @@ final class PlayerUi implements XrRenderer.UiListener {
                 if (p.id == UI_PANEL_SHEET && sheet == SHEET_NONE) {
                     continue;
                 }
-                if (p.id == UI_PANEL_DIALOG && !library.confirming()) {
+                if (p.id == UI_PANEL_DIALOG && !library.confirming() && !exitAsking) {
                     continue;
                 }
                 render(p);
