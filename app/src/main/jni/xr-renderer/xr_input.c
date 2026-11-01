@@ -967,8 +967,8 @@ static void stepSpring(XrCtx* ctx) {
     }
 }
 
-// Move and resize start only from a handle under the ray; gripping the picture
-// itself does nothing, to avoid accidental drags.
+// Move and resize start from a handle under the ray, or in the player from a grip
+// on the picture itself; the trigger on the picture is a click, never a drag.
 static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* grab, int hand,
                       int hover, int corner, int offPicture, float height, int curved) {
     for (int h = 0; h < HAND_COUNT; h++) {
@@ -1005,7 +1005,9 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
         if (roomStyle > 0 && (hover != HOVER_CORNER || !roomResizable(roomStyle))) {
             return;
         }
-        if (hand < 0 || (hover != HOVER_BAR && hover != HOVER_CORNER)) {
+        int gripPicture = ctx->playerMode && hand >= 0 && hand != SRC_GAZE && ctx->gripEdge[hand]
+                && (hover == HOVER_SCREEN || hover == HOVER_HALO);
+        if (hand < 0 || (hover != HOVER_BAR && hover != HOVER_CORNER && !gripPicture)) {
             return;
         }
 
@@ -1050,7 +1052,7 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
         ctx->grabRadius = ctx->screenRadius;
         ctx->springActive = 0;
 
-        if (hover == HOVER_BAR) {
+        if (hover == HOVER_BAR || gripPicture) {
             ctx->grabMode = GRAB_MOVE;
             if (ctx->playerMode) {
                 ctx->grabHandDist = distFromHead(ctx, aims[mover].position);
