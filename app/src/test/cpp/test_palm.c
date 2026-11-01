@@ -35,13 +35,23 @@ static void testWhereItIs(void) {
     CHECK(palmShown(&h, HEAD, 0));
     h = hand(0.4f, 0.0f, -0.4f, 0, 0.09f);
     CHECK(!palmShown(&h, HEAD, 0));
-    // Below the view.
+    // An outstretched arm, below the eye line, counts.
+    h = hand(0.05f, -0.3f, -0.6f, 0, 0.09f);
+    CHECK(palmShown(&h, HEAD, 0));
+    h = hand(-0.1f, -0.45f, -0.6f, 0, 0.09f);
+    CHECK(palmShown(&h, HEAD, 0));
+    // Resting in the lap, or raised well above the view, does not.
     h = hand(0.0f, -0.5f, -0.3f, 0, 0.09f);
+    CHECK(!palmShown(&h, HEAD, 0));
+    h = hand(0.0f, 0.3f, -0.4f, 0, 0.09f);
+    CHECK(!palmShown(&h, HEAD, 0));
+    // Behind the head.
+    h = hand(0.0f, 0.0f, 0.4f, 0, 0.09f);
     CHECK(!palmShown(&h, HEAD, 0));
     // Too close and beyond arm's length.
     h = hand(0.0f, 0.0f, -0.1f, 0, 0.09f);
     CHECK(!palmShown(&h, HEAD, 0));
-    h = hand(0.0f, 0.0f, -0.9f, 0, 0.09f);
+    h = hand(0.0f, 0.0f, -1.0f, 0, 0.09f);
     CHECK(!palmShown(&h, HEAD, 0));
 }
 
@@ -95,10 +105,23 @@ static void testHowLongItIsHeld(void) {
     for (int i = 0; i < 90; i++) {
         CHECK(!palmHoldStep(&hold, 1, FRAME));
     }
-    // A one-frame drop restarts the hold.
+    // Tracking dropping the palm for a frame neither fires again nor restarts the hold.
     palmHoldStep(&hold, 0, FRAME);
     CHECK(!palmHoldStep(&hold, 1, FRAME));
+    CHECK(hold.heldFor >= PALM_HOLD_SEC);
+    // A real drop re-arms it.
+    for (int i = 0; i < 30; i++) {
+        palmHoldStep(&hold, 0, FRAME);
+    }
+    CHECK(!palmHoldStep(&hold, 1, FRAME));
     CHECK(hold.heldFor < PALM_HOLD_SEC);
+    // Flickering tracking still fires.
+    PalmHold flicker = { 0 };
+    int flickerFired = 0;
+    for (int i = 0; i < 60 && !flickerFired; i++) {
+        flickerFired = palmHoldStep(&flicker, i % 3 != 0, FRAME);
+    }
+    CHECK(flickerFired);
     // A brief palm does not fire.
     PalmHold brief = { 0 };
     for (int i = 0; i < 10; i++) {

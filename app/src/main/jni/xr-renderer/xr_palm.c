@@ -24,11 +24,16 @@ int palmShown(const PalmHand* hand, XrPosef head, int facing) {
         return 0;
     }
 
-    // Near the centre of view
+    // In front of the face, in the head's own frame
     Vec3 toPalm = vecNorm(vecSub(palm, eyes));
-    Vec3 forward = { 0.0f, 0.0f, -1.0f };
-    forward = quatRotate(head.orientation, forward);
-    if (vecDot(forward, toPalm) < cosf(PALM_CENTRE_DEG * DEG_TO_RAD)) {
+    Vec3 local = quatRotate(quatConj(head.orientation), toPalm);
+    float ahead = -local.z;
+    if (ahead <= 0.0f) {
+        return 0;
+    }
+    float side = atan2f(fabsf(local.x), ahead) / DEG_TO_RAD;
+    float up = atan2f(local.y, sqrtf(local.x * local.x + ahead * ahead)) / DEG_TO_RAD;
+    if (side > PALM_SIDE_DEG || up > PALM_ABOVE_DEG || up < -PALM_BELOW_DEG) {
         return 0;
     }
 
@@ -54,10 +59,14 @@ int palmShown(const PalmHand* hand, XrPosef head, int facing) {
 
 int palmHoldStep(PalmHold* hold, int shown, float dt) {
     if (!shown) {
-        hold->heldFor = 0.0f;
-        hold->fired = 0;
+        hold->lostFor += dt;
+        if (hold->lostFor >= PALM_DROP_SEC) {
+            hold->heldFor = 0.0f;
+            hold->fired = 0;
+        }
         return 0;
     }
+    hold->lostFor = 0.0f;
     hold->heldFor += dt;
     if (!hold->fired && hold->heldFor >= PALM_HOLD_SEC) {
         hold->fired = 1;
