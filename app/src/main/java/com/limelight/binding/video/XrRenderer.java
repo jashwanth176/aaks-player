@@ -101,7 +101,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private MidasDepthSource.Spec sessionDepthSpec;
     private MidasDepthSource.Route sessionDepthRoute;
     private int depthModeNow;
-    // Width, height, fps, depth mode, screen hidden, same film: applied between frames
+    // Width, height, fps, depth mode, screen hidden, same film, 3D on: applied between frames
     private final AtomicReference<int[]> pendingReconfig = new AtomicReference<>();
     // The frame still latched is drawn again on the next frame, for a new layout of a paused film
     private boolean redrawLatched;
@@ -596,7 +596,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     // envResTier: 0 low, 1 standard, 2 high, 3 ultra. fps is the video's; the display rate is
     // matched to it.
     private native boolean nativeReconfigure(long ctx, int width, int height, int fps, int stereoMode,
-                                             boolean sameFilm);
+                                             boolean sameFilm, boolean stereoOn);
     private native long nativeInit(Activity activity, int width, int height, int fps,
                                    int stereoMode, int depthWidth, int depthHeight,
                                    boolean depthDebug, int convergence, int depthScale,
@@ -2483,17 +2483,18 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
 
     /**
      * A new film in the running session, or a new layout for the same one, whose decoder keeps
-     * running: frame size per eye, frame rate, depth mode and whether the screen is hidden
-     * (library). Applied between frames. Any thread.
+     * running: frame size per eye, frame rate, depth mode, whether the screen is hidden
+     * (library) and whether 3D is on (a stereo source can play flat). Applied between
+     * frames. Any thread.
      */
     public void reconfigure(int width, int height, int fps, int depthMode, boolean screenHidden,
-                            boolean sameFilm) {
+                            boolean sameFilm, boolean stereoOn) {
         SurfaceTexture texture = surfaceTexture;
         if (texture != null && !sameFilm) {
             texture.setDefaultBufferSize(width, height);
         }
         pendingReconfig.set(new int[] { width, height, fps, depthMode, screenHidden ? 1 : 0,
-                sameFilm ? 1 : 0 });
+                sameFilm ? 1 : 0, stereoOn ? 1 : 0 });
     }
 
     private void applyReconfigure(int[] next) {
@@ -2513,7 +2514,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
         if (!sameFilm && pendingFrames.getAndSet(0) > 0) {
             surfaceTexture.updateTexImage();
         }
-        if (!nativeReconfigure(nativeCtx, next[0], next[1], next[2], mode, sameFilm)) {
+        if (!nativeReconfigure(nativeCtx, next[0], next[1], next[2], mode, sameFilm, next[6] != 0)) {
             LimeLog.severe("XR renderer: could not set up for the new film");
         }
         redrawLatched = sameFilm && videoFrameIndex > 0;

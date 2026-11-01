@@ -85,6 +85,8 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         Uri uri;
         VideoProbe probe;
         int eyeWidth, eyeHeight, depthMode;
+        // A 3D disc shown as 2D: one eye, flat
+        boolean flat;
         PlaybackStore.Entry known;
     }
 
@@ -111,9 +113,10 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
                 : disc ? new VideoProbe(3840, 1080, 24)
                 : playing != null ? playing : VideoProbe.read(this, uri);
         probe = f.probe;
+        String requested = getIntent().getStringExtra(EXTRA_LAYOUT);
         layout = browse ? StereoLayout.MONO : disc ? StereoLayout.SBS
-                : StereoLayout.resolve(getIntent().getStringExtra(EXTRA_LAYOUT),
-                        uri.getLastPathSegment(), f.probe.width, f.probe.height);
+                : StereoLayout.resolve(requested, uri.getLastPathSegment(), f.probe.width, f.probe.height);
+        f.flat = disc && "mono".equalsIgnoreCase(requested);
         f.eyeWidth = layout.eyeWidth(f.probe.width, f.probe.height);
         f.eyeHeight = layout.eyeHeight(f.probe.width, f.probe.height);
         if (layout == StereoLayout.SBS) {
@@ -128,7 +131,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         f.known = browse ? new PlaybackStore.Entry() : store.get(filmKey);
         LimeLog.info("PlayerXR: " + uri + " " + f.probe.width + "x" + f.probe.height + " @" + f.probe.fps
                 + " layout=" + layout + " eye=" + f.eyeWidth + "x" + f.eyeHeight
-                + " depthMode=" + f.depthMode + (disc ? " disc" : ""));
+                + " depthMode=" + f.depthMode + (disc ? " disc" : "") + (f.flat ? " flat" : ""));
         return f;
     }
 
@@ -272,7 +275,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         renderer.setVideoColour(XrShared.VIDEO_TRANSFER_CODE_SDR, 0.0f, 0.0f);
         renderer.setPlayerContent(f.known.barsKnown ? f.known.barTop : 0.0f,
                 f.known.barsKnown ? f.known.barBottom : 0.0f);
-        renderer.reconfigure(f.eyeWidth, f.eyeHeight, f.probe.fps, f.depthMode, browse, false);
+        renderer.reconfigure(f.eyeWidth, f.eyeHeight, f.probe.fps, f.depthMode, browse, false, !f.flat);
         beginFilm(f, false);
     }
 
@@ -283,7 +286,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             return;
         }
         Film f = plan(probe);
-        renderer.reconfigure(f.eyeWidth, f.eyeHeight, f.probe.fps, f.depthMode, false, true);
+        renderer.reconfigure(f.eyeWidth, f.eyeHeight, f.probe.fps, f.depthMode, false, true, !f.flat);
     }
 
     private void createUi() {

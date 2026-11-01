@@ -615,7 +615,7 @@ JNIEXPORT jboolean JNICALL
 Java_com_limelight_binding_video_XrRenderer_nativeReconfigure(JNIEnv* env, jobject thiz,
                                                               jlong handle, jint width, jint height,
                                                               jint fps, jint stereoMode,
-                                                              jboolean sameFilm) {
+                                                              jboolean sameFilm, jboolean stereoOn) {
     (void)env;
     (void)thiz;
     XrCtx* ctx = (XrCtx*)(intptr_t)handle;
@@ -640,8 +640,8 @@ Java_com_limelight_binding_video_XrRenderer_nativeReconfigure(JNIEnv* env, jobje
     ctx->videoWidth = width;
     ctx->videoHeight = height;
     ctx->stereoMode = stereoMode;
-    ctx->stereoLive = stereoMode != DEPTH_MODE_OFF;
-    ctx->stereoWaiting = stereoMode == DEPTH_MODE_MODEL;
+    ctx->stereoLive = stereoMode != DEPTH_MODE_OFF && stereoOn;
+    ctx->stereoWaiting = ctx->stereoLive && stereoMode == DEPTH_MODE_MODEL;
     ctx->drawnEyes = ctx->stereoLive ? 2 : 1;
     if (sizeChanged) {
         resizeUpsample(ctx);
