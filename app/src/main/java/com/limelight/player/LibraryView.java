@@ -199,7 +199,7 @@ final class LibraryView {
         scrim.setOnClickListener(v -> cancelDelete());
         LinearLayout dialog = new LinearLayout(context);
         dialog.setOrientation(LinearLayout.VERTICAL);
-        dialog.setBackground(UiKit.frost(40));
+        dialog.setBackground(UiKit.frost(40, UiKit.DIALOG_BASE));
         dialog.setPadding(48, 40, 48, 40);
         dialog.setClickable(true);
         dialog.addView(UiKit.text(context, "Delete this film?", 40, true, TEXT));

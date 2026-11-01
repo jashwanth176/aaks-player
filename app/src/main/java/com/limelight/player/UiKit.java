@@ -66,11 +66,17 @@ final class UiKit {
 
     // Menu sheet glass: darker base for legibility, top sheen, corner highlight, gradient rim
     static final int SHEET_BASE = 0x8F1C1D23;
+    // Dialogs sit over other text, so they are nearly solid
+    static final int DIALOG_BASE = 0xF21C1D23;
     static final int SHEET_SHEEN_TOP = 0x2EFFFFFF;
     static final int SHEET_SHEEN_BOTTOM = 0x08FFFFFF;
 
     static Drawable frost(float radius) {
-        return new SheetGlass(radius);
+        return new SheetGlass(radius, SHEET_BASE);
+    }
+
+    static Drawable frost(float radius, int baseColour) {
+        return new SheetGlass(radius, baseColour);
     }
 
     private static final class SheetGlass extends Drawable {
@@ -81,9 +87,9 @@ final class UiKit {
         private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF rect = new RectF();
 
-        SheetGlass(float radius) {
+        SheetGlass(float radius, int baseColour) {
             this.radius = radius;
-            base.setColor(SHEET_BASE);
+            base.setColor(baseColour);
             rim.setStyle(Paint.Style.STROKE);
             rim.setStrokeWidth(2.5f);
         }

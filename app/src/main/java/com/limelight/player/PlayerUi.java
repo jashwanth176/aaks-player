@@ -523,7 +523,7 @@ final class PlayerUi implements XrRenderer.UiListener {
     private ViewGroup buildExitDialog() {
         LinearLayout dialog = new LinearLayout(context);
         dialog.setOrientation(LinearLayout.VERTICAL);
-        dialog.setBackground(UiKit.frost(40));
+        dialog.setBackground(UiKit.frost(40, UiKit.DIALOG_BASE));
         dialog.setPadding(48, 40, 48, 40);
         dialog.setClickable(true);
         dialog.addView(UiKit.text(context, "Leave AaksVR?", 40, true, TEXT));
