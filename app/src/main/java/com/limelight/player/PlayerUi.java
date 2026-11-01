@@ -934,7 +934,8 @@ final class PlayerUi implements XrRenderer.UiListener {
                     p.gap = browse ? DIALOG_GAP : SHEET_GAP + DIALOG_GAP;
                     break;
                 case UI_PANEL_BACK:
-                    visible = browse || show;
+                    // Whenever the bar shows, which the renderer decides
+                    visible = true;
                     break;
                 default:
                     visible = show;
