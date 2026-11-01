@@ -444,8 +444,9 @@ final class LibraryView {
         }
     }
 
-    /** A clipped viewport whose content scrolls, with a thin bar at its right edge. */
+    /** A clipped viewport whose content scrolls, with a thin bar in a gutter at its right. */
     private static final class Pane extends FrameLayout {
+        private static final int GUTTER = 24;
         // Wanted scroll, clamped to the content once it is laid out
         int offset;
         private final Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -476,7 +477,7 @@ final class LibraryView {
             View child = getChildAt(0);
             if (child != null) {
                 // The content keeps its full height, whatever the viewport's
-                child.measure(MeasureSpec.makeMeasureSpec(getMeasuredWidth(), MeasureSpec.EXACTLY),
+                child.measure(MeasureSpec.makeMeasureSpec(getMeasuredWidth() - GUTTER, MeasureSpec.EXACTLY),
                         MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED));
             }
         }
@@ -485,7 +486,7 @@ final class LibraryView {
         protected void onLayout(boolean changed, int l, int t, int r, int b) {
             View child = getChildAt(0);
             if (child != null) {
-                child.layout(0, 0, r - l, child.getMeasuredHeight());
+                child.layout(0, 0, r - l - GUTTER, child.getMeasuredHeight());
             }
             set(offset);
         }
