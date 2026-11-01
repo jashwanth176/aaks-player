@@ -626,6 +626,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                                           boolean pointerEnabled, boolean gazeEnabled,
                                           boolean pointerSleep, float[] out);
     private native void nativeSetScreenPose(long ctx, float[] pose);
+    private native void nativeRecentreScreen(long ctx);
     // The cell the room belongs to, which the native side maps to its room style
     private native void nativeUploadRoomModel(long ctx, ByteBuffer mesh, int length, int cell);
     private native void nativeUploadRoomAtlas(long ctx, ByteBuffer atlas, int cell, int slot);
@@ -785,7 +786,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                     nativeSetPlayerContent(nativeCtx, playerBarTop, playerBarBottom);
                     nativeSetPlayerScreenHidden(nativeCtx, playerScreenHidden);
                 }
-                restoreScreenPose();
+                restoreScreenPoseFresh();
                 if (playerMode) {
                     // After the saved placement, whose own curve the player overrides
                     nativeSetPlayerCurve(nativeCtx, playerCurve);
@@ -2415,6 +2416,17 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 .apply();
     }
 
+    // Placements restored this session; the first restore of each is aimed straight ahead,
+    // since the save was made under an earlier session's origin
+    private final java.util.Set<String> placedKeys = new java.util.HashSet<>();
+
+    private void restoreScreenPoseFresh() {
+        restoreScreenPose();
+        if (playerMode && placedKeys.add(screenPoseKey())) {
+            nativeRecentreScreen(nativeCtx);
+        }
+    }
+
     private void restoreScreenPose() {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(prefsContext);
         String saved = prefs.getString(screenPoseKey(), null);
@@ -2507,7 +2519,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             saveScreenPose();
             playerScreenHidden = hidden;
             nativeSetPlayerScreenHidden(nativeCtx, hidden);
-            restoreScreenPose();
+            restoreScreenPoseFresh();
         }
         boolean sameFilm = next[5] != 0;
         // Drop a frame of the last film still queued, so it never shows on the new screen

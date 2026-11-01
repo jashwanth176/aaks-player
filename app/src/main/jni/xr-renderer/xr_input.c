@@ -3810,6 +3810,19 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetScreenPose(JNIEnv* env, job
          p[0], p[1], p[2], p[7]);
 }
 
+// Straight ahead at the restored distance, height and size: a placement saved under
+// another session's origin would land anywhere otherwise. Any thread.
+JNIEXPORT void JNICALL
+Java_com_limelight_binding_video_XrRenderer_nativeRecentreScreen(JNIEnv* env, jobject thiz,
+                                                                 jlong handle) {
+    (void)env;
+    (void)thiz;
+    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
+    if (ctx != NULL) {
+        recentreScreen(ctx);
+    }
+}
+
 // Player mode: disables the hand hint and bar detection, and switches the
 // handles to player behaviour. Set once, before the first frame.
 JNIEXPORT void JNICALL
