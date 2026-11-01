@@ -268,12 +268,15 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetPlayerContent(JNIEnv* env, 
 }
 
 float screenAspect(const XrCtx* ctx) {
-    // With no video the screen takes the library sheet's aspect, so the
-    // handles frame the page
+    // With no video the screen is the library window; a fixed-size sheet in its
+    // place (settings) gives the frame its own height, so the handles hug it
     if (ctx->playerMode && ctx->playerScreenHidden) {
         const int sheet = UI_PANEL_SHEET;
-        return ctx->ui[sheet].texW > 0 ? (float)ctx->ui[sheet].texH / (float)ctx->ui[sheet].texW
-                                       : PLAYER_BROWSE_ASPECT;
+        if (ctx->ui[sheet].fixed && ctx->ui[sheet].visible && ctx->ui[sheet].texH > 0
+                && ctx->screenWidth > 0.0f) {
+            return (float)ctx->ui[sheet].texH * uiMetresPerPx(ctx) / ctx->screenWidth;
+        }
+        return PLAYER_BROWSE_ASPECT;
     }
     float full = (float)ctx->videoHeight / (float)ctx->videoWidth;
     return full * (1.0f - ctx->contentCur[0] - ctx->contentCur[1]);

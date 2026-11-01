@@ -31,6 +31,13 @@ final class DepthPairs {
         return state[pair];
     }
 
+    /** All pairs free again, for a depth thread starting afresh. */
+    void reset() {
+        java.util.Arrays.fill(state, FREE);
+        java.util.Arrays.fill(made, false);
+        captures = 0;
+    }
+
     /**
      * The pair the next capture goes into, or -1 when a capture is already waiting
      * for the model or no pair is free. The pair stays free until captured(); only

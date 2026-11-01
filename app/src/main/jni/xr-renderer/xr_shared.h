@@ -165,13 +165,18 @@
 #define IN_PLAYER_STICK_X (IN_PLAYER_BUTTONS + 1)
 #define IN_SLOTS    (IN_PLAYER_STICK_X + 1)
 
-// Player panels, drawn in Java. Width and edge gap scale with the screen width.
+// Player panels, drawn in Java. Subtitles and the browse library scale with the
+// screen; the rest keep one pixel size whatever the screen's size.
 #define UI_PANEL_TOP 0
 #define UI_PANEL_RAIL 1
 #define UI_PANEL_CONTROLS 2
 #define UI_PANEL_SHEET 3
 #define UI_PANEL_SUBS 4
-#define UI_PANEL_COUNT 5
+// Spinner over the screen while a film's first frame is late; shown by the renderer
+#define UI_PANEL_LOADING 5
+#define UI_PANEL_COUNT 6
+// Fixed-size panels: radians per pixel
+#define UI_PX_ANGLE 0.0004f
 // Panel anchors. The gap is away from the edge, or towards the viewer for FRONT.
 #define UI_ANCHOR_ABOVE 0
 #define UI_ANCHOR_LEFT 1

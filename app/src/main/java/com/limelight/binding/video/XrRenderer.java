@@ -96,6 +96,16 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private int skippedFrames;
     private volatile boolean depthReady;
 
+    // Kept so a later film can start the depth thread in the same session
+    private Activity sessionActivity;
+    private MidasDepthSource.Spec sessionDepthSpec;
+    private MidasDepthSource.Route sessionDepthRoute;
+    private int depthModeNow;
+    // Width, height, fps, depth mode, screen hidden, same film: applied between frames
+    private final AtomicReference<int[]> pendingReconfig = new AtomicReference<>();
+    // The frame still latched is drawn again on the next frame, for a new layout of a paused film
+    private boolean redrawLatched;
+
     // Frame index and time of the frame the live depth map came from, to measure its lag
     private volatile long publishedFrameIndex;
     private volatile long publishedFrameNs;
@@ -438,18 +448,20 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     /**
-     * Where a panel hangs off the screen and whether it shows: a UI_ANCHOR_,
-     * its width as a share of the screen's, and its gap from that edge (or
-     * towards the viewer, for the front) as a share of the screen's width.
-     * Any thread.
+     * Where a panel hangs off the screen and whether it shows: a UI_ANCHOR_, and its gap from
+     * that edge (or towards the viewer, for the front). A fixed panel keeps its size whatever the
+     * screen's, with the gap in its pixels; otherwise width and gap are shares of the screen's
+     * width. Any thread.
      */
-    public void setUiPanel(int panel, boolean visible, int anchor, float widthFrac, float gapFrac) {
+    public void setUiPanel(int panel, boolean visible, int anchor, boolean fixed, float widthFrac,
+                           float gap) {
         if (panel < 0 || panel >= UI_PANEL_COUNT) {
             return;
         }
         // Applied on the frame loop after any new picture, so a panel never shows the old picture
         // at the new size
-        pendingUiPlacements.set(panel, new float[] { visible ? 1 : 0, anchor, widthFrac, gapFrac });
+        pendingUiPlacements.set(panel, new float[] { visible ? 1 : 0, anchor, fixed ? 1 : 0,
+                widthFrac, gap });
     }
 
     /**
@@ -506,7 +518,8 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             }
             float[] place = pendingUiPlacements.getAndSet(i, null);
             if (place != null) {
-                nativeSetUiPanel(nativeCtx, i, place[0] != 0, (int) place[1], place[2], place[3]);
+                nativeSetUiPanel(nativeCtx, i, place[0] != 0, (int) place[1], place[2] != 0,
+                        place[3], place[4]);
             }
         }
     }
@@ -582,6 +595,8 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private static native String[] nativeTakeStartFailure();
     // envResTier: 0 low, 1 standard, 2 high, 3 ultra. fps is the video's; the display rate is
     // matched to it.
+    private native boolean nativeReconfigure(long ctx, int width, int height, int fps, int stereoMode,
+                                             boolean sameFilm);
     private native long nativeInit(Activity activity, int width, int height, int fps,
                                    int stereoMode, int depthWidth, int depthHeight,
                                    boolean depthDebug, int convergence, int depthScale,
@@ -660,7 +675,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private native void nativeSetVideoColour(long ctx, int transfer, float maxCll, float masteringNits);
     private native void nativeUploadUiPanel(long ctx, int panel, ByteBuffer sheet, int width, int height);
     private native void nativeSetUiPanel(long ctx, int panel, boolean visible, int anchor,
-                                         float widthFrac, float gapFrac);
+                                         boolean fixed, float widthFrac, float gapFrac);
     private native void nativeSetUiPanelDepth(long ctx, int panel, float k);
     private native void nativeUploadStereoButton(long ctx, ByteBuffer off, ByteBuffer on);
     private native void nativeUploadRayButton(long ctx, ByteBuffer off, ByteBuffer on);
@@ -725,6 +740,10 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 MidasDepthSource.Route depthRoute =
                         depthSpec.route(PreferenceConfiguration.isXr2Gen1Headset());
                 DepthSize mapSize = depthRoute.size;
+                sessionActivity = activity;
+                sessionDepthSpec = depthSpec;
+                sessionDepthRoute = depthRoute;
+                depthModeNow = prefs.vrDepthMode;
                 nativeCtx = nativeInit(activity, videoWidth, videoHeight, prefs.fps,
                         prefs.vrDepthMode, mapSize.width, mapSize.height,
                         prefs.vrDepthDebug, prefs.vrConvergence, prefs.vrDepthScale,
@@ -1183,6 +1202,10 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
         long stereoBackNs = 0;
 
         while (!stopping) {
+            int[] next = pendingReconfig.getAndSet(null);
+            if (next != null) {
+                applyReconfigure(next);
+            }
             int r = nativeWaitBeginFrame(nativeCtx);
             if (r == FRAME_EXIT) {
                 return !stopping;
@@ -1253,11 +1276,13 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 }
                 videoFrameIndex++;
             }
-            else if (stereoBack && depthReady && videoFrameIndex > 0) {
+            else if ((stereoBack || redrawLatched) && depthReady && stereoOn && videoFrameIndex > 0) {
                 // Nothing new from the decoder, so capture the frame still latched
                 nativeDepthDue(nativeCtx, true);
                 startDepthCapture();
             }
+            boolean drawFrame = newFrame || redrawLatched;
+            redrawLatched = false;
             ByteBuffer splash = pendingSplash.getAndSet(null);
             if (splash != null) {
                 nativeUploadSplash(nativeCtx, splash);
@@ -1335,7 +1360,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 }
             }
 
-            nativeEndFrame(nativeCtx, newFrame, texMatrix, distance, quadWidth, curvature,
+            nativeEndFrame(nativeCtx, drawFrame, texMatrix, distance, quadWidth, curvature,
                     headLocked, separation, eyeSwap, passthroughOn);
         }
         return false;
@@ -2454,6 +2479,67 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
 
     private static String msPer(long totalNs, long count) {
         return String.format("%.2f", totalNs / (double)count / 1000000.0);
+    }
+
+    /**
+     * A new film in the running session, or a new layout for the same one, whose decoder keeps
+     * running: frame size per eye, frame rate, depth mode and whether the screen is hidden
+     * (library). Applied between frames. Any thread.
+     */
+    public void reconfigure(int width, int height, int fps, int depthMode, boolean screenHidden,
+                            boolean sameFilm) {
+        SurfaceTexture texture = surfaceTexture;
+        if (texture != null && !sameFilm) {
+            texture.setDefaultBufferSize(width, height);
+        }
+        pendingReconfig.set(new int[] { width, height, fps, depthMode, screenHidden ? 1 : 0,
+                sameFilm ? 1 : 0 });
+    }
+
+    private void applyReconfigure(int[] next) {
+        int mode = next[3];
+        boolean hidden = next[4] != 0;
+        if (depthModeNow == DEPTH_MODE_MODEL && mode != DEPTH_MODE_MODEL) {
+            stopDepthThread();
+        }
+        if (hidden != playerScreenHidden) {
+            saveScreenPose();
+            playerScreenHidden = hidden;
+            nativeSetPlayerScreenHidden(nativeCtx, hidden);
+            restoreScreenPose();
+        }
+        boolean sameFilm = next[5] != 0;
+        // Drop a frame of the last film still queued, so it never shows on the new screen
+        if (!sameFilm && pendingFrames.getAndSet(0) > 0) {
+            surfaceTexture.updateTexImage();
+        }
+        if (!nativeReconfigure(nativeCtx, next[0], next[1], next[2], mode, sameFilm)) {
+            LimeLog.severe("XR renderer: could not set up for the new film");
+        }
+        redrawLatched = sameFilm && videoFrameIndex > 0;
+        if (mode == DEPTH_MODE_MODEL && depthThread == null) {
+            synchronized (depthLock) {
+                depthExit = false;
+                pairs.reset();
+            }
+            startDepthThread(sessionActivity, sessionDepthSpec, sessionDepthRoute);
+        }
+        depthModeNow = mode;
+        if (prefConfig != null) {
+            prefConfig.vrDepthMode = mode;
+        }
+    }
+
+    /** A fresh Surface for the next decoder, once the last one has let go of the old. Main thread. */
+    public Surface newInputSurface() {
+        if (surfaceTexture == null) {
+            return inputSurface;
+        }
+        if (inputSurface != null) {
+            inputSurface.release();
+        }
+        inputSurface = new Surface(surfaceTexture);
+        return inputSurface;
     }
 
     public Surface getInputSurface() {

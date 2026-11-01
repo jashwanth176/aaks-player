@@ -719,7 +719,8 @@ static void addKofiLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers
 // Player panels, back to front.
 static void addUiPanelLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
     static const int order[UI_PANEL_COUNT] = {
-        UI_PANEL_SUBS, UI_PANEL_RAIL, UI_PANEL_TOP, UI_PANEL_CONTROLS, UI_PANEL_SHEET
+        UI_PANEL_LOADING, UI_PANEL_SUBS, UI_PANEL_RAIL, UI_PANEL_TOP, UI_PANEL_CONTROLS,
+        UI_PANEL_SHEET
     };
     for (int i = 0; i < UI_PANEL_COUNT; i++) {
         int id = order[i];
@@ -1472,7 +1473,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     if (!splashUp && ctx->everRendered && ctx->shouldRender) {
         // No film: panels without the screen. Handles
         // stay so the panels can be moved and sized.
-        if (!ctx->playerScreenHidden) {
+        if (!ctx->playerScreenHidden && ctx->videoReady) {
             // On a cylinder the glow's clear middle does not line up with the picture,
             // so the glow goes under it and shows through the picture's soft edge.
             int glowUnder = ctx->playerMode && view.screenCurved;

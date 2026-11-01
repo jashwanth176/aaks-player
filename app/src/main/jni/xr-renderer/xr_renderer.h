@@ -773,6 +773,11 @@ typedef struct {
     XrTime predictedDisplayTime;
     int shouldRender;
     int everRendered;
+    // Depth model GL set up, so any film can switch to 2D-to-3D
+    int depthGlReady;
+    // The video swapchain holds a frame of the current film; when the wait for it began
+    int videoReady;
+    int64_t videoWaitNs;
     // Frames submitted while focused; passthrough waits for the first (see nativeEndFrame).
     int focusedFrames;
     int passthroughBlendSaid;
@@ -1316,6 +1321,9 @@ typedef struct {
         int ready;
         int visible;
         int anchor;
+        // Fixed: width from the texture at uiMetresPerPx, gap in pixels.
+        // Otherwise both are shares of the screen width.
+        int fixed;
         float widthFrac;
         float gapFrac;
         // Fraction of the distance toward the viewer the panel floats off the screen.
@@ -1601,6 +1609,8 @@ int linkVideoProgram(XrCtx* ctx, GLuint* out, const char* fragmentSrc, const cha
 // changed. GL thread, before the frame draws.
 void applyVideoColour(XrCtx* ctx);
 int initGl(XrCtx* ctx);
+// After a new video size: the quarter-size depth targets follow it
+void resizeUpsample(XrCtx* ctx);
 void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation);
 
 // xr_depth.c: the depth model staging and the stage thread's uploads
@@ -1664,6 +1674,8 @@ float screenPitch(XrCtx* ctx);
 XrQuaternionf screenOrient(float yaw, float pitch, float roll);
 // The local player's panels (xr_uipanels.c)
 XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight);
+// Metres per pixel of a fixed-size panel
+float uiMetresPerPx(const XrCtx* ctx);
 int uiPanelAt(XrCtx* ctx, XrPosef aim, float* outU, float* outV);
 void stepUiPanels(XrCtx* ctx, int64_t nowNs);
 void destroyUiPanels(XrCtx* ctx);
@@ -1734,6 +1746,8 @@ void startPerfLevels(XrCtx* ctx);
 void setPerfLevel(XrCtx* ctx, int level);
 void perfNotice(XrCtx* ctx, const XrEventDataPerfSettingsEXT* notice);
 void displaySessionBegun(XrCtx* ctx);
+// A new film's frame rate: picks the display rate again
+void displayContentChanged(XrCtx* ctx);
 // Compositor colour space: logged at start, set when the colour mode changes.
 void startColorSpace(XrCtx* ctx);
 void applyColourMode(XrCtx* ctx);

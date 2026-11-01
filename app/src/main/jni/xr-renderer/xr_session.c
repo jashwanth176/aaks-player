@@ -609,6 +609,57 @@ static int initSwapchain(XrCtx* ctx) {
     return 1;
 }
 
+// A new film, or a new layout for the same one, in the running session: rebuilds the
+// video swapchain when its size or eye count changes. Frame loop thread, between frames.
+JNIEXPORT jboolean JNICALL
+Java_com_limelight_binding_video_XrRenderer_nativeReconfigure(JNIEnv* env, jobject thiz,
+                                                              jlong handle, jint width, jint height,
+                                                              jint fps, jint stereoMode,
+                                                              jboolean sameFilm) {
+    (void)env;
+    (void)thiz;
+    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
+    if (ctx == NULL || width <= 0 || height <= 0) {
+        return JNI_FALSE;
+    }
+    if (stereoMode == DEPTH_MODE_MODEL && !ctx->depthGlReady) {
+        stereoMode = DEPTH_MODE_OFF;
+    }
+    int sizeChanged = width != ctx->videoWidth || height != ctx->videoHeight;
+    int eyesChanged = (stereoMode != DEPTH_MODE_OFF) != (ctx->stereoMode != DEPTH_MODE_OFF);
+    if (sizeChanged || eyesChanged) {
+        glFinish();
+        destroyArtSwapchain(ctx, &ctx->swapchain, &ctx->swapchainImages);
+        int chainWidth = stereoMode != DEPTH_MODE_OFF ? width * 2 : width;
+        if (!createArtSwapchain(ctx, chainWidth, height, "xrCreateSwapchain", &ctx->swapchain,
+                                &ctx->swapchainImages, &ctx->swapchainImageCount)) {
+            LOGE("video swapchain %dx%d could not be made for the new film", chainWidth, height);
+            return JNI_FALSE;
+        }
+    }
+    ctx->videoWidth = width;
+    ctx->videoHeight = height;
+    ctx->stereoMode = stereoMode;
+    ctx->stereoLive = stereoMode != DEPTH_MODE_OFF;
+    ctx->stereoWaiting = stereoMode == DEPTH_MODE_MODEL;
+    ctx->drawnEyes = ctx->stereoLive ? 2 : 1;
+    if (sizeChanged) {
+        resizeUpsample(ctx);
+    }
+    ctx->videoReady = 0;
+    ctx->videoWaitNs = nowNs();
+    ctx->glowRendered = 0;
+    if (sameFilm) {
+        LOGI("new layout: %dx%d per eye, stereo mode %d", width, height, stereoMode);
+        return JNI_TRUE;
+    }
+    ctx->relightAvgValid = 0;
+    ctx->streamFps = fps;
+    displayContentChanged(ctx);
+    LOGI("new film: %dx%d per eye, %d fps, stereo mode %d", width, height, fps, stereoMode);
+    return JNI_TRUE;
+}
+
 // Ends the frame loop for a runtime reason, which Java
 // passes to the activity. The first reason is kept.
 static void runtimeEnded(XrCtx* ctx, const char* what, XrResult res) {
@@ -995,6 +1046,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
     ctx->relightAmbientTarget = 1.0f;
     ctx->relightOpacitySet = -1.0f;
     ctx->playerCrop = RELIGHT_CROP_DEFAULT;
+    ctx->videoWaitNs = nowNs();
     // Neutral picture grade until Java sets the preferences.
     for (int row = 0; row < PICTURE_VALUES; row++) {
         ctx->pictureUnits[row] = pictureDefault(row);

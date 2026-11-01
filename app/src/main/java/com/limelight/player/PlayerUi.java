@@ -35,6 +35,7 @@ import static com.limelight.binding.video.XrShared.UI_ANCHOR_FRONT;
 import static com.limelight.binding.video.XrShared.UI_ANCHOR_LEFT;
 import static com.limelight.binding.video.XrShared.UI_PANEL_CONTROLS;
 import static com.limelight.binding.video.XrShared.UI_PANEL_COUNT;
+import static com.limelight.binding.video.XrShared.UI_PANEL_LOADING;
 import static com.limelight.binding.video.XrShared.UI_PANEL_RAIL;
 import static com.limelight.binding.video.XrShared.UI_PANEL_SHEET;
 import static com.limelight.binding.video.XrShared.UI_PANEL_SUBS;
@@ -146,36 +147,34 @@ final class PlayerUi implements XrRenderer.UiListener {
     private static final float[] SPEEDS = { 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f };
     // How long the skip target stays shown after the last skip
     private static final long AIM_SHOW_MS = 1500;
-    // All sheets share one size
+    // Sheets are as wide as the library page; the library and tracks sheets have its height,
+    // the rest the height of their content
     private static final int SHEET_W = LibraryView.WIDTH, SHEET_H = LibraryView.HEIGHT;
-    private static final int[][] SHEET_SIZE = {
-        {0, 0}, {SHEET_W, SHEET_H}, {SHEET_W, SHEET_H}, {SHEET_W, SHEET_H}, {SHEET_W, SHEET_H}, {SHEET_W, SHEET_H},
-        {SHEET_W, SHEET_H}
-    };
+    private static final boolean[] SHEET_FULL = { false, false, false, true, true, false, false };
 
-    // Placement as fractions of screen width
-    private static final float TOP_FRAC = 0.52f, TOP_GAP = 0.02f;
-    private static final float RAIL_FRAC = TOP_FRAC * RAIL_W / TOP_W, RAIL_GAP = 0.025f;
-    // Browse-mode library width as a fraction of its window; the renderer sizes that window
-    // separately from the video screen
-    private static final float BROWSE_WIDTH = 1.0f;
-    private static final float CTRL_FRAC = 0.6f;
+    // Panels other than subtitles keep one size whatever the screen's; the renderer sets the
+    // scale. Gaps in panel pixels.
+    private static final int TOP_GAP = 48, RAIL_GAP = 60;
     // Negative gap: controls sit inside the bottom of the picture, with a margin
-    private static final float CTRL_GAP = -(CTRL_FRAC * CTRL_H / CTRL_W + 0.03f);
-    // Subtitles sit above the bottom edge, raised further while the controls are shown
+    private static final int CTRL_GAP = -(CTRL_H + 72);
+    // Sheets float toward the viewer, except in browse mode where they take the library's place
+    private static final int SHEET_GAP = 190;
+    private static final int LOADING_SIZE = 160;
+    // How far panels float toward the viewer, as a share of the distance to the screen
+    private static final float CHROME_DEPTH = 0.06f, SHEET_DEPTH = 0.1f;
+    // Subtitles belong to the picture, so they scale with it: width and gaps as fractions of
+    // the screen width. They sit above the bottom edge, raised further while the controls show.
     private static final float SUBS_FRAC = 0.8f;
     private static final float SUBS_HEIGHT_FRAC = SUBS_FRAC * SUBS_H / SUBS_W;
     private static final float SUBS_GAP_LOW = -(SUBS_HEIGHT_FRAC + 0.025f);
     private static final float SUBS_GAP_RAISED = SUBS_GAP_LOW - 0.095f;
-    // Sheet width per pixel as a fraction of screen width, so all sheets share one scale
-    private static final float SHEET_PER_PX = 0.00034f, SHEET_GAP = 0.08f;
 
     private final Context context;
     private final XrRenderer renderer;
     private final Actions actions;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Panel[] panels = new Panel[UI_PANEL_COUNT];
-    private final ViewGroup[] sheetRoots = new ViewGroup[SHEET_SIZE.length];
+    private final ViewGroup[] sheetRoots = new ViewGroup[SHEET_FULL.length];
 
     private String title = "";
     private int sheet = SHEET_NONE;
@@ -227,6 +226,8 @@ final class PlayerUi implements XrRenderer.UiListener {
     private final Map<String, TextView> depthOptions = new LinkedHashMap<>();
     private TextView passthroughOn, passthroughOff;
     private TextView convertOn, convertOff;
+    // Settings that only apply to a playing film, hidden in the library
+    private View[] filmRows;
     private TextView colourNatural, colourVivid;
     private TextView handHide, handAlways;
     private TextView jumpText;
@@ -256,21 +257,27 @@ final class PlayerUi implements XrRenderer.UiListener {
         ViewGroup root;
         int width, height;
         final int anchor;
+        // Fixed: one size whatever the screen's, gap in pixels. Otherwise width and gap are
+        // fractions of the screen width.
+        boolean fixed = true;
         float widthFrac;
-        float gapFrac;
+        float gap;
+        // Height from the content, up to `height`; the height last drawn
+        boolean wrap;
+        int drawn;
         boolean dirty = true;
         // Debug builds save the next render as PNG
         boolean dumpNext = true;
         Bitmap bitmap;
 
-        Panel(int id, ViewGroup root, int width, int height, int anchor, float widthFrac, float gapFrac) {
+        Panel(int id, ViewGroup root, int width, int height, int anchor, float gap) {
             this.id = id;
             this.root = root;
             this.width = width;
             this.height = height;
             this.anchor = anchor;
-            this.widthFrac = widthFrac;
-            this.gapFrac = gapFrac;
+            this.gap = gap;
+            drawn = height;
         }
     }
 
@@ -285,19 +292,28 @@ final class PlayerUi implements XrRenderer.UiListener {
     void start(String title) {
         this.title = title;
         panels[UI_PANEL_TOP] = new Panel(UI_PANEL_TOP, buildTop(), TOP_W, TOP_H,
-                UI_ANCHOR_ABOVE, TOP_FRAC, TOP_GAP);
+                UI_ANCHOR_ABOVE, TOP_GAP);
         panels[UI_PANEL_RAIL] = new Panel(UI_PANEL_RAIL, buildRail(), RAIL_W, RAIL_H,
-                UI_ANCHOR_LEFT, RAIL_FRAC, RAIL_GAP);
+                UI_ANCHOR_LEFT, RAIL_GAP);
         panels[UI_PANEL_CONTROLS] = new Panel(UI_PANEL_CONTROLS, buildControls(), CTRL_W, CTRL_H,
-                UI_ANCHOR_BELOW, CTRL_FRAC, CTRL_GAP);
+                UI_ANCHOR_BELOW, CTRL_GAP);
         panels[UI_PANEL_SUBS] = new Panel(UI_PANEL_SUBS, buildSubtitles(), SUBS_W, SUBS_H,
-                UI_ANCHOR_BELOW, SUBS_FRAC, SUBS_GAP_LOW);
+                UI_ANCHOR_BELOW, SUBS_GAP_LOW);
+        panels[UI_PANEL_SUBS].fixed = false;
+        panels[UI_PANEL_SUBS].widthFrac = SUBS_FRAC;
+        panels[UI_PANEL_LOADING] = new Panel(UI_PANEL_LOADING, buildLoading(), LOADING_SIZE,
+                LOADING_SIZE, UI_ANCHOR_FRONT, 4);
         sheetRoots[SHEET_LIGHT] = buildLight();
         sheetRoots[SHEET_SETTINGS] = buildSettings();
         sheetRoots[SHEET_TRACKS] = buildTracks();
         sheetRoots[SHEET_SUBTITLES] = buildSubtitleStyle();
         sheetRoots[SHEET_SPEED] = buildSpeed();
         renderer.setUiPanelDepth(UI_PANEL_SUBS, subStyle.depthK());
+        // Floated in front of the picture, so a 3D film's pop-out never comes through them
+        renderer.setUiPanelDepth(UI_PANEL_TOP, CHROME_DEPTH);
+        renderer.setUiPanelDepth(UI_PANEL_RAIL, CHROME_DEPTH);
+        renderer.setUiPanelDepth(UI_PANEL_CONTROLS, CHROME_DEPTH);
+        renderer.setUiPanelDepth(UI_PANEL_SHEET, SHEET_DEPTH);
         library = new LibraryView(context, new PlaybackStore(context), new LibraryView.Host() {
             @Override
             public void onPlay(File file) {
@@ -326,8 +342,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         });
         sheetRoots[SHEET_LIBRARY] = library.root();
         panels[UI_PANEL_SHEET] = new Panel(UI_PANEL_SHEET, sheetRoots[SHEET_SETTINGS],
-                SHEET_SIZE[SHEET_SETTINGS][0], SHEET_SIZE[SHEET_SETTINGS][1], UI_ANCHOR_FRONT,
-                SHEET_PER_PX * SHEET_SIZE[SHEET_SETTINGS][0], SHEET_GAP);
+                SHEET_W, SHEET_H, UI_ANCHOR_FRONT, SHEET_GAP);
         // Empty until a sheet opens or a subtitle arrives
         panels[UI_PANEL_SHEET].dirty = false;
         panels[UI_PANEL_SUBS].dirty = false;
@@ -352,13 +367,40 @@ final class PlayerUi implements XrRenderer.UiListener {
     /** Browse mode (no file): shows the library in place of the screen. Main thread. */
     void startBrowsing() {
         browse = true;
+        title = "Library";
         library.setCloseable(false);
         tracksButton.setVisibility(View.GONE);
+        for (View row : filmRows) {
+            row.setVisibility(View.GONE);
+        }
+        // The library window is what the handles frame, so it stays on the screen plane
+        renderer.setUiPanelDepth(UI_PANEL_SHEET, 0.0f);
         // Shrink the rail to the remaining icons
         panels[UI_PANEL_RAIL].height = railHeight(3);
-        panels[UI_PANEL_RAIL].gapFrac = RAIL_GAP - (1.0f - BROWSE_WIDTH) / 2.0f;
         markDirty(UI_PANEL_RAIL);
         openSheet(SHEET_LIBRARY);
+    }
+
+    /** A film opened in the running session: back from browse mode to the film's panels. Main thread. */
+    void startFilm(String title) {
+        this.title = title;
+        if (browse) {
+            browse = false;
+            library.setCloseable(true);
+            tracksButton.setVisibility(View.VISIBLE);
+            for (View row : filmRows) {
+                row.setVisibility(View.VISIBLE);
+            }
+            renderer.setUiPanelDepth(UI_PANEL_SHEET, SHEET_DEPTH);
+            panels[UI_PANEL_RAIL].height = RAIL_H;
+            markDirty(UI_PANEL_RAIL);
+        }
+        audioSignature = "";
+        subtitleSignature = "";
+        setSubtitle(null, null, 0.0f);
+        aimUntil = 0;
+        openSheet(SHEET_NONE);
+        nudge();
     }
 
     /** Debug: opens a sheet and dumps it a few times as its content loads. */
@@ -490,9 +532,14 @@ final class PlayerUi implements XrRenderer.UiListener {
 
     // Debug: dumps every sheet to PNG at startup
     private void previewSheets() {
-        for (int which = SHEET_LIGHT; which < SHEET_SIZE.length; which++) {
+        for (int which = SHEET_LIGHT; which < SHEET_FULL.length; which++) {
             ViewGroup root = sheetRoots[which];
-            int w = SHEET_SIZE[which][0], h = SHEET_SIZE[which][1];
+            int w = SHEET_W, h = SHEET_H;
+            if (!SHEET_FULL[which]) {
+                root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                h = Math.min(h, Math.max(1, root.getMeasuredHeight()));
+            }
             root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
                          View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY));
             root.layout(0, 0, w, h);
@@ -535,7 +582,7 @@ final class PlayerUi implements XrRenderer.UiListener {
     private void handlePointer(int panelId, float u, float v, boolean pressed) {
         Panel panel = panelId >= 0 ? panels[panelId] : null;
         float x = panel != null ? u * panel.width : 0.0f;
-        float y = panel != null ? v * panel.height : 0.0f;
+        float y = panel != null ? v * panel.drawn : 0.0f;
         View target = panel != null ? clickableAt(panel.root, x, y) : null;
 
         if (dragLine != null) {
@@ -752,13 +799,13 @@ final class PlayerUi implements XrRenderer.UiListener {
                     break;
                 case UI_PANEL_SUBS:
                     visible = subsVisible;
-                    p.gapFrac = (show ? SUBS_GAP_RAISED : SUBS_GAP_LOW) - subStyle.lift();
+                    p.gap = (show ? SUBS_GAP_RAISED : SUBS_GAP_LOW) - subStyle.lift();
                     break;
                 default:
                     visible = show;
                     break;
             }
-            renderer.setUiPanel(p.id, visible, p.anchor, p.widthFrac, p.gapFrac);
+            renderer.setUiPanel(p.id, visible, p.anchor, p.fixed, p.widthFrac, p.gap);
         }
     }
 
@@ -790,12 +837,14 @@ final class PlayerUi implements XrRenderer.UiListener {
         if (which != SHEET_NONE) {
             Panel p = panels[UI_PANEL_SHEET];
             p.root = sheetRoots[which];
-            p.width = SHEET_SIZE[which][0];
-            p.height = SHEET_SIZE[which][1];
-            // In browse mode every sheet fills the library window, so its frame fits any sheet
-            boolean inPlace = browse;
-            p.widthFrac = inPlace ? BROWSE_WIDTH : SHEET_PER_PX * p.width;
-            p.gapFrac = inPlace ? 0.0f : SHEET_GAP;
+            p.width = SHEET_W;
+            p.height = SHEET_H;
+            p.wrap = !SHEET_FULL[which];
+            // In browse mode the library is the window, which the viewer sizes; other sheets
+            // take its place at the menus' own size
+            p.fixed = !(browse && which == SHEET_LIBRARY);
+            p.widthFrac = 1.0f;
+            p.gap = browse ? 0.0f : SHEET_GAP;
             p.dirty = true;
             p.dumpNext = true;
             if (which == SHEET_LIBRARY) {
@@ -846,11 +895,17 @@ final class PlayerUi implements XrRenderer.UiListener {
     }
 
     private void render(Panel p) {
-        p.root.measure(View.MeasureSpec.makeMeasureSpec(p.width, View.MeasureSpec.EXACTLY),
-                       View.MeasureSpec.makeMeasureSpec(p.height, View.MeasureSpec.EXACTLY));
-        p.root.layout(0, 0, p.width, p.height);
-        if (p.bitmap == null || p.bitmap.getWidth() != p.width || p.bitmap.getHeight() != p.height) {
-            p.bitmap = Bitmap.createBitmap(p.width, p.height, Bitmap.Config.ARGB_8888);
+        int width = View.MeasureSpec.makeMeasureSpec(p.width, View.MeasureSpec.EXACTLY);
+        int height = p.height;
+        if (p.wrap) {
+            p.root.measure(width, View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            height = Math.min(p.height, Math.max(1, p.root.getMeasuredHeight()));
+        }
+        p.root.measure(width, View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
+        p.root.layout(0, 0, p.width, height);
+        p.drawn = height;
+        if (p.bitmap == null || p.bitmap.getWidth() != p.width || p.bitmap.getHeight() != height) {
+            p.bitmap = Bitmap.createBitmap(p.width, height, Bitmap.Config.ARGB_8888);
         }
         else {
             p.bitmap.eraseColor(Color.TRANSPARENT);
@@ -1037,6 +1092,32 @@ final class PlayerUi implements XrRenderer.UiListener {
     }
 
     // Subtitle strip: styled text or a bitmap
+    // A faint ring with a bright arc; the renderer turns it
+    private ViewGroup buildLoading() {
+        FrameLayout root = new FrameLayout(context);
+        root.addView(new View(context) {
+            private final android.graphics.Paint paint = new android.graphics.Paint(
+                    android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+            @Override
+            protected void onDraw(Canvas canvas) {
+                float stroke = LOADING_SIZE * 0.09f;
+                float inset = stroke / 2.0f + 6.0f;
+                android.graphics.RectF ring = new android.graphics.RectF(inset, inset,
+                        getWidth() - inset, getHeight() - inset);
+                paint.setStyle(android.graphics.Paint.Style.STROKE);
+                paint.setStrokeWidth(stroke);
+                paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                paint.setColor(0x40FFFFFF);
+                canvas.drawOval(ring, paint);
+                paint.setColor(0xE6FFFFFF);
+                canvas.drawArc(ring, -90.0f, 100.0f, false, paint);
+            }
+        }, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        return root;
+    }
+
     private ViewGroup buildSubtitles() {
         FrameLayout strip = new FrameLayout(context);
         subsText = new SubtitleView(context);
@@ -1202,7 +1283,8 @@ final class PlayerUi implements XrRenderer.UiListener {
         LinearLayout box = sheetFrame("Settings");
         Pages pages = new Pages(box);
 
-        pages.first.addView(label("3D"));
+        TextView stereoLabel = label("3D");
+        pages.first.addView(stereoLabel);
         LinearLayout stereo = segmentRow();
         addOption(stereo, "auto", "Auto");
         addOption(stereo, "mono", "2D");
@@ -1218,12 +1300,14 @@ final class PlayerUi implements XrRenderer.UiListener {
         convert.addView(convertOn, segmentParams());
         pages.first.addView(convert);
 
-        pages.first.addView(label("Depth"));
+        TextView depthLabel = label("Depth");
+        pages.first.addView(depthLabel);
         LinearLayout depthRow = segmentRow();
         addDepth(depthRow, PlayerXR.DEPTH_POP, "Pop out");
         addDepth(depthRow, PlayerXR.DEPTH_BALANCED, "Balanced");
         addDepth(depthRow, PlayerXR.DEPTH_FULL, "Full");
         pages.first.addView(depthRow);
+        filmRows = new View[] { stereoLabel, stereo, depthLabel, depthRow };
 
         // Natural: as graded. Vivid: expanded toward the display's full gamut.
         pages.second.addView(label("Colours"));

@@ -378,13 +378,30 @@ int initGl(XrCtx* ctx) {
         return 0;
     }
 
-    if (ctx->stereoMode == DEPTH_MODE_MODEL) {
-        if (!initDepthModel(ctx) || !initUpsample(ctx)) {
+    ctx->depthGlReady = initDepthModel(ctx) && initUpsample(ctx);
+    if (!ctx->depthGlReady) {
+        if (ctx->stereoMode == DEPTH_MODE_MODEL) {
             return 0;
         }
+        LOGW("depth model GL unavailable, 2D films stay flat this session");
     }
 
     return 1;
+}
+
+void resizeUpsample(XrCtx* ctx) {
+    if (!ctx->depthGlReady) {
+        return;
+    }
+    ctx->upsampleWidth = ctx->videoWidth / 4;
+    ctx->upsampleHeight = ctx->videoHeight / 4;
+    glBindTexture(GL_TEXTURE_2D, ctx->upsampleTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, ctx->upsampleWidth, ctx->upsampleHeight, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, ctx->offsetTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, ctx->upsampleWidth, ctx->upsampleHeight, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 // Runs every video frame so an older depth map is re-snapped to the current frame's edges.
@@ -787,4 +804,5 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
     }
 
     ctx->everRendered = 1;
+    ctx->videoReady = 1;
 }

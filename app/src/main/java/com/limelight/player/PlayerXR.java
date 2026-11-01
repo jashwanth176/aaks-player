@@ -37,14 +37,8 @@ import java.util.Locale;
 public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRenderer.SessionListener {
 
     public static final String EXTRA_LAYOUT = "layout";
-    // Start position for a restart in place
-    public static final String EXTRA_POSITION_MS = "positionMs";
     // Library tab, page and folder to return to
     private static final String EXTRA_LIBRARY_PLACE = "libraryPlace";
-    private static final String EXTRA_SPEED = "speed";
-    // Selected track indices kept across a restart; the count guards against a different list
-    private static final String EXTRA_SUB_TRACK = "subTrack", EXTRA_SUB_COUNT = "subCount";
-    private static final String EXTRA_AUDIO_TRACK = "audioTrack", EXTRA_AUDIO_COUNT = "audioCount";
 
     // Ambient light reach and room brightness, 0..1
     private static final String PREF_IMMERSION = "player_immersion";
@@ -86,25 +80,61 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     private String depth;
     private boolean convert2d;
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    // What the intent names: a film's frame size per eye, layout and depth mode, or the library
+    private static final class Film {
+        Uri uri;
+        VideoProbe probe;
+        int eyeWidth, eyeHeight, depthMode;
+        PlaybackStore.Entry known;
+    }
+
+    private VideoProbe probe;
+
+    private Film plan() {
+        return plan(null);
+    }
+
+    // `playing`: the probe of the film already playing, to skip reading the file again
+    private Film plan(VideoProbe playing) {
+        Film f = new Film();
         Uri uri = getIntent().getData();
+        f.uri = uri;
         browse = uri == null;
+        filmKey = null;
+        disc = false;
         if (!browse) {
             filmKey = "file".equals(uri.getScheme()) && uri.getPath() != null ? uri.getPath() : uri.toString();
             disc = "file".equals(uri.getScheme()) && uri.getPath() != null && VideoLibrary.isDisc(new File(uri.getPath()));
         }
-
         // Disc: 1920x1080 per eye, decoded side by side, 23.976 Hz. Browse: placeholder 16:9.
-        VideoProbe probe = browse ? new VideoProbe(1920, 1080, 24)
-                : disc ? new VideoProbe(3840, 1080, 24) : VideoProbe.read(this, uri);
+        f.probe = browse ? new VideoProbe(1920, 1080, 24)
+                : disc ? new VideoProbe(3840, 1080, 24)
+                : playing != null ? playing : VideoProbe.read(this, uri);
+        probe = f.probe;
         layout = browse ? StereoLayout.MONO : disc ? StereoLayout.SBS
                 : StereoLayout.resolve(getIntent().getStringExtra(EXTRA_LAYOUT),
-                        uri.getLastPathSegment(), probe.width, probe.height);
-        int eyeWidth = layout.eyeWidth(probe.width, probe.height);
-        int eyeHeight = layout.eyeHeight(probe.width, probe.height);
+                        uri.getLastPathSegment(), f.probe.width, f.probe.height);
+        f.eyeWidth = layout.eyeWidth(f.probe.width, f.probe.height);
+        f.eyeHeight = layout.eyeHeight(f.probe.width, f.probe.height);
+        if (layout == StereoLayout.SBS) {
+            f.depthMode = XrShared.DEPTH_MODE_NATIVE_SBS;
+        }
+        else if (layout == StereoLayout.OU) {
+            f.depthMode = XrShared.DEPTH_MODE_NATIVE_OU;
+        }
+        else {
+            f.depthMode = convert2d && !browse ? XrShared.DEPTH_MODE_MODEL : XrShared.DEPTH_MODE_OFF;
+        }
+        f.known = browse ? new PlaybackStore.Entry() : store.get(filmKey);
+        LimeLog.info("PlayerXR: " + uri + " " + f.probe.width + "x" + f.probe.height + " @" + f.probe.fps
+                + " layout=" + layout + " eye=" + f.eyeWidth + "x" + f.eyeHeight
+                + " depthMode=" + f.depthMode + (disc ? " disc" : ""));
+        return f;
+    }
 
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
         saved = PreferenceManager.getDefaultSharedPreferences(this);
         store = new PlaybackStore(this);
         immersion = saved.getFloat(PREF_IMMERSION, 1.0f);
@@ -136,20 +166,10 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         prefs.vrDistance = 25;
         prefs.vrScreenSize = 24;
         prefs.vrCurvature = 0;
+        Film film = plan();
         // The renderer picks a display rate that is a multiple of this (72 Hz for 24 fps)
-        prefs.fps = probe.fps;
-        if (layout == StereoLayout.SBS) {
-            prefs.vrDepthMode = XrShared.DEPTH_MODE_NATIVE_SBS;
-        }
-        else if (layout == StereoLayout.OU) {
-            prefs.vrDepthMode = XrShared.DEPTH_MODE_NATIVE_OU;
-        }
-        else {
-            prefs.vrDepthMode = convert2d && !browse ? XrShared.DEPTH_MODE_MODEL : XrShared.DEPTH_MODE_OFF;
-        }
-        LimeLog.info("PlayerXR: " + uri + " " + probe.width + "x" + probe.height + " @" + probe.fps
-                + " layout=" + layout + " eye=" + eyeWidth + "x" + eyeHeight
-                + " depthMode=" + prefs.vrDepthMode + (disc ? " disc" : ""));
+        prefs.fps = film.probe.fps;
+        prefs.vrDepthMode = film.depthMode;
 
         renderer = new XrRenderer();
         renderer.setPlayerMode(true);
@@ -160,27 +180,25 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         renderer.setColourMode(colourMode);
         renderer.setHandAutoHide(handAutoHide);
         renderer.setPlayerDepth(cropFor(depth));
-        PlaybackStore.Entry known = browse ? new PlaybackStore.Entry() : store.get(filmKey);
-        if (known.barsKnown) {
-            renderer.setPlayerContent(known.barTop, known.barBottom);
+        if (film.known.barsKnown) {
+            renderer.setPlayerContent(film.known.barTop, film.known.barBottom);
         }
         renderer.setInputListener(this);
         renderer.setSessionListener(this);
         // start() blocks until the session is running, so call it off the main thread
         new Thread(() -> {
-            boolean ok = renderer.start(PlayerXR.this, eyeWidth, eyeHeight, prefs);
+            boolean ok = renderer.start(PlayerXR.this, film.eyeWidth, film.eyeHeight, prefs);
             main.post(() -> {
                 if (!ok || finishing) {
                     finish();
                     return;
                 }
-                startPlayback(uri, known);
+                beginFilm(film, true);
             });
         }, "PlayerXR start").start();
     }
 
-    private void startPlayback(Uri uri, PlaybackStore.Entry known) {
-        PlaybackEngine.Listener listener = new PlaybackEngine.Listener() {
+    private final PlaybackEngine.Listener engineListener = new PlaybackEngine.Listener() {
             @Override
             public void onSubtitle(CharSequence text, Bitmap image, float widthShare) {
                 main.post(() -> {
@@ -210,33 +228,65 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
                     r.setVideoColour(transfer, maxCll, masteringNits);
                 }
             }
-        };
+    };
+
+    // Starts the planned film (or the library) on the running session
+    private void beginFilm(Film f, boolean first) {
         engine = browse ? new NullEngine()
-                : disc ? new DiscEngine(this, new File(uri.getPath()), listener)
-                : new ExoEngine(this, uri, listener);
+                : disc ? new DiscEngine(this, new File(f.uri.getPath()), engineListener)
+                : new ExoEngine(this, f.uri, engineListener);
         subtitleDelayMs = filmKey != null ? saved.getLong(PREF_SUB_DELAY + filmKey, 0L) : 0L;
         engine.setSubtitleDelayMs(subtitleDelayMs);
-        speed = getIntent().getFloatExtra(EXTRA_SPEED, 1.0f);
-        if (speed != 1.0f) {
-            engine.setSpeed(speed);
-        }
-
-        long start = getIntent().getLongExtra(EXTRA_POSITION_MS, 0);
-        if (start <= 0) {
-            start = known.resumeMs();
-        }
-        Surface target = renderer.getInputSurface();
+        speed = 1.0f;
+        long start = f.known.resumeMs();
+        Surface target = first ? renderer.getInputSurface() : renderer.newInputSurface();
         if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugHeadless")) {
             target = headlessSurface();
         }
         engine.start(target, start, true);
+        if (ui == null) {
+            createUi();
+        }
         if (browse) {
-            showIdleFrame(target);
+            if (first) {
+                showIdleFrame(target);
+            }
+            ui.startBrowsing();
         }
         else {
-            restoreTracks(0);
+            ui.startFilm(titleFor(f.uri));
         }
+        if (!f.known.barsKnown && !disc && !browse) {
+            findBars(f.uri);
+        }
+    }
 
+    // Another film or the library, in the running session
+    private void reload() {
+        PlaybackEngine old = engine;
+        engine = null;
+        if (old != null) {
+            old.release();
+        }
+        Film f = plan();
+        renderer.setVideoColour(XrShared.VIDEO_TRANSFER_CODE_SDR, 0.0f, 0.0f);
+        renderer.setPlayerContent(f.known.barsKnown ? f.known.barTop : 0.0f,
+                f.known.barsKnown ? f.known.barBottom : 0.0f);
+        renderer.reconfigure(f.eyeWidth, f.eyeHeight, f.probe.fps, f.depthMode, browse, false);
+        beginFilm(f, false);
+    }
+
+    // A new layout or 2D-to-3D setting for the film playing: the decoder runs on and only the
+    // screen changes, so the picture never stops
+    private void relayout() {
+        if (browse) {
+            return;
+        }
+        Film f = plan(probe);
+        renderer.reconfigure(f.eyeWidth, f.eyeHeight, f.probe.fps, f.depthMode, false, true);
+    }
+
+    private void createUi() {
         ui = new PlayerUi(this, renderer, new PlayerUi.Actions() {
             @Override
             public void onBack() {
@@ -268,7 +318,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
 
             @Override
             public void onStereoMode(String mode) {
-                restartWithLayout(mode);
+                changeLayout(mode);
             }
 
             @Override
@@ -371,8 +421,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
                 if (on != convert2d) {
                     convert2d = on;
                     saved.edit().putBoolean(PREF_CONVERT, on).apply();
-                    // The depth model is configured at session start
-                    restart();
+                    relayout();
                 }
             }
 
@@ -443,14 +492,10 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             }
         });
         renderer.setUiListener(ui);
-        ui.start(browse ? "Library" : titleFor(uri));
+        ui.start(browse ? "Library" : titleFor(getIntent().getData()));
         String place = getIntent().getStringExtra(EXTRA_LIBRARY_PLACE);
         if (place != null) {
             ui.restoreLibrary(place);
-        }
-        if (browse) {
-            renderer.setPlayerScreenHidden(true);
-            ui.startBrowsing();
         }
         if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugSheet")) {
             ui.debugOpen(getIntent().getIntExtra("debugSheet", 0));
@@ -470,9 +515,6 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             main.postDelayed(() -> engine.setPlaying(false), 22000);
             main.postDelayed(() -> engine.setPlaying(true), 27000);
             main.postDelayed(() -> engine.seekToMs(9000000), 32000);
-        }
-        if (!known.barsKnown && !disc && !browse) {
-            findBars(uri);
         }
     }
 
@@ -639,143 +681,55 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     // Detects letterbox bars in the background, stores them and crops the screen to the picture
     private void findBars(Uri uri) {
         final StereoLayout forLayout = layout;
+        final String key = filmKey;
         new Thread(() -> {
             float[] bars = LetterboxProbe.detect(PlayerXR.this, uri, forLayout);
             if (bars == null || finishing) {
                 return;
             }
-            store.saveBars(filmKey, bars[0], bars[1]);
-            XrRenderer r = renderer;
-            if (r != null) {
-                r.setPlayerContent(bars[0], bars[1]);
-            }
+            store.saveBars(key, bars[0], bars[1]);
+            main.post(() -> {
+                XrRenderer r = renderer;
+                if (r != null && key.equals(filmKey)) {
+                    r.setPlayerContent(bars[0], bars[1]);
+                }
+            });
         }, "PlayerXR bars").start();
     }
 
-    // ---- restarts and file switching ---------------------------------------------------
+    // ---- layouts and file switching ----------------------------------------------------
 
-    // The stereo layout is fixed at session start, so changing it restarts in place
-    private void restartWithLayout(String mode) {
+    private void changeLayout(String mode) {
         if (mode.equals(getIntent().getStringExtra(EXTRA_LAYOUT))
                 || (mode.equals("auto") && getIntent().getStringExtra(EXTRA_LAYOUT) == null)) {
             return;
         }
         getIntent().putExtra(EXTRA_LAYOUT, mode);
-        restart();
-    }
-
-    private void restart() {
-        saveProgress();
-        getIntent().putExtra(EXTRA_POSITION_MS, engine != null ? engine.positionMs() : 0);
-        getIntent().putExtra(EXTRA_SPEED, speed);
-        keepTracks();
-        recreate();
-    }
-
-    // Saves the selected tracks so the new engine after a restart can reselect them
-    private void keepTracks() {
-        forgetTracks();
-        PlaybackEngine e = engine;
-        if (e == null) {
-            return;
-        }
-        List<PlayerUi.TrackChoice> subs = e.subtitleTracks();
-        int sub = selectedIn(subs);
-        if (sub >= 0) {
-            getIntent().putExtra(EXTRA_SUB_TRACK, sub);
-            getIntent().putExtra(EXTRA_SUB_COUNT, subs.size());
-        }
-        List<PlayerUi.TrackChoice> audio = e.audioTracks();
-        int track = selectedIn(audio);
-        if (track >= 0) {
-            getIntent().putExtra(EXTRA_AUDIO_TRACK, track);
-            getIntent().putExtra(EXTRA_AUDIO_COUNT, audio.size());
-        }
-    }
-
-    private void forgetTracks() {
-        getIntent().removeExtra(EXTRA_SUB_TRACK);
-        getIntent().removeExtra(EXTRA_SUB_COUNT);
-        getIntent().removeExtra(EXTRA_AUDIO_TRACK);
-        getIntent().removeExtra(EXTRA_AUDIO_COUNT);
-    }
-
-    private static int selectedIn(List<PlayerUi.TrackChoice> list) {
-        for (int i = 0; i < list.size(); i++) {
-            if (list.get(i).selected) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    // Reselects kept tracks once the engine has listed them; polls for up to 10 s
-    private static final long TRACK_LOOK_MS = 250;
-    private static final int TRACK_LOOKS = 40;
-
-    private void restoreTracks(int look) {
-        if (!getIntent().hasExtra(EXTRA_SUB_TRACK) && !getIntent().hasExtra(EXTRA_AUDIO_TRACK)) {
-            return;
-        }
-        PlaybackEngine e = engine;
-        if (e == null || finishing) {
-            return;
-        }
-        boolean subsDone = restoreTrack(e.subtitleTracks(), EXTRA_SUB_TRACK, EXTRA_SUB_COUNT, false);
-        boolean audioDone = restoreTrack(e.audioTracks(), EXTRA_AUDIO_TRACK, EXTRA_AUDIO_COUNT, true);
-        if ((subsDone && audioDone) || look + 1 >= TRACK_LOOKS) {
-            forgetTracks();
-            return;
-        }
-        main.postDelayed(() -> restoreTracks(look + 1), TRACK_LOOK_MS);
-    }
-
-    // True when done: reselected, already selected, or nothing was kept
-    private boolean restoreTrack(List<PlayerUi.TrackChoice> list, String indexKey, String countKey,
-                                 boolean audio) {
-        int index = getIntent().getIntExtra(indexKey, -1);
-        if (index < 0) {
-            return true;
-        }
-        if (list.size() != getIntent().getIntExtra(countKey, -1)) {
-            // Track list not complete yet
-            return false;
-        }
-        PlayerUi.TrackChoice choice = list.get(index);
-        if (!choice.selected) {
-            if (audio) {
-                engine.chooseAudio(choice);
-            }
-            else {
-                engine.chooseSubtitle(choice);
-            }
-        }
-        return true;
+        relayout();
     }
 
     private void backToLibrary() {
         saveProgress();
-        forgetTracks();
-        getIntent().removeExtra(EXTRA_SPEED);
         getIntent().setData(null);
         getIntent().removeExtra(EXTRA_LAYOUT);
-        getIntent().removeExtra(EXTRA_POSITION_MS);
-        recreate();
+        reload();
     }
 
-    // Restarts on another file, resuming it and detecting its layout afresh
+    // Switches to another file, resuming it and detecting its layout afresh
     private void openFile(Uri uri) {
-        saveProgress();
-        if (ui != null) {
-            getIntent().putExtra(EXTRA_LIBRARY_PLACE, ui.libraryPlace());
+        long now = SystemClock.uptimeMillis();
+        if (now - lastOpenMs < OPEN_DEBOUNCE_MS) {
+            return;
         }
-        forgetTracks();
-        getIntent().removeExtra(EXTRA_SPEED);
+        lastOpenMs = now;
+        saveProgress();
         getIntent().setData(uri);
         getIntent().removeExtra(EXTRA_LAYOUT);
-        getIntent().removeExtra(EXTRA_POSITION_MS);
-        recreate();
+        reload();
     }
+
+    private static final long OPEN_DEBOUNCE_MS = 1000;
+    private long lastOpenMs;
 
     // Outward eye shift as a fraction of width. 1.5% suits parallel-camera footage; converged
     // Blu-ray masters keep more pop-out with less.

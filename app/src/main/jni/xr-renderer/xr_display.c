@@ -430,6 +430,11 @@ static void applyRate(XrCtx* ctx, const char* why) {
     }
 }
 
+void displayContentChanged(XrCtx* ctx) {
+    rateBudgetStart(&ctx->rateBudget, nowNs(), RATE_SETTLE_WINDOWS);
+    applyRate(ctx, "new film");
+}
+
 void displaySessionBegun(XrCtx* ctx) {
     rateBudgetStart(&ctx->rateBudget, nowNs(), RATE_SETTLE_WINDOWS);
     applyRate(ctx, "session start");

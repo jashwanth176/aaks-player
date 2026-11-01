@@ -816,13 +816,11 @@ void recentreScreen(XrCtx* ctx) {
           ctx->headLockedPref);
 }
 
-// Output only when dirty (end of a grab), so preferences are written once per move.
+// The pose every frame, for a save at a film switch; the dirty flag once per
+// grab, so preferences are written once per move.
 static void writeInputPose(XrCtx* ctx, float* out) {
-    if (!ctx->poseDirty) {
-        return;
-    }
+    out[IN_POSE_DIRTY] = ctx->poseDirty ? 1.0f : 0.0f;
     ctx->poseDirty = 0;
-    out[IN_POSE_DIRTY] = 1.0f;
     out[IN_POSE + 0] = ctx->screenPose.position.x;
     out[IN_POSE + 1] = ctx->screenPose.position.y;
     out[IN_POSE + 2] = ctx->screenPose.position.z;
@@ -2093,8 +2091,9 @@ static void updatePointerWake(XrCtx* ctx, InputFrame* f) {
         ctx->stillFor = 0.0f;
     }
 
-    // Modal sheets wait on a press, so the pointer stays awake under them.
-    if (ctx->hintOpen || ctx->kofiOpen) {
+    // Modal sheets wait on a press, so the pointer stays awake under them, as it
+    // does over the player's menus.
+    if (ctx->hintOpen || ctx->kofiOpen || (ctx->playerMode && ctx->ui[UI_PANEL_SHEET].visible)) {
         ctx->pointerAwake = 1;
         ctx->stillFor = 0.0f;
     }

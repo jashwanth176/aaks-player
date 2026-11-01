@@ -1,22 +1,40 @@
 // Player UI panels rendered in Java (top bar, side rail, playback controls,
-// settings sheet), anchored to the screen and sized as a fraction of its
-// width. Uploaded on the frame loop, faded and hit tested here, drawn by
-// addUiPanelLayers in xr_layers.c.
+// settings sheet), anchored to the screen. Uploaded on the frame loop, faded
+// and hit tested here, drawn by addUiPanelLayers in xr_layers.c.
 #include "xr_renderer.h"
 
 // Full fade duration
 #define UI_FADE_NS 150000000LL
+// The spinner shows once a film's first frame is this late, and turns once a second
+#define UI_LOADING_DELAY_NS 400000000LL
+#define UI_LOADING_TURN_NS 1000000000LL
 
 static int validId(int id) {
     return id >= 0 && id < UI_PANEL_COUNT;
 }
 
+// Metres per pixel of a fixed panel: a fixed angle at the screen's distance, so
+// a resized screen or library window keeps its menus the same size
+float uiMetresPerPx(const XrCtx* ctx) {
+    XrVector3f p = ctx->screenPose.position;
+    float d = sqrtf(p.x * p.x + p.y * p.y + p.z * p.z);
+    return UI_PX_ANGLE * fmaxf(d, 0.5f);
+}
+
 XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
     float screenW = ctx->screenWidth;
     float screenH = screenW * screenAspect(ctx);
-    float w = ctx->ui[id].widthFrac * screenW;
+    float w, gap;
+    if (ctx->ui[id].fixed) {
+        float perPx = uiMetresPerPx(ctx);
+        w = (float)ctx->ui[id].texW * perPx;
+        gap = ctx->ui[id].gapFrac * perPx;
+    }
+    else {
+        w = ctx->ui[id].widthFrac * screenW;
+        gap = ctx->ui[id].gapFrac * screenW;
+    }
     float h = ctx->ui[id].texW > 0 ? w * (float)ctx->ui[id].texH / (float)ctx->ui[id].texW : 0.0f;
-    float gap = ctx->ui[id].gapFrac * screenW;
     *outWidth = w;
     *outHeight = h;
 
@@ -40,6 +58,11 @@ XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
     Vec3 offset = quatRotate(ctx->screenPose.orientation, local);
     XrPosef pose;
     pose.orientation = ctx->screenPose.orientation;
+    if (id == UI_PANEL_LOADING) {
+        Vec3 axis = { 0.0f, 0.0f, 1.0f };
+        float turn = (float)(nowNs() % UI_LOADING_TURN_NS) / (float)UI_LOADING_TURN_NS;
+        pose.orientation = quatMul(pose.orientation, axisAngleQuat(axis, -turn * 6.2831853f));
+    }
     pose.position.x = ctx->screenPose.position.x + offset.x;
     pose.position.y = ctx->screenPose.position.y + offset.y;
     pose.position.z = ctx->screenPose.position.z + offset.z;
@@ -91,6 +114,8 @@ void stepUiPanels(XrCtx* ctx, int64_t nowNs) {
     if (step < 0.0f) {
         step = 0.0f;
     }
+    ctx->ui[UI_PANEL_LOADING].visible = ctx->playerMode && !ctx->playerScreenHidden
+            && !ctx->videoReady && nowNs - ctx->videoWaitNs > UI_LOADING_DELAY_NS;
     for (int id = 0; id < UI_PANEL_COUNT; id++) {
         float target = ctx->ui[id].visible ? 1.0f : 0.0f;
         float level = ctx->ui[id].level;
@@ -168,13 +193,18 @@ JNIEXPORT void JNICALL
 Java_com_limelight_binding_video_XrRenderer_nativeSetUiPanel(JNIEnv* env, jobject thiz,
                                                              jlong handle, jint id,
                                                              jboolean visible, jint anchor,
-                                                             jfloat widthFrac, jfloat gapFrac) {
+                                                             jboolean fixed, jfloat widthFrac,
+                                                             jfloat gapFrac) {
     XrCtx* ctx = (XrCtx*)(intptr_t)handle;
     if (ctx == NULL || !validId(id)) {
         return;
     }
-    ctx->ui[id].visible = visible ? 1 : 0;
+    // The renderer decides when the spinner shows
+    if (id != UI_PANEL_LOADING) {
+        ctx->ui[id].visible = visible ? 1 : 0;
+    }
     ctx->ui[id].anchor = anchor;
+    ctx->ui[id].fixed = fixed ? 1 : 0;
     ctx->ui[id].widthFrac = widthFrac;
     ctx->ui[id].gapFrac = gapFrac;
 }
