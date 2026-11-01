@@ -126,6 +126,8 @@ static inline int64_t nowNs(void) {
 #define PRESS_OFF  0.35f
 // Thumbstick scroll deadzone, and wheel clicks per second at full deflection.
 #define SCROLL_DEADZONE 0.30f
+// Held bar or grip: the stick reels the screen by this factor per second at full push
+#define STICK_REEL_RATE 0.9f
 #define SCROLL_CLICKS_PER_SEC 7.5f
 
 // One euro filter on the hit point: low cutoff at rest
@@ -1314,6 +1316,8 @@ typedef struct {
     int playerMode;
     float grabHandDist;
     float grabScreenDist;
+    // Distance factor from the stick while a move grab is held
+    float grabReel;
     float grabSizeRatio;
     // Eased facing target for a carried screen, and its last step time.
     float playerYaw, playerPitch;

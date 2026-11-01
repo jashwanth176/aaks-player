@@ -970,7 +970,8 @@ static void stepSpring(XrCtx* ctx) {
 // Move and resize start from a handle under the ray, or in the player from a grip
 // on the picture itself; the trigger on the picture is a click, never a drag.
 static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* grab, int hand,
-                      int hover, int corner, int offPicture, float height, int curved) {
+                      int hover, int corner, int offPicture, float height, int curved,
+                      const XrVector2f* sticks, float dt) {
     for (int h = 0; h < HAND_COUNT; h++) {
         int wasDown = ctx->grabDown[h];
         ctx->grabDown[h] = grab[h] > (wasDown ? PRESS_OFF : PRESS_ON);
@@ -1054,6 +1055,7 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
 
         if (hover == HOVER_BAR || gripPicture) {
             ctx->grabMode = GRAB_MOVE;
+            ctx->grabReel = 1.0f;
             if (ctx->playerMode) {
                 ctx->grabHandDist = distFromHead(ctx, aims[mover].position);
                 ctx->grabScreenDist = distFromHead(ctx, ctx->screenPose.position);
@@ -1113,11 +1115,24 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
             ctx->screenPose.position.z = aims[h].position.z + moved.z;
 
             if (ctx->playerMode) {
-                // Direction from the rigid attach; distance reeled by the hand
-                // within elastic limits; width keeps its place in the range.
-                float dist = handleElasticDistance(handleReelDistance(
-                        ctx->grabScreenDist, ctx->grabHandDist,
-                        distFromHead(ctx, aims[h].position)));
+                // Direction from the rigid attach; distance reeled by the hand and
+                // the stick within elastic limits; width keeps its place in the range.
+                float push = h >= 0 && h < HAND_COUNT ? sticks[h].y : 0.0f;
+                if (fabsf(push) > SCROLL_DEADZONE) {
+                    float past = (fabsf(push) - SCROLL_DEADZONE) / (1.0f - SCROLL_DEADZONE);
+                    ctx->grabReel *= expf(copysignf(past * STICK_REEL_RATE * dt, push));
+                }
+                float reel = handleReelDistance(ctx->grabScreenDist, ctx->grabHandDist,
+                                                distFromHead(ctx, aims[h].position));
+                float want = ctx->grabReel * reel;
+                // The stick stops at the limits rather than winding past them
+                if (want > HANDLE_DIST_MAX) {
+                    ctx->grabReel = HANDLE_DIST_MAX / reel;
+                }
+                else if (want < HANDLE_DIST_MIN) {
+                    ctx->grabReel = HANDLE_DIST_MIN / reel;
+                }
+                float dist = handleElasticDistance(want);
                 placeAlongView(ctx, dist, handleWidthFor(dist, ctx->grabSizeRatio));
             }
         }
@@ -3025,7 +3040,9 @@ static void updateScroll(XrCtx* ctx, InputFrame* f, int hit) {
     int offPicture = !ctx->pointerSleepOn
             && (f->hover == HOVER_NONE || f->hover == HOVER_HALO);
     int onPanel = ctx->playerMode && f->hover == HOVER_UIPANEL;
-    if ((hit || offPicture || onPanel) && fabsf(stick.y) > SCROLL_DEADZONE) {
+    // A held bar or grip takes the stick to reel the screen
+    if (ctx->grabMode == GRAB_NONE && (hit || offPicture || onPanel)
+            && fabsf(stick.y) > SCROLL_DEADZONE) {
         float past = (fabsf(stick.y) - SCROLL_DEADZONE) / (1.0f - SCROLL_DEADZONE);
         ctx->scrollCarry += copysignf(past * SCROLL_CLICKS_PER_SEC * f->dt, stick.y);
     }
@@ -3687,7 +3704,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     int offPicture = f.hand >= 0 && (f.hitU[f.hand] < 0.0f || f.hitU[f.hand] > 1.0f
                                      || f.hitV[f.hand] < 0.0f || f.hitV[f.hand] > 1.0f);
     applyGrab(ctx, f.aimPoses, f.aimValid, f.grab, f.hand, f.hover, ctx->hoverCorner,
-              offPicture, f.height, f.curved);
+              offPicture, f.height, f.curved, f.stick, f.dt);
     f.screenPose = ctx->screenPose;
     f.height = ctx->screenWidth * screenAspect(ctx);
     f.radius = ctx->screenRadius;
