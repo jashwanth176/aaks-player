@@ -1006,8 +1006,9 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
         if (roomStyle > 0 && (hover != HOVER_CORNER || !roomResizable(roomStyle))) {
             return;
         }
+        // The picture or any panel on it, so the library window moves the same way
         int gripPicture = ctx->playerMode && hand >= 0 && hand != SRC_GAZE && ctx->gripEdge[hand]
-                && (hover == HOVER_SCREEN || hover == HOVER_HALO);
+                && (hover == HOVER_SCREEN || hover == HOVER_HALO || hover == HOVER_UIPANEL);
         if (hand < 0 || (hover != HOVER_BAR && hover != HOVER_CORNER && !gripPicture)) {
             return;
         }
