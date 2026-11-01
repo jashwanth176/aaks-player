@@ -77,12 +77,18 @@ and shows each frame in 3D.
   `m2ts`, `mts`, `avi` and `iso`.
 - **Continue** for films you're part way through, **Films** for everything (newest first), and
   **Folders** to browse.
-- Thumbnails, a 3D badge and a progress bar on each film, and every film resumes where you left it.
+- Thumbnails (discs included), a 3D badge and a progress bar on each film, and every film resumes
+  where you left it.
+- The lists scroll under your pointer, and each tab remembers its place.
+- **Delete** a film from its card once you've watched it, with a confirmation.
 - Films can also be opened straight from a file manager.
 
 ### Controls
 - **Controllers:** point and pull the trigger to click, A to play or pause, and push the thumbstick
   left or right to skip 10 seconds (hold it to skip 30 seconds at a time).
+- **Moving the screen:** drag the white bar under it, or hold the grip button while pointing at the
+  screen. While holding, the thumbstick brings it closer or sends it further away. The back button
+  beside the bar returns to the library, and from there leaves the app.
 - **Hands:** pinch to click. **Double tap** the left or right of the picture to skip 10 seconds, and
   keep tapping to skip further.
 - **Hand pointer:** hides when your hand is idle; show an open palm to bring it back. Prefer it
