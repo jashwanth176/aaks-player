@@ -54,7 +54,8 @@ and shows each frame in 3D.
 - **Colours:** Natural shows the film as it was graded; Vivid uses the headset's wider colour range.
 - **Black bars** are detected and trimmed, so the screen fits the picture.
 - **A screen your way:** move it, resize it from its corners, and curve it from flat to wrapped
-  around you.
+  around you. The library and the film screen each keep their own size and distance, and open in
+  front of wherever you're facing.
 
 ### Your room
 - **Passthrough or Dark:** watch with your room around you, or in darkness.
@@ -87,7 +88,8 @@ and shows each frame in 3D.
 - **Controllers:** point and pull the trigger to click, A to play or pause, and push the thumbstick
   left or right to skip 10 seconds (hold it to skip 30 seconds at a time).
 - **Moving the screen:** drag the white bar under it, or hold the grip button while pointing at the
-  screen. While holding, the thumbstick brings it closer or sends it further away. The back button
+  screen. While holding, the thumbstick brings it closer or sends it further away. With hands,
+  pinch the white bar and move your hand. The back button
   beside the bar returns to the library, and from there leaves the app.
 - **Hands:** pinch to click. **Double tap** the left or right of the picture to skip 10 seconds, and
   keep tapping to skip further.
