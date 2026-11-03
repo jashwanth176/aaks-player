@@ -249,8 +249,7 @@ int roomGlowOn(XrCtx* ctx, int style) {
 
 // Whether the picture size is being dragged (suppresses per-step logging)
 static int roomSizeDragging(XrCtx* ctx) {
-    return ctx->grabMode == GRAB_RESIZE
-            || (ctx->cogDragSlider == COG_ROOM_ROW_SIZE && ctx->cogDragFace == COG_FACE_ROOM);
+    return ctx->grabMode == GRAB_RESIZE;
 }
 
 // Room scale: the model's, unless overridden by a property within range

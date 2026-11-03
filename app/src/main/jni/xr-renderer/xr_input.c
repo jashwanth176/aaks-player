@@ -438,7 +438,6 @@ int initXrInput(XrCtx* ctx) {
     ctx->pointerOn = 1;
     initJointTracking(ctx);
     refreshInputSource(ctx);
-    padRumbleReset(&ctx->rumble);
     LOGI("controller input ready (pico bindings %s, hand pinch %s, menu button %s, "
          "vibration %s)",
          ctx->picoInteraction ? "offered" : "not offered by this runtime",
@@ -523,33 +522,16 @@ static int onHandActions(XrCtx* ctx, int h) {
 // back. Hands give pinch and grasp in place of trigger and grip.
 static float seenTrigger(XrCtx* ctx, int h) {
     XrAction action = onHandActions(ctx, h) ? ctx->handPinchAction : ctx->triggerAction;
-    return padChordSeen(&ctx->padChord, h == HAND_LEFT ? PAD_PART_LT : PAD_PART_RT,
-                        actionFloat(ctx, action, h));
+    return actionFloat(ctx, action, h);
 }
 
 static float seenGrip(XrCtx* ctx, int h) {
     XrAction action = onHandActions(ctx, h) ? ctx->handGraspAction : ctx->grabAction;
-    return padChordSeen(&ctx->padChord, h == HAND_LEFT ? PAD_PART_LG : PAD_PART_RG,
-                        actionFloat(ctx, action, h));
-}
-
-static int seenStickClick(XrCtx* ctx, int h) {
-    int raw = actionBool(ctx, ctx->toggleAction, h);
-    return padChordSeen(&ctx->padChord, h == HAND_LEFT ? PAD_PART_LS : PAD_PART_RS,
-                        raw ? 1.0f : 0.0f) > 0.5f;
+    return actionFloat(ctx, action, h);
 }
 
 static XrVector2f seenStick(XrCtx* ctx, int h) {
-    XrVector2f stick = actionVec2(ctx, ctx->scrollAction, h);
-    if (ctx->padChord.held & (h == HAND_LEFT ? PAD_PART_LS : PAD_PART_RS)) {
-        stick.x = 0.0f;
-        stick.y = 0.0f;
-    }
-    return stick;
-}
-
-static int chordHasStickClick(XrCtx* ctx) {
-    return ((ctx->padChord.held | ctx->padChord.replay) & (PAD_PART_LS | PAD_PART_RS)) != 0;
+    return actionVec2(ctx, ctx->scrollAction, h);
 }
 
 // Pointer ray from the joints, for runtimes without a hand aim pose. Cast from
@@ -1220,28 +1202,9 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
     ctx->screenPose.orientation = ctx->grabScreen.orientation;
 }
 
-// Marks a press as consumed by an overlay. For gaze, the pinching hands' presses
-// are consumed too.
-static void swallowTrigger(XrCtx* ctx, int src) {
-    if (src < 0 || src >= SRC_COUNT) {
-        return;
-    }
-    ctx->triggerSwallowed[src] = 1;
-    if (src == SRC_GAZE) {
-        for (int h = 0; h < HAND_COUNT; h++) {
-            if (ctx->triggerDown[h]) {
-                ctx->triggerSwallowed[h] = 1;
-            }
-        }
-    }
-}
-
 // Whether a hover target lies on the bar's frame rather than the picture.
 static int onFurniture(int hover) {
-    return hover == HOVER_BAR || hover == HOVER_ENVBUTTON || hover == HOVER_COGBUTTON
-            || hover == HOVER_KBBUTTON || hover == HOVER_EXITBUTTON
-            || hover == HOVER_STEREOBUTTON || hover == HOVER_RAYBUTTON
-            || hover == HOVER_AIMBUTTON || hover == HOVER_PADBUTTON;
+    return hover == HOVER_BAR;
 }
 
 // World point for a hit on (u, v), on whichever surface the hover belongs to.
@@ -1249,29 +1212,6 @@ static Vec3 furniturePoint(XrCtx* ctx, int hover, float u, float v, XrPosef scre
                            float height, float radius, int curved, const BarFrame* bar) {
     if (onFurniture(hover)) {
         return screenPoint(u, v, bar->pose, bar->width, bar->height, bar->radius, bar->curved);
-    }
-    if (hover == HOVER_PICKER) {
-        float pickW, pickH;
-        XrPosef pose = pickerPose(ctx, &pickW, &pickH);
-        return screenPoint(u, v, pose, pickW, pickH, 0.0f, 0);
-    }
-    if (hover == HOVER_COGPANEL) {
-        return screenPoint(u, v, ctx->cogPose, ctx->cogW, ctx->cogH, 0.0f, 0);
-    }
-    if (hover == HOVER_KBPANEL) {
-        return screenPoint(u, v, ctx->kbPose, ctx->kbW, ctx->kbH, 0.0f, 0);
-    }
-    if (hover == HOVER_EXITPROMPT) {
-        return screenPoint(u, v, ctx->exitPose, ctx->exitW, ctx->exitH, 0.0f, 0);
-    }
-    if (hover == HOVER_REPORT) {
-        return screenPoint(u, v, ctx->reportPose, ctx->reportW, ctx->reportH, 0.0f, 0);
-    }
-    if (hover == HOVER_HINT) {
-        return screenPoint(u, v, ctx->hintPose, ctx->hintW, ctx->hintH, 0.0f, 0);
-    }
-    if (hover == HOVER_KOFI) {
-        return screenPoint(u, v, ctx->kofiPose, ctx->kofiW, ctx->kofiH, 0.0f, 0);
     }
     return screenPoint(u, v, screenPose, ctx->screenWidth, height, radius, curved);
 }
@@ -1361,31 +1301,9 @@ static int handInUse(XrCtx* ctx, int h) {
     return controllerInUse(ctx->profileKind[h], ctx->aimTracked[h], ctx->aimClock[h].awake);
 }
 
-// In gamepad mode controllers drive the pad, not the pointer; tracked hands still point.
-static int padHand(XrCtx* ctx, int h) {
-    return ctx->padMode && ctx->profileKind[h] == PROFILE_CONTROLLER;
-}
-
-// Clears a pad controller's pointer state and filters, so its ray does not
-// sweep in from a stale pose on return.
-static void padHandAway(XrCtx* ctx, int h) {
-    ctx->triggerDown[h] = 0;
-    ctx->triggerEdge[h] = 0;
-    ctx->triggerValue[h] = 0.0f;
-    ctx->pinchDown[h] = 0;
-    ctx->aimTracked[h] = 0;
-    ctx->aimFilterPos[h][0].valid = 0;
-    ctx->aimFilterPos[h][1].valid = 0;
-    ctx->aimFilterPos[h][2].valid = 0;
-    ctx->aimFilterRot[h].valid = 0;
-    ctx->poseSeen[h] = 0;
-}
-
 // Whether a gaze-started drag is in progress.
 static int gazeHoldingPress(XrCtx* ctx) {
-    return (ctx->grabMode != GRAB_NONE && (ctx->grabByGaze || ctx->grabHand == SRC_GAZE))
-            || (ctx->cogDragSlider >= 0
-                && (ctx->cogDragByGaze || ctx->cogDragHand == SRC_GAZE));
+    return ctx->grabMode != GRAB_NONE && (ctx->grabByGaze || ctx->grabHand == SRC_GAZE);
 }
 
 // Settled once per frame from last frame's clocks, so the frame agrees on it.
@@ -1407,7 +1325,7 @@ static void updateControllerAwake(XrCtx* ctx) {
 // The bridge switches only when nothing is held, so a press ends on its own source.
 static int pressHeld(XrCtx* ctx) {
     return ctx->triggerDown[HAND_LEFT] || ctx->triggerDown[HAND_RIGHT]
-            || ctx->grabMode != GRAB_NONE || ctx->cogDragSlider >= 0;
+            || ctx->grabMode != GRAB_NONE;
 }
 
 // Hands take over after gaze is lost for GAZE_BRIDGE_SEC, and hand back as soon
@@ -1453,7 +1371,7 @@ static void gazeTrigger(XrCtx* ctx, const InputFrame* f) {
 }
 
 // Releases everything held when input stops being read (e.g. focus lost).
-static void releaseInput(XrCtx* ctx, float* out) {
+static void releaseInput(XrCtx* ctx) {
     ctx->buttonsDown = 0;
     ctx->beamVisible = 0;
     ctx->aimTracked[HAND_LEFT] = 0;
@@ -1466,38 +1384,6 @@ static void releaseInput(XrCtx* ctx, float* out) {
         ctx->grabByGaze = 0;
         ctx->poseDirty = 1;
     }
-    if (ctx->cogDragSlider >= 0) {
-        // Still writes the value; out is flushed on return.
-        cogDragEnded(ctx, out);
-    }
-}
-
-// Refines a hover into a bar button. u and v are on the bar's frame.
-static int furnitureHover(XrCtx* ctx, int hover, float u, float v, const BarFrame* bar) {
-    // These two overhang the bar's zone, so they are tested before a hand is picked.
-    if ((hover == HOVER_NONE || hover == HOVER_BAR)
-            && barButtonHit(ctx, BAR_SLOT_ENV, u, v, bar)) {
-        hover = HOVER_ENVBUTTON;
-    }
-    if ((hover == HOVER_NONE || hover == HOVER_BAR)
-            && barButtonHit(ctx, BAR_SLOT_COG, u, v, bar)) {
-        hover = HOVER_COGBUTTON;
-    }
-    // The outer buttons sit in the halo past the bar's ends and must claim it back.
-    static const int OUTER[6] = {
-        BAR_SLOT_KB, BAR_SLOT_EXIT, BAR_SLOT_PAD, BAR_SLOT_AIM, BAR_SLOT_RAY, BAR_SLOT_STEREO
-    };
-    static const int HOVERS[6] = {
-        HOVER_KBBUTTON, HOVER_EXITBUTTON, HOVER_PADBUTTON, HOVER_AIMBUTTON, HOVER_RAYBUTTON,
-        HOVER_STEREOBUTTON
-    };
-    for (int i = 0; i < 6; i++) {
-        if ((hover == HOVER_NONE || hover == HOVER_BAR || hover == HOVER_HALO)
-                && barButtonHit(ctx, OUTER[i], u, v, bar)) {
-            hover = HOVERS[i];
-        }
-    }
-    return hover;
 }
 
 // Room hover priority: picture, bar buttons, corner brackets, bar zone, then
@@ -1524,8 +1410,7 @@ static void roomHover(XrCtx* ctx, InputFrame* f, int h) {
     if (screenProject(f->aimPoses[h], bar->pose, bar->width, bar->height, bar->radius,
                       bar->curved, &su, &sv)) {
         int unused;
-        row = furnitureHover(ctx, hoverTest(su, sv, bar->width, bar->height, 0.0f, &unused),
-                             su, sv, bar);
+        row = hoverTest(su, sv, bar->width, bar->height, 0.0f, &unused);
     }
     if (onFurniture(row) && row != HOVER_BAR) {
         f->hovers[h] = row;
@@ -1582,23 +1467,12 @@ static void hoverSource(XrCtx* ctx, InputFrame* f, int h) {
         return;
     }
 
-    // The keyboard is not modal but occludes what is behind it.
-    float kbU, kbV;
-    int onKeyboard = ctx->kbOpen
-            && screenProject(f->aimPoses[h], ctx->kbPose, ctx->kbW, ctx->kbH, 0.0f, 0,
-                             &kbU, &kbV)
-            && kbU >= 0.0f && kbU <= 1.0f && kbV >= 0.0f && kbV <= 1.0f;
-    if (onKeyboard) {
-        f->hovers[h] = HOVER_KBPANEL;
-        f->hitU[h] = kbU;
-        f->hitV[h] = kbV;
-    }
-    else if (!f->roomOn) {
+    if (!f->roomOn) {
         if (screenProject(f->aimPoses[h], f->screenPose, ctx->screenWidth, f->height,
                           f->radius, f->curved, &f->hitU[h], &f->hitV[h])) {
             int hover = hoverTest(f->hitU[h], f->hitV[h], ctx->screenWidth, f->height,
                                   f->cornerSide, &f->corners[h]);
-            f->hovers[h] = furnitureHover(ctx, hover, f->hitU[h], f->hitV[h], &f->bar);
+            f->hovers[h] = hover;
         }
     }
     else {
@@ -1655,19 +1529,11 @@ static void sayPinchSource(XrCtx* ctx, int h) {
 // Reads triggers, aim poses and ray hits for every source.
 static void readSources(XrCtx* ctx, InputFrame* f) {
     int gazeSpace = ctx->aimSpaces[SRC_GAZE] != XR_NULL_HANDLE;
-    for (int h = 0; h < HAND_COUNT; h++) {
-        if (padHand(ctx, h)) {
-            padHandAway(ctx, h);
-        }
-    }
     // In gaze mode the eyes point and the hands only pinch.
     int gazeMode = gazePointing(ctx) && gazeSpace;
     // Gaze is still read while bridged, but does not point.
     int gazeWatch = gazeWanted(ctx) && gazeSpace;
     for (int h = 0; h < SRC_COUNT; h++) {
-        if (h < HAND_COUNT && padHand(ctx, h)) {
-            continue;
-        }
         if (h < HAND_COUNT) {
             f->grab[h] = seenGrip(ctx, h);
             f->stick[h] = seenStick(ctx, h);
@@ -1876,87 +1742,12 @@ static void readSources(XrCtx* ctx, InputFrame* f) {
     }
 }
 
-// Closes the hand lock hint; forGood tells Java not to show it again.
-static void closeHandHint(XrCtx* ctx, InputFrame* f, int forGood, const char* by) {
-    ctx->hintOpen = 0;
-    ctx->hintHoverZone = HINT_ZONE_NONE;
-    if (forGood) {
-        f->out[IN_HINT] = 1.0f;
-    }
-    LOGEV("hand lock hint put away by %s, %s", by,
-          forGood ? "not shown again" : "back next session");
-}
-
-static void setHandsLocked(XrCtx* ctx, int locked, const char* from) {
-    ctx->handsLocked = locked;
-    LOGEV("hands %s by %s", locked ? "locked" : "unlocked", from);
-    if (locked) {
-        // Release everything so nothing stays grabbed or pressed.
-        ctx->pointerAwake = 0;
-        ctx->buttonsDown = 0;
-        ctx->stillFor = 0.0f;
-        ctx->movingFor = 0.0f;
-        if (ctx->grabMode != GRAB_NONE) {
-            ctx->grabMode = GRAB_NONE;
-            ctx->grabByGaze = 0;
-            ctx->poseDirty = 1;
-        }
-    }
-}
-
-// Triple pinch toggles the hand lock. Runs before applyHandLock so locked hands
-// can unlock. The first two pinches pass through; the third is held back until
-// released.
-static void updateLockGesture(XrCtx* ctx, InputFrame* f) {
-    for (int h = 0; h < HAND_COUNT; h++) {
-        if (!ctx->handsEnabled || ctx->profileKind[h] == PROFILE_CONTROLLER) {
-            triplePinchReset(&ctx->triplePinch[h]);
-            continue;
-        }
-        if (triplePinchStep(&ctx->triplePinch[h], ctx->triggerDown[h], f->now)) {
-            if (ctx->hintOpen) {
-                closeHandHint(ctx, f, 0, "the triple pinch");
-            }
-            setHandsLocked(ctx, !ctx->handsLocked, "the triple pinch");
-            // Toast, since nothing else visibly changes.
-            noticePush(&ctx->notices, ctx->handsLocked ? TOAST_HANDS_LOCKED
-                                                       : TOAST_HANDS_UNLOCKED, 0);
-        }
-        if (triplePinchHeld(&ctx->triplePinch[h])) {
-            ctx->triggerDown[h] = 0;
-            ctx->triggerEdge[h] = 0;
-        }
-    }
-}
-
-// Locked hands (any non-controller source) get no aim, press or movement.
-// Then gaze takes the hands' pinch.
-static void applyHandLock(XrCtx* ctx, InputFrame* f) {
-    int locked = 0;
-    for (int h = 0; h < HAND_COUNT; h++) {
-        if (!ctx->handsLocked || ctx->profileKind[h] == PROFILE_CONTROLLER) {
-            continue;
-        }
-        f->hovers[h] = HOVER_NONE;
-        f->aimValid[h] = 0;
-        f->handMoved[h] = 0;
-        ctx->triggerDown[h] = 0;
-        ctx->triggerEdge[h] = 0;
-        locked = 1;
-    }
-    if (locked) {
-        f->moved = f->handMoved[HAND_LEFT] || f->handMoved[HAND_RIGHT];
-    }
-
-    gazeTrigger(ctx, f);
-}
-
 // Whether any button is down on this controller.
 static int controllerPressed(XrCtx* ctx, const InputFrame* f, int h) {
     return ctx->triggerDown[h] || f->grab[h] > PRESS_ON || stickPushed(f->stick[h])
             || actionBool(ctx, ctx->rightClickAction, h)
             || actionBool(ctx, ctx->middleClickAction, h)
-            || seenStickClick(ctx, h);
+            || actionBool(ctx, ctx->toggleAction, h);
 }
 
 // Per-controller wake/sleep clocks, so a controller put down retires even while
@@ -1965,7 +1756,7 @@ static void updateControllerClocks(XrCtx* ctx, InputFrame* f) {
     int eyesPoint = ctx->eyeGaze && ctx->gazeEnabled;
     int swallowed = 0;
     for (int h = 0; h < HAND_COUNT; h++) {
-        if (ctx->profileKind[h] != PROFILE_CONTROLLER || padHand(ctx, h)) {
+        if (ctx->profileKind[h] != PROFILE_CONTROLLER) {
             controllerClockReset(&ctx->aimClock[h]);
             continue;
         }
@@ -2109,9 +1900,8 @@ static void updatePointerWake(XrCtx* ctx, InputFrame* f) {
         ctx->stillFor = 0.0f;
     }
 
-    // Modal sheets wait on a press, so the pointer stays awake under them, as it
-    // does over the player's menus.
-    if (ctx->hintOpen || ctx->kofiOpen || (ctx->playerMode && ctx->ui[UI_PANEL_SHEET].visible)) {
+    // A menu waits on a press, so the pointer stays awake over it
+    if (ctx->ui[UI_PANEL_SHEET].visible) {
         ctx->pointerAwake = 1;
         ctx->stillFor = 0.0f;
     }
@@ -2162,717 +1952,6 @@ static void pickPointingSource(XrCtx* ctx, InputFrame* f) {
     f->hover = f->hand >= 0 ? f->hovers[f->hand] : HOVER_NONE;
     if (f->hover == HOVER_CORNER) {
         ctx->hoverCorner = f->corners[f->hand];
-    }
-}
-
-// Clears all hover highlights before this frame sets them.
-static void clearHotState(XrCtx* ctx) {
-    ctx->pickerHover = -1;
-    ctx->envButtonHot = 0;
-    ctx->cogButtonHot = 0;
-    ctx->cogHoverSlider = -1;
-    ctx->cogHoverCell = -1;
-    ctx->cogHoverStep = 0;
-    ctx->pickerPick = -1;
-    ctx->kbButtonHot = 0;
-    ctx->kbHoverKey = -1;
-    ctx->kbKeyDown = 0;
-    ctx->exitButtonHot = 0;
-    ctx->exitHoverZone = EXIT_ZONE_NONE;
-    ctx->stereoButtonHot = 0;
-    ctx->rayButtonHot = 0;
-    ctx->aimButtonHot = 0;
-    ctx->padButtonHot = 0;
-    ctx->reportHoverZone = REPORT_ZONE_NONE;
-    ctx->cogReportHot = 0;
-    ctx->cogKofiHot = 0;
-}
-
-// The picker is modal.
-static void updatePicker(XrCtx* ctx, InputFrame* f) {
-    f->hover = HOVER_PICKER;
-    // Earlier hits are in screen coordinates, not grid ones.
-    f->hand = -1;
-    float pickW, pickH;
-    XrPosef pose = pickerPose(ctx, &pickW, &pickH);
-    for (int h = 0; h < SRC_COUNT; h++) {
-        float pu, pv;
-        if (!canPoint(ctx, f, h)) {
-            continue;
-        }
-        if (!screenProject(f->aimPoses[h], pose, pickW, pickH, 0.0f, 0, &pu, &pv)) {
-            continue;
-        }
-        if (pu < 0.0f || pu > 1.0f || pv < 0.0f || pv > 1.0f) {
-            continue;
-        }
-        // Each band is a header strip over a row of cells; the header is not a target.
-        int band = (int)(pv * PICKER_ROWS);
-        if (band >= PICKER_ROWS) band = PICKER_ROWS - 1;
-        float inBand = pv * PICKER_TEX_H - band * PICKER_BAND_PX;
-        if (inBand < PICKER_HEADER_PX) {
-            continue;
-        }
-        int col = (int)(pu * PICKER_COLS);
-        if (col >= PICKER_COLS) col = PICKER_COLS - 1;
-        // Cells past the last real one are blank tiles.
-        int cell = band * PICKER_COLS + col;
-        if (cell >= ctx->pickerCells) {
-            continue;
-        }
-        ctx->pickerHover = cell;
-        f->hand = h;
-        f->hitU[h] = pu;
-        f->hitV[h] = pv;
-
-        if (ctx->triggerEdge[h]) {
-            ctx->pickerPick = ctx->pickerHover;
-            ctx->pickerChoice = ctx->pickerHover;
-            ctx->pickerOpen = 0;
-            ctx->clickPending = 1;
-            swallowTrigger(ctx, h);
-        }
-        break;
-    }
-
-    // A press on no cell closes the picker.
-    if (ctx->pickerOpen && ctx->pickerHover < 0) {
-        for (int h = 0; h < SRC_COUNT; h++) {
-            if (ctx->triggerEdge[h]) {
-                ctx->pickerOpen = 0;
-                swallowTrigger(ctx, h);
-            }
-        }
-    }
-}
-
-// Replaces the settings panel with the report sheet and opens the keyboard.
-// The sheet shows once Java has drawn it.
-static void openReport(XrCtx* ctx, InputFrame* f) {
-    ctx->cogOpen = 0;
-    ctx->reportOpen = 1;
-    ctx->reportReady = 0;
-    ctx->reportSendReady = 0;
-    ctx->reportHoverZone = REPORT_ZONE_NONE;
-    ctx->reportPose = reportSheetPose(ctx, &ctx->reportW, &ctx->reportH);
-    ctx->kbOpen = 1;
-    ctx->kbState = KB_STATE_LOWER;
-    ctx->kbMods = 0;
-    ctx->kbPose = kbPanelPose(ctx, &ctx->kbW, &ctx->kbH);
-    f->out[IN_REPORT] = (float)REPORT_OPENED;
-    LOGEV("report sheet open");
-}
-
-// Handles one key press (at most one per frame). Modifiers are ignored when
-// typing into the report sheet.
-static void pressKey(XrCtx* ctx, InputFrame* f, int key, int intoReport) {
-    int code = ctx->kbCodes[ctx->kbState][key];
-    KbPress press = kbPress(ctx->kbState, intoReport ? 0 : ctx->kbMods, code);
-    if (intoReport) {
-        press.mods = 0;
-        press.codeMods = 0;
-    }
-    if (press.code > 0) {
-        f->out[IN_KEY] = (float)press.code;
-        f->out[IN_KEY_MODS] = (float)press.codeMods;
-    }
-    if (press.mods != ctx->kbMods) {
-        LOGI("keyboard modifiers %d -> %d%s", ctx->kbMods, press.mods,
-             press.code > 0 ? ", let go after the key" : "");
-    }
-    ctx->kbState = press.sheet;
-    ctx->kbMods = press.mods;
-    if (press.hide) {
-        ctx->kbOpen = 0;
-        LOGI("keyboard closed");
-    }
-}
-
-// Report sheet press. A field takes focus and reopens the keyboard; Send works
-// only once Java marks the input valid; Send and Cancel close the sheet.
-static void pressReport(XrCtx* ctx, InputFrame* f, int zone) {
-    if (zone == REPORT_ZONE_NONE || (zone == REPORT_ZONE_SEND && !ctx->reportSendReady)) {
-        if (zone == REPORT_ZONE_SEND) {
-            LOGI("report send pressed before the note will do");
-        }
-        return;
-    }
-    ctx->clickPending = 1;
-    f->out[IN_REPORT] = (float)zone;
-    if (zone == REPORT_ZONE_NOTE || zone == REPORT_ZONE_EMAIL) {
-        if (!ctx->kbOpen) {
-            ctx->kbOpen = 1;
-            ctx->kbState = KB_STATE_LOWER;
-            ctx->kbPose = kbPanelPose(ctx, &ctx->kbW, &ctx->kbH);
-        }
-        LOGI("report field %s takes the keys", zone == REPORT_ZONE_NOTE ? "note" : "address");
-        return;
-    }
-    ctx->reportOpen = 0;
-    ctx->kbOpen = 0;
-    LOGEV("report sheet %s", zone == REPORT_ZONE_SEND ? "sent" : "cancelled");
-}
-
-// Ignored until the sheet's texture is ready; an invisible modal would eat presses.
-static void openKofi(XrCtx* ctx) {
-    if (!ctx->kofiReady) {
-        LOGI("Ko-fi pressed on the About tab before its sheet's art arrived");
-        return;
-    }
-    ctx->cogOpen = 0;
-    ctx->kofiOpen = 1;
-    ctx->kofiHoverZone = KOFI_ZONE_NONE;
-    ctx->kofiPose = kofiSheetPose(ctx, &ctx->kofiW, &ctx->kofiH);
-    LOGEV("Ko-fi sheet open from the About tab");
-}
-
-// Starts a slider drag. With gaze, the pinching hand carries the drag.
-static void cogStartDrag(XrCtx* ctx, InputFrame* f, int h, int face, int row, float pu,
-                         float pv) {
-    ctx->cogDragByGaze = 0;
-    ctx->cogDragHand = h;
-    if (h == SRC_GAZE) {
-        Vec3 target = screenPoint(pu, pv, ctx->cogPose, ctx->cogW, ctx->cogH, 0.0f, 0);
-        int hand = gazeDragHand(ctx, f->aimPoses, f->aimValid, target,
-                                &ctx->cogDragHandStart, &ctx->cogDragScale);
-        if (hand < 0) {
-            // No hand: set the value here; the drag ends (and saves) next frame.
-            ctx->cogDragHand = -1;
-            ctx->cogDragSlider = row;
-            ctx->cogDragFace = face;
-            cogApplySlider(ctx, face, row, pu);
-            return;
-        }
-        ctx->cogDragByGaze = 1;
-        ctx->cogDragHand = hand;
-        ctx->cogDragStartU = pu;
-        dragRampStart(&ctx->cogDragRamp, f->now);
-        LOGI("gaze drag: slider %d by hand %d, scale %.2f", row, hand, ctx->cogDragScale);
-    }
-    ctx->cogDragSlider = row;
-    ctx->cogDragFace = face;
-    // Jump to the press point.
-    cogApplySlider(ctx, face, row, pu);
-}
-
-// Settings panel, modal, at the pose frozen when it opened.
-static void updateCogPanel(XrCtx* ctx, InputFrame* f) {
-    f->hover = HOVER_COGPANEL;
-    f->hand = -1;
-    int face = cogFace(ctx);
-
-    // A drag keeps its hand even when the ray leaves the panel.
-    if (ctx->cogDragSlider >= 0 && ctx->cogDragFace != face) {
-        // The tab layout changed mid drag (debug property only).
-        cogDragEnded(ctx, f->out);
-    }
-    else if (ctx->cogDragSlider >= 0 && cogRowIsTrack(face, ctx->cogDragSlider)) {
-        int h = ctx->cogDragHand;
-        float pu = 0.0f, pv = 0.0f;
-        int held = h >= 0 && ctx->triggerDown[h]
-                && (f->aimValid[h] || (ctx->cogDragByGaze && pinchTracked(ctx, h)));
-        if (held && ctx->cogDragByGaze) {
-            // Hand travel along the panel's x axis, with a dead zone so a
-            // shaky pinch at high gearing does not slide the thumb.
-            Vec3 travel = vecSub(gazeHandPos(ctx, f->aimPoses, h), ctx->cogDragHandStart);
-            Vec3 carry = gazeDragCarry(ctx, &ctx->cogDragRamp,
-                                       dragDeadZone(travel, GAZE_DRAG_DEAD_M), f->now);
-            Vec3 xAxis = { 1.0f, 0.0f, 0.0f };
-            Vec3 right = quatRotate(ctx->cogPose.orientation, xAxis);
-            pu = ctx->cogDragStartU + vecDot(carry, right) * ctx->cogDragScale / ctx->cogW;
-            if (pu < 0.0f) pu = 0.0f;
-            if (pu > 1.0f) pu = 1.0f;
-            pv = cogRowV(face, ctx->cogDragSlider);
-        }
-        else if (held) {
-            held = screenProject(f->aimPoses[h], ctx->cogPose, ctx->cogW, ctx->cogH,
-                                 0.0f, 0, &pu, &pv);
-        }
-        if (held) {
-            // Attribute a gaze drag to gaze, so no hand ray is drawn.
-            f->hand = ctx->cogDragByGaze ? SRC_GAZE : h;
-            f->hitU[f->hand] = pu;
-            f->hitV[f->hand] = pv;
-            ctx->cogHoverSlider = ctx->cogDragSlider;
-            cogApplySlider(ctx, face, ctx->cogDragSlider, pu);
-        }
-        else {
-            cogDragEnded(ctx, f->out);
-        }
-    }
-
-    for (int h = 0; f->hand < 0 && h < SRC_COUNT; h++) {
-        float pu, pv;
-        if (!canPoint(ctx, f, h)) {
-            continue;
-        }
-        if (!screenProject(f->aimPoses[h], ctx->cogPose, ctx->cogW, ctx->cogH,
-                           0.0f, 0, &pu, &pv)) {
-            continue;
-        }
-        if (pu < 0.0f || pu > 1.0f || pv < 0.0f || pv > 1.0f) {
-            continue;
-        }
-        f->hand = h;
-        f->hitU[h] = pu;
-        f->hitV[h] = pv;
-
-        // Tab bar across the top, one even slot per tab.
-        if (pv < COG_TAB_BAR_B) {
-            if (ctx->triggerEdge[h]) {
-                int t = (int)(pu * COG_TAB_COUNT);
-                if (t >= COG_TAB_COUNT) t = COG_TAB_COUNT - 1;
-                ctx->cogTab = t;
-                ctx->clickPending = 1;
-                ctx->cogDragSlider = -1;
-                ctx->cogDragHand = -1;
-                ctx->cogDragFace = -1;
-                ctx->cogDragByGaze = 0;
-            }
-            break;
-        }
-
-        // Greyed-out rows are skipped.
-        int rowCount = cogTabRowCount(face);
-        int row = -1;
-        for (int s = 0; s < rowCount; s++) {
-            if (!cogRowLive(ctx, face, s)) {
-                continue;
-            }
-            if (fabsf(pv - cogRowV(face, s)) < cogRowHalf(face)) {
-                row = s;
-                break;
-            }
-        }
-
-        if (row >= 0 && !cogRowIsTrack(face, row)) {
-            int cell = cogCellAt(pu, cogRowCells(face, row));
-            ctx->cogHoverSlider = cell >= 0 ? row : -1;
-            ctx->cogHoverCell = cell;
-            if (cell >= 0 && ctx->triggerEdge[h]) {
-                cogApplyCell(ctx, face, row, cell, f->out);
-                ctx->clickPending = 1;
-            }
-            break;
-        }
-
-        // Sliders: step buttons at each end, the track between them.
-        int part = row >= 0 ? cogTrackPart(pu) : TRACK_PART_NONE;
-        if (part == TRACK_PART_NONE) {
-            row = -1;
-        }
-        ctx->cogHoverSlider = row;
-        if (part == TRACK_PART_DOWN || part == TRACK_PART_UP) {
-            int dir = part == TRACK_PART_UP ? 1 : -1;
-            ctx->cogHoverStep = dir;
-            if (ctx->triggerEdge[h]) {
-                cogStepTrack(ctx, face, row, dir, f->out);
-                ctx->clickPending = 1;
-            }
-            break;
-        }
-
-        // The About tab has only two buttons, each opening a sheet.
-        if (face == COG_TAB_ABOUT) {
-            ctx->cogReportHot = cogReportButtonAt(pu, pv);
-            ctx->cogKofiHot = cogKofiButtonAt(pu, pv);
-            if (ctx->cogReportHot && ctx->triggerEdge[h]) {
-                ctx->clickPending = 1;
-                openReport(ctx, f);
-                swallowTrigger(ctx, h);
-            }
-            else if (ctx->cogKofiHot && ctx->triggerEdge[h]) {
-                ctx->clickPending = 1;
-                openKofi(ctx);
-                swallowTrigger(ctx, h);
-            }
-            break;
-        }
-
-        // Reset button on the Screen, 3D and Picture tabs.
-        int onReset = (face == COG_TAB_SCREEN || face == COG_TAB_3D || face == COG_TAB_PICTURE)
-                && pu >= COG_RESET_L && pu <= COG_RESET_R
-                && pv >= COG_RESET_T && pv <= COG_RESET_B;
-        if (onReset && ctx->triggerEdge[h]) {
-            ctx->clickPending = 1;
-        }
-        if (onReset && ctx->triggerEdge[h] && face == COG_TAB_3D) {
-            // The running model's defaults, set at session start. Allowed with
-            // stereo off too.
-            ctx->panelSeparation = ctx->defaultSeparation;
-            ctx->separationCurrent = ctx->defaultSeparation;
-            ctx->convergence = ctx->defaultConvergence;
-            f->out[IN_SETTING] = (float)SETTING_RESET_3D;
-            f->out[IN_SETTING_VALUE] = 0.0f;
-            LOGEV("3d settings reset from the panel to separation %d, convergence %d",
-                  separationUnits(ctx->defaultSeparation),
-                  (int)roundf(ctx->defaultConvergence * 100.0f));
-        }
-        else if (onReset && ctx->triggerEdge[h] && face == COG_TAB_PICTURE) {
-            pictureReset(ctx);
-            f->out[IN_SETTING] = (float)SETTING_RESET_PICTURE;
-            f->out[IN_SETTING_VALUE] = 0.0f;
-        }
-        else if (onReset && ctx->triggerEdge[h]) {
-            // updatePlacement reseeds from preferences next frame and marks
-            // the pose dirty. The panel stays open so the jump is visible.
-            ctx->panelCurve = -1.0f;
-            ctx->placementValid = 0;
-            LOGI("screen placement reset from the panel");
-        }
-        else if (row >= 0 && ctx->triggerEdge[h]) {
-            cogStartDrag(ctx, f, h, face, row, pu, pv);
-            ctx->clickPending = 1;
-        }
-    }
-
-    // A press off the panel closes it (also how the cog button toggles it).
-    if (f->hand < 0) {
-        for (int h = 0; h < SRC_COUNT; h++) {
-            if (ctx->triggerEdge[h]) {
-                ctx->cogOpen = 0;
-                swallowTrigger(ctx, h);
-            }
-        }
-    }
-}
-
-// Exit confirmation, modal, at the pose frozen when it opened.
-static void updateExitPrompt(XrCtx* ctx, InputFrame* f) {
-    f->hover = HOVER_EXITPROMPT;
-    f->hand = -1;
-
-    for (int h = 0; h < SRC_COUNT; h++) {
-        float pu, pv;
-        if (!canPoint(ctx, f, h)) {
-            continue;
-        }
-        if (!screenProject(f->aimPoses[h], ctx->exitPose, ctx->exitW, ctx->exitH,
-                           0.0f, 0, &pu, &pv)) {
-            continue;
-        }
-        if (pu < 0.0f || pu > 1.0f || pv < 0.0f || pv > 1.0f) {
-            continue;
-        }
-        f->hand = h;
-        f->hitU[h] = pu;
-        f->hitV[h] = pv;
-        ctx->exitHoverZone = exitPromptZone(pu, pv);
-
-        if (ctx->triggerEdge[h]) {
-            // Any press closes it; only the buttons click.
-            if (ctx->exitHoverZone != EXIT_ZONE_NONE) {
-                ctx->clickPending = 1;
-            }
-            if (ctx->exitHoverZone == EXIT_ZONE_EXIT) {
-                // Java handles the exit; the prompt closes regardless.
-                f->out[IN_EXIT] = 1.0f;
-                LOGI("exit confirmed from the prompt");
-            }
-            ctx->exitConfirmOpen = 0;
-            swallowTrigger(ctx, h);
-        }
-        break;
-    }
-
-    // A press off the sheet closes it.
-    if (f->hand < 0) {
-        for (int h = 0; h < SRC_COUNT; h++) {
-            if (ctx->triggerEdge[h]) {
-                ctx->exitConfirmOpen = 0;
-                swallowTrigger(ctx, h);
-            }
-        }
-    }
-}
-
-// Report sheet, modal except for the keyboard. Java routes keys into the
-// focused field. Only Cancel and Send close it, so a stray press cannot lose
-// the typed note.
-static void updateReport(XrCtx* ctx, InputFrame* f) {
-    f->hover = HOVER_REPORT;
-    f->hand = -1;
-
-    for (int h = 0; h < SRC_COUNT; h++) {
-        float pu, pv;
-        if (!canPoint(ctx, f, h)) {
-            continue;
-        }
-        if (screenProject(f->aimPoses[h], ctx->reportPose, ctx->reportW, ctx->reportH,
-                          0.0f, 0, &pu, &pv)
-                && pu >= 0.0f && pu <= 1.0f && pv >= 0.0f && pv <= 1.0f) {
-            f->hand = h;
-            f->hitU[h] = pu;
-            f->hitV[h] = pv;
-            ctx->reportHoverZone = reportZone(pu, pv);
-            if (ctx->triggerEdge[h]) {
-                pressReport(ctx, f, ctx->reportHoverZone);
-                swallowTrigger(ctx, h);
-            }
-            break;
-        }
-        if (ctx->kbOpen && f->hovers[h] == HOVER_KBPANEL) {
-            f->hand = h;
-            f->hover = HOVER_KBPANEL;
-            int key = kbKeyAt(ctx, f->hitU[h], f->hitV[h]);
-            ctx->kbHoverKey = key;
-            ctx->kbKeyDown = key >= 0 && ctx->triggerDown[h];
-            if (key >= 0 && ctx->triggerEdge[h]) {
-                ctx->clickPending = 1;
-                pressKey(ctx, f, key, 1);
-                swallowTrigger(ctx, h);
-            }
-            break;
-        }
-    }
-
-    // Presses elsewhere are swallowed.
-    if (f->hand < 0) {
-        for (int h = 0; h < SRC_COUNT; h++) {
-            if (ctx->triggerEdge[h]) {
-                swallowTrigger(ctx, h);
-            }
-        }
-    }
-}
-
-// Opens the hand lock hint once per session, after a hand has pointed for
-// HINT_POINTING_NS with nothing else open or held, and only once its texture is
-// ready.
-static void updateHintOpening(XrCtx* ctx, InputFrame* f) {
-    if (!ctx->hintWanted || ctx->hintShown || !ctx->hintReady) {
-        return;
-    }
-    int hand = -1;
-    for (int h = 0; h < HAND_COUNT && hand < 0; h++) {
-        if (ctx->usingHands[h] && f->aimValid[h] && !f->pinchOnly[h]) {
-            hand = h;
-        }
-    }
-    int clear = !panelUp(ctx) && !ctx->panelFadingOut && !ctx->handsLocked
-            && !ctx->controllerAwake && !pressHeld(ctx);
-    if (hand < 0 || !clear) {
-        ctx->hintPointingNs = 0;
-        return;
-    }
-    if (ctx->hintPointingNs == 0) {
-        ctx->hintPointingNs = f->now;
-    }
-    if (f->now - ctx->hintPointingNs < HINT_POINTING_NS) {
-        return;
-    }
-    ctx->hintOpen = 1;
-    ctx->hintShown = 1;
-    ctx->hintHoverZone = HINT_ZONE_NONE;
-    ctx->hintPose = handHintPose(ctx, &ctx->hintW, &ctx->hintH);
-    ctx->pointerAwake = 1;
-    ctx->stillFor = 0.0f;
-    LOGEV("hand lock hint up: hand %d is pointing", hand);
-}
-
-// Hand lock hint, modal. Any press closes it; "Don't show this again" closes it
-// for good.
-static void updateHandHint(XrCtx* ctx, InputFrame* f) {
-    f->hover = HOVER_HINT;
-    f->hand = -1;
-    int zone = HINT_ZONE_NONE;
-    for (int h = 0; h < SRC_COUNT; h++) {
-        float pu, pv;
-        if (!canPoint(ctx, f, h)) {
-            continue;
-        }
-        if (!screenProject(f->aimPoses[h], ctx->hintPose, ctx->hintW, ctx->hintH,
-                           0.0f, 0, &pu, &pv)) {
-            continue;
-        }
-        if (pu < 0.0f || pu > 1.0f || pv < 0.0f || pv > 1.0f) {
-            continue;
-        }
-        f->hand = h;
-        f->hitU[h] = pu;
-        f->hitV[h] = pv;
-        zone = handHintZone(pu, pv);
-        break;
-    }
-    ctx->hintHoverZone = zone;
-
-    // Prefer the source on the sheet, so a gaze pinch on a button counts as on it.
-    int pressed = f->hand >= 0 && ctx->triggerEdge[f->hand] ? f->hand : -1;
-    for (int h = 0; h < SRC_COUNT && pressed < 0; h++) {
-        if (ctx->triggerEdge[h]) {
-            pressed = h;
-        }
-    }
-    if (pressed < 0) {
-        return;
-    }
-    int on = pressed == f->hand ? zone : HINT_ZONE_NONE;
-    if (on != HINT_ZONE_NONE) {
-        ctx->clickPending = 1;
-    }
-    closeHandHint(ctx, f, on == HINT_ZONE_NEVER,
-                  on == HINT_ZONE_NEVER ? "\"Don't show this again\""
-                  : on == HINT_ZONE_OK ? "OK" : "a press off its buttons");
-    for (int h = 0; h < SRC_COUNT; h++) {
-        if (ctx->triggerEdge[h]) {
-            swallowTrigger(ctx, h);
-        }
-    }
-}
-
-// Modal sheet; any press closes it and is swallowed.
-static void updateKofiSheet(XrCtx* ctx, InputFrame* f) {
-    f->hover = HOVER_KOFI;
-    f->hand = -1;
-    int zone = KOFI_ZONE_NONE;
-    for (int h = 0; h < SRC_COUNT; h++) {
-        float pu, pv;
-        if (!canPoint(ctx, f, h)) {
-            continue;
-        }
-        if (!screenProject(f->aimPoses[h], ctx->kofiPose, ctx->kofiW, ctx->kofiH,
-                           0.0f, 0, &pu, &pv)) {
-            continue;
-        }
-        if (pu < 0.0f || pu > 1.0f || pv < 0.0f || pv > 1.0f) {
-            continue;
-        }
-        f->hand = h;
-        f->hitU[h] = pu;
-        f->hitV[h] = pv;
-        zone = kofiSheetZone(pu, pv);
-        break;
-    }
-    ctx->kofiHoverZone = zone;
-
-    int pressed = -1;
-    for (int h = 0; h < SRC_COUNT && pressed < 0; h++) {
-        if (ctx->triggerEdge[h]) {
-            pressed = h;
-        }
-    }
-    if (pressed < 0) {
-        return;
-    }
-    int onClose = pressed == f->hand && zone == KOFI_ZONE_CLOSE;
-    if (onClose) {
-        ctx->clickPending = 1;
-    }
-    ctx->kofiOpen = 0;
-    ctx->kofiHoverZone = KOFI_ZONE_NONE;
-    int byHand = pressed == SRC_GAZE
-            || (pressed < HAND_COUNT && ctx->profileKind[pressed] != PROFILE_CONTROLLER);
-    LOGEV("Ko-fi sheet put away by %s", onClose ? "Close" : byHand ? "a pinch" : "a press");
-    for (int h = 0; h < SRC_COUNT; h++) {
-        if (ctx->triggerEdge[h]) {
-            swallowTrigger(ctx, h);
-        }
-    }
-}
-
-// Highlights the bar button or key under the ray and handles a press on it.
-static void updateFurniture(XrCtx* ctx, InputFrame* f) {
-    int pressed = f->hand >= 0 && ctx->triggerEdge[f->hand];
-    if (pressed && (f->hover == HOVER_ENVBUTTON || f->hover == HOVER_COGBUTTON
-            || f->hover == HOVER_KBBUTTON || f->hover == HOVER_EXITBUTTON
-            || f->hover == HOVER_STEREOBUTTON || f->hover == HOVER_RAYBUTTON
-            || f->hover == HOVER_AIMBUTTON || f->hover == HOVER_PADBUTTON
-            || (f->hover == HOVER_KBPANEL
-                && kbKeyAt(ctx, f->hitU[f->hand], f->hitV[f->hand]) >= 0))) {
-        ctx->clickPending = 1;
-    }
-    if (f->hover == HOVER_ENVBUTTON) {
-        ctx->envButtonHot = 1;
-        if (ctx->triggerEdge[f->hand]) {
-            ctx->pickerOpen = 1;
-        }
-    }
-    else if (f->hover == HOVER_COGBUTTON) {
-        ctx->cogButtonHot = 1;
-        if (ctx->triggerEdge[f->hand]) {
-            ctx->cogOpen = !ctx->cogOpen;
-            if (ctx->cogOpen) {
-                ctx->cogTab = COG_TAB_SCREEN;
-                ctx->cogPose = cogPanelPose(ctx, &ctx->cogW, &ctx->cogH);
-            }
-        }
-    }
-    else if (f->hover == HOVER_KBBUTTON) {
-        ctx->kbButtonHot = 1;
-        if (ctx->triggerEdge[f->hand]) {
-            ctx->kbOpen = !ctx->kbOpen;
-            if (ctx->kbOpen) {
-                ctx->kbState = KB_STATE_LOWER;
-                ctx->kbPose = kbPanelPose(ctx, &ctx->kbW, &ctx->kbH);
-            }
-            LOGI("keyboard %s", ctx->kbOpen ? "open" : "closed");
-        }
-    }
-    else if (f->hover == HOVER_EXITBUTTON) {
-        ctx->exitButtonHot = 1;
-        if (ctx->triggerEdge[f->hand]) {
-            ctx->exitConfirmOpen = 1;
-            ctx->exitHoverZone = EXIT_ZONE_NONE;
-            ctx->exitPose = exitPromptPose(ctx, &ctx->exitW, &ctx->exitH);
-            swallowTrigger(ctx, f->hand);
-            LOGI("exit prompt open");
-        }
-    }
-    else if (f->hover == HOVER_STEREOBUTTON) {
-        ctx->stereoButtonHot = 1;
-        if (ctx->triggerEdge[f->hand]) {
-            setStereoLive(ctx, !ctx->stereoLive, "the bar button");
-            // Toast: the change is easy to miss otherwise.
-            noticePush(&ctx->notices, ctx->stereoLive ? TOAST_3D_ON : TOAST_3D_OFF, 0);
-        }
-    }
-    else if (f->hover == HOVER_RAYBUTTON) {
-        ctx->rayButtonHot = 1;
-        if (ctx->triggerEdge[f->hand]) {
-            setRayOn(ctx, !raySwitchOn(ctx->raySetting, ctx->rayFlipped), "the bar button");
-        }
-    }
-    else if (f->hover == HOVER_AIMBUTTON) {
-        ctx->aimButtonHot = 1;
-        if (ctx->triggerEdge[f->hand]) {
-            int on = !headAimSwitchOn(ctx->headAimSetting, ctx->headAimFlipped);
-            setHeadAimOn(ctx, on, "the bar button");
-            // Toast: nothing visible changes until the head turns.
-            noticePush(&ctx->notices, on ? TOAST_HEAD_AIM_ON : TOAST_HEAD_AIM_OFF, 0);
-        }
-    }
-    else if (f->hover == HOVER_PADBUTTON) {
-        ctx->padButtonHot = 1;
-        if (ctx->triggerEdge[f->hand]) {
-            setPadMode(ctx, !ctx->padMode, "the bar button");
-        }
-    }
-    else if (f->hover == HOVER_KBPANEL) {
-        int key = kbKeyAt(ctx, f->hitU[f->hand], f->hitV[f->hand]);
-        ctx->kbHoverKey = key;
-        ctx->kbKeyDown = key >= 0 && ctx->triggerDown[f->hand];
-        if (key >= 0 && ctx->triggerEdge[f->hand]) {
-            pressKey(ctx, f, key, 0);
-        }
-    }
-}
-
-// A press on empty space (from any source) closes the keyboard.
-static void dismissKeyboard(XrCtx* ctx, InputFrame* f) {
-    if (ctx->kbOpen && !ctx->pickerOpen && !ctx->cogOpen && !ctx->exitConfirmOpen
-            && !ctx->reportOpen && !ctx->hintOpen && !ctx->kofiOpen) {
-        for (int h = 0; h < SRC_COUNT; h++) {
-            if (!canPoint(ctx, f, h) || !ctx->triggerEdge[h]) {
-                continue;
-            }
-            // The halo counts as empty space.
-            if (f->hovers[h] == HOVER_NONE || f->hovers[h] == HOVER_HALO) {
-                ctx->kbOpen = 0;
-                swallowTrigger(ctx, h);
-                LOGI("keyboard closed");
-                break;
-            }
-        }
     }
 }
 
@@ -2955,20 +2034,9 @@ static void sendPointer(XrCtx* ctx, InputFrame* f, int hit) {
                          ctx->pointerBeta);
     float v = euroFilter(&ctx->filterV, f->hitV[f->hand], f->dt, ctx->pointerMinCutoff,
                          ctx->pointerBeta);
-    if (ctx->headAimActive) {
-        // Head aim drives relative mouse motion, so the ray adds a relative
-        // nudge instead of an absolute position.
-        int dx, dy;
-        pointerNudge(&ctx->headAimNudge, f->hand, u, v, ctx->inputFrames, ctx->videoWidth,
-                     ctx->videoHeight, &dx, &dy);
-        f->out[IN_MOUSE_DX] += (float)dx;
-        f->out[IN_MOUSE_DY] += (float)dy;
-    }
-    else {
-        f->out[IN_HIT] = 1.0f;
-        f->out[IN_U] = u;
-        f->out[IN_V] = v;
-    }
+    f->out[IN_HIT] = 1.0f;
+    f->out[IN_U] = u;
+    f->out[IN_V] = v;
 
     Vec3 endPoint = screenPoint(u, v, f->screenPose, ctx->screenWidth, f->height, f->radius,
                                 f->curved);
@@ -2988,11 +2056,11 @@ static void updateButtons(XrCtx* ctx, InputFrame* f, int hit) {
             mask |= VR_BUTTON_LEFT;
         }
     }
-    // Controller only; owned by the pad in gamepad mode.
-    if (!ctx->padMode && actionBool(ctx, ctx->rightClickAction, -1)) {
+    // Controller only
+    if (actionBool(ctx, ctx->rightClickAction, -1)) {
         mask |= VR_BUTTON_RIGHT;
     }
-    if (!ctx->padMode && actionBool(ctx, ctx->middleClickAction, -1)) {
+    if (actionBool(ctx, ctx->middleClickAction, -1)) {
         mask |= VR_BUTTON_MIDDLE;
     }
     // Presses need a hit; releases always apply, so leaving the screen mid drag releases.
@@ -3033,11 +2101,7 @@ static void updateButtons(XrCtx* ctx, InputFrame* f, int hit) {
 // Turns the stick into scroll clicks while the pointer is on the picture, or
 // off it with pointer sleep disabled, or on a player UI panel.
 static void updateScroll(XrCtx* ctx, InputFrame* f, int hit) {
-    // No scroll in gamepad mode or while a stick click is part of the chord.
-    XrVector2f stick = { 0.0f, 0.0f };
-    if (!ctx->padMode && !chordHasStickClick(ctx)) {
-        stick = actionVec2(ctx, ctx->scrollAction, -1);
-    }
+    XrVector2f stick = actionVec2(ctx, ctx->scrollAction, -1);
     int offPicture = !ctx->pointerSleepOn
             && (f->hover == HOVER_NONE || f->hover == HOVER_HALO);
     int onPanel = ctx->playerMode && f->hover == HOVER_UIPANEL;
@@ -3077,383 +2141,12 @@ static void beamIntoRoom(XrCtx* ctx, InputFrame* f) {
     }
 }
 
-// Head yaw relative to the screen, for virtual surround. 0 when head locked
-// (outside a room); keeps the last value if the head is not located.
-static void updateAudioYaw(XrCtx* ctx, int headLocked) {
-    if (headLocked && roomEffective(ctx) <= 0) {
-        ctx->audioYaw = 0.0f;
-        return;
-    }
-    if (!ctx->sessionRunning || !ctx->placementValid) {
-        return;
-    }
-    XrSpaceLocation head = { XR_TYPE_SPACE_LOCATION };
-    if (XR_SUCCEEDED(xrLocateSpace(ctx->viewSpace, ctx->localSpace,
-                                   ctx->predictedDisplayTime, &head))
-            && (head.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) != 0) {
-        ctx->audioYaw = yawBetween(head.pose.orientation, ctx->screenPose.orientation);
-    }
-}
-
-// Collapses head aim step results to a log state; dropped or dead-zone frames count as on.
-static int headAimDoing(int what) {
-    return what == HEAD_AIM_OFF || what == HEAD_AIM_PAUSED || what == HEAD_AIM_LOST
-            ? what : HEAD_AIM_SENT;
-}
-
-// Head aim: while head locked, the head's turn since last frame is output as
-// relative mouse motion (IN_MOUSE_DX/DY), measured in local space. Runs before
-// the input pass's early returns; paused while a panel is up, unfocused, or
-// during the splash.
-static void updateHeadAim(XrCtx* ctx, int headLocked, float* out) {
-    int active = headAimSwitchOn(ctx->headAimSetting, ctx->headAimFlipped) && headLocked
-            && roomEffective(ctx) <= 0;
-    int paused = !ctx->sessionRunning || ctx->sessionState != XR_SESSION_STATE_FOCUSED
-            || ctx->splash.phase != SPLASH_GONE || !ctx->placementValid || panelUp(ctx);
-    int tracked = 0;
-    float yaw = 0.0f;
-    float pitch = 0.0f;
-    if (active && !paused) {
-        // Require tracked: snapping back from a held orientation would read as a turn.
-        const XrSpaceLocationFlags needed = XR_SPACE_LOCATION_ORIENTATION_VALID_BIT
-                | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
-        XrSpaceLocation head = { XR_TYPE_SPACE_LOCATION };
-        tracked = XR_SUCCEEDED(xrLocateSpace(ctx->viewSpace, ctx->localSpace,
-                                             ctx->predictedDisplayTime, &head))
-                && (head.locationFlags & needed) == needed;
-        if (tracked) {
-            headAimAngles(head.pose.orientation, &yaw, &pitch);
-        }
-    }
-    // Drop frames until the recentre has reached the display, even with head aim off.
-    int recentred = ctx->headAimRecentring;
-    if (recentred && ctx->predictedDisplayTime >= ctx->headAimRecentreAt) {
-        ctx->headAimRecentring = 0;
-    }
-
-    int dx = 0;
-    int dy = 0;
-    int what = headAimStep(&ctx->headAim, headAimBlocked(active, paused, tracked, recentred),
-                           yaw, pitch, ctx->predictedDisplayTime,
-                           (float)ctx->headAimSensitivity, (float)ctx->headAimDeadZone,
-                           &dx, &dy);
-    ctx->headAimActive = active;
-    out[IN_HEAD_AIM] = active ? 1.0f : 0.0f;
-    out[IN_MOUSE_DX] = (float)dx;
-    out[IN_MOUSE_DY] = (float)dy;
-
-    // On/off to the event log; pauses (every panel opening) to logcat only.
-    int doing = headAimDoing(what);
-    if (doing != ctx->headAimSaid) {
-        int wasOn = ctx->headAimSaid >= 0 && ctx->headAimSaid != HEAD_AIM_OFF;
-        if (doing == HEAD_AIM_OFF) {
-            if (wasOn) {
-                LOGEV("head aim off");
-            }
-        }
-        else {
-            if (!wasOn) {
-                LOGEV("head aim on: %d px a degree, dead zone %d deg/s",
-                      ctx->headAimSensitivity, ctx->headAimDeadZone);
-            }
-            LOGI("head aim %s", doing == HEAD_AIM_SENT ? "measuring the head"
-                                : doing == HEAD_AIM_PAUSED
-                                ? "paused while a panel is up or the session is not focused"
-                                : "waiting for the head to be tracked");
-        }
-        ctx->headAimSaid = doing;
-        ctx->headAimSentX = 0;
-        ctx->headAimSentY = 0;
-        ctx->headAimCountNs = ctx->predictedDisplayTime;
-    }
-    if (what == HEAD_AIM_JUMPED) {
-        LOGI("head aim dropped a frame turning faster than a head can");
-    }
-    if (doing == HEAD_AIM_SENT) {
-        ctx->headAimSentX += dx;
-        ctx->headAimSentY += dy;
-        if (ctx->predictedDisplayTime - ctx->headAimCountNs >= HEAD_AIM_COUNT_NS) {
-            if (ctx->headAimSentX != 0 || ctx->headAimSentY != 0) {
-                LOGI("head aim moved the mouse %ld, %ld px in %.0f s", ctx->headAimSentX,
-                     ctx->headAimSentY,
-                     (ctx->predictedDisplayTime - ctx->headAimCountNs) / 1e9);
-            }
-            ctx->headAimSentX = 0;
-            ctx->headAimSentY = 0;
-            ctx->headAimCountNs = ctx->predictedDisplayTime;
-        }
-    }
-}
-
-// One controller's pad inputs, zero for a hand without one. Read in pointer mode
-// too, for the shortcuts.
-static void readPadHand(XrCtx* ctx, int h, PadHand* p) {
-    memset(p, 0, sizeof(*p));
-    if (ctx->profileKind[h] != PROFILE_CONTROLLER) {
-        return;
-    }
-    p->grip = actionFloat(ctx, ctx->grabAction, h);
-    p->menu = h == HAND_LEFT && actionBool(ctx, ctx->menuAction, h);
-    p->trigger = actionFloat(ctx, ctx->triggerAction, h);
-    XrVector2f stick = actionVec2(ctx, ctx->scrollAction, h);
-    p->stickX = stick.x;
-    p->stickY = stick.y;
-    p->stickClick = actionBool(ctx, ctx->toggleAction, h);
-    p->lower = actionBool(ctx, ctx->rightClickAction, h);
-    p->upper = actionBool(ctx, ctx->middleClickAction, h);
-}
-
-// The virtual pad is attached in gamepad mode while either hand holds a controller.
-static int padPlugged(XrCtx* ctx) {
-    return ctx->padMode && (ctx->profileKind[HAND_LEFT] == PROFILE_CONTROLLER
-                            || ctx->profileKind[HAND_RIGHT] == PROFILE_CONTROLLER);
-}
-
-// Final pad state for Java: at rest unless live; inputs held from before it went
-// live stay off until released.
-static void settlePad(XrCtx* ctx, int plugged, int live, PadState* s, const char* why) {
-    if (!plugged || !live) {
-        padRest(s);
-        if (plugged && !ctx->padResting) {
-            LOGI("gamepad resting: %s", why);
-        }
-        ctx->padResting = 1;
-    }
-    else if (ctx->padResting) {
-        ctx->padHeld = padHeldIn(s);
-        ctx->padResting = 0;
-        LOGI("gamepad live%s", ctx->padHeld != 0 ? ", holding back what is still down" : "");
-    }
-    padHoldBack(&ctx->padHeld, s);
-
-    if (plugged != ctx->padAttached) {
-        if (plugged) {
-            LOGEV("gamepad plugged in: the controllers are one Xbox pad on the host");
-        }
-        else {
-            LOGEV("gamepad unplugged: %s", ctx->padMode ? "no controller in either hand"
-                                                        : "pointer mode");
-        }
-        ctx->padAttached = plugged;
-    }
-    // Buttons only; sticks and triggers change every frame.
-    if (s->buttons != ctx->padButtonsSaid) {
-        LOGI("gamepad buttons 0x%04x, triggers %d %d", s->buttons, s->leftTrigger,
-             s->rightTrigger);
-        ctx->padButtonsSaid = s->buttons;
-    }
-    ctx->pad = *s;
-}
-
-// Releases all pad inputs and resets the shortcut state, but keeps the pad
-// attached across a brief focus loss.
-static void restPad(XrCtx* ctx, const char* why) {
-    PadState s;
-    padRest(&s);
-    padToggleReset(&ctx->padToggle);
-    padChordReset(&ctx->padChord, ctx->padChord.parts);
-    settlePad(ctx, padPlugged(ctx), 0, &s, why);
-}
-
-// Applies a rumble pulse or stops it. Logs the first result per controller and
-// any failure.
-static void hapticOut(XrCtx* ctx, int h, int action, float amp) {
-    XrHapticActionInfo info = { XR_TYPE_HAPTIC_ACTION_INFO };
-    info.action = ctx->hapticAction;
-    info.subactionPath = ctx->handPaths[h];
-    const char* side = h == HAND_LEFT ? "left" : "right";
-    if (action == PAD_RUMBLE_APPLY) {
-        XrHapticVibration vibration = { XR_TYPE_HAPTIC_VIBRATION };
-        vibration.duration = PAD_RUMBLE_PULSE_NS;
-        vibration.frequency = XR_FREQUENCY_UNSPECIFIED;
-        vibration.amplitude = amp;
-        XrResult res = xrApplyHapticFeedback(ctx->session, &info,
-                                             (const XrHapticBaseHeader*)&vibration);
-        ctx->rumblePulses++;
-        if (!ctx->rumbleResultSaid[h]) {
-            ctx->rumbleResultSaid[h] = 1;
-            LOGI("rumble on the %s controller at %.2f for %ld ms: runtime said %s", side, amp,
-                 (long)(PAD_RUMBLE_PULSE_NS / 1000000LL), xrResultName(res));
-        }
-        else if (XR_FAILED(res)) {
-            LOGW("rumble pulse on the %s controller refused: %s", side, xrResultName(res));
-        }
-        return;
-    }
-    XrResult res = xrStopHapticFeedback(ctx->session, &info);
-    LOGI("rumble stopped on the %s controller: runtime said %s", side, xrResultName(res));
-}
-
-// Drives pad rumble on the pad's controllers; live == 0 stops it. Cleared when
-// the pad detaches.
-static void updateRumble(XrCtx* ctx, int live) {
-    if (ctx->hapticAction == XR_NULL_HANDLE || !ctx->hapticBound) {
-        return;
-    }
-    int on[HAND_COUNT];
-    int action[HAND_COUNT];
-    float amp[HAND_COUNT];
-    for (int h = 0; h < HAND_COUNT; h++) {
-        on[h] = live && ctx->padAttached && ctx->profileKind[h] == PROFILE_CONTROLLER;
-    }
-    padRumbleStep(&ctx->rumble, on, nowNs(), action, amp);
-    for (int h = 0; h < HAND_COUNT; h++) {
-        if (action[h] != PAD_RUMBLE_KEEP) {
-            hapticOut(ctx, h, action[h], amp[h]);
-        }
-    }
-    if (!ctx->padAttached && ctx->rumbleOn) {
-        LOGI("rumble from the host dropped after %ld pulses: the pad is out", ctx->rumblePulses);
-        ctx->rumbleOn = 0;
-        padRumbleReset(&ctx->rumble);
-    }
-}
-
-static const char* chordPartNames(int parts, char* buf, size_t size) {
-    static const char* names[PAD_PART_COUNT] = { "L3", "R3", "LT", "RT", "left grip",
-                                                 "right grip" };
-    size_t used = 0;
-    buf[0] = '\0';
-    for (int i = 0; i < PAD_PART_COUNT && used < size; i++) {
-        if (parts & (1 << i)) {
-            used += snprintf(buf + used, size - used, "%s%s", used > 0 ? ", " : "", names[i]);
-        }
-    }
-    return parts != 0 ? buf : "nothing";
-}
-
-// Logs chord events, so a held-back press can be told from a missing one.
-static void logChord(XrCtx* ctx, int event, const PadState* rawPad) {
-    char held[64], tapped[64];
-    const PadChord* c = &ctx->padChord;
-    if (event == PAD_CHORD_FORMING) {
-        LOGI("gamepad shortcut: holding back %s while it may be %s (%s mode)",
-             chordPartNames(c->held, held, sizeof(held)), padShortcutName(ctx->padShortcut),
-             ctx->padMode ? "gamepad" : "pointer");
-    }
-    else if (event == PAD_CHORD_ABANDONED) {
-        LOGI("gamepad shortcut given up after %ld ms: %s goes through now, %s as a tap; "
-             "the pad as read 0x%04x, triggers %d %d",
-             (long)((nowNs() - c->startNs) / 1000000L),
-             chordPartNames(c->stirred, held, sizeof(held)),
-             chordPartNames(c->replay, tapped, sizeof(tapped)), rawPad->buttons,
-             rawPad->leftTrigger, rawPad->rightTrigger);
-    }
-    else if (event == PAD_CHORD_FIRED) {
-        LOGI("gamepad shortcut held %ld ms, %s kept back until let go",
-             (long)(PAD_CHORD_HOLD_NS / 1000000L), chordPartNames(c->taken, held, sizeof(held)));
-    }
-}
-
-// Gamepad pass, after action sync and before pointing. The chosen shortcut
-// (left menu + left grip, or a chord whose parts are held back while it forms)
-// toggles gamepad mode. In gamepad mode both controllers form the pad, which
-// rests while a panel is up.
-static void updatePad(XrCtx* ctx) {
-    PadHand* raw = ctx->padRead;
-    for (int h = 0; h < HAND_COUNT; h++) {
-        readPadHand(ctx, h, &raw[h]);
-    }
-    // A chord needs a controller in each hand.
-    int parts = ctx->profileKind[HAND_LEFT] == PROFILE_CONTROLLER
-            && ctx->profileKind[HAND_RIGHT] == PROFILE_CONTROLLER
-            ? padChordParts(ctx->padShortcut) : 0;
-    if (parts != ctx->padChord.parts) {
-        padChordReset(&ctx->padChord, parts);
-    }
-    int64_t now = nowNs();
-    int chord = padChordStep(&ctx->padChord, &raw[HAND_LEFT], &raw[HAND_RIGHT], now);
-    PadHand seen[HAND_COUNT];
-    padChordApply(&ctx->padChord, &raw[HAND_LEFT], &raw[HAND_RIGHT], &seen[HAND_LEFT],
-                  &seen[HAND_RIGHT]);
-    for (int h = 0; h < HAND_COUNT; h++) {
-        ctx->padGrip[h] = padGripDown(seen[h].grip, ctx->padGrip[h]);
-    }
-    if (chord != PAD_CHORD_NOTHING) {
-        PadState rawPad;
-        int rawGrips[HAND_COUNT] = { raw[HAND_LEFT].grip >= PAD_GRIP_ON,
-                                     raw[HAND_RIGHT].grip >= PAD_GRIP_ON };
-        padMap(&raw[HAND_LEFT], &raw[HAND_RIGHT], rawGrips, 1, ctx->padDeadzone, &rawPad);
-        logChord(ctx, chord, &rawPad);
-    }
-
-    // The menu button is Start unless the menu+grip shortcut claims it.
-    int startOk = 1;
-    int menuGrip = ctx->padShortcut == PAD_SHORTCUT_MENU_GRIP
-            && padToggleStep(&ctx->padToggle, raw[HAND_LEFT].menu, ctx->padGrip[HAND_LEFT], now,
-                             &startOk);
-    if (menuGrip || chord == PAD_CHORD_FIRED) {
-        setPadMode(ctx, !ctx->padMode, padShortcutName(ctx->padShortcut));
-    }
-
-    PadState s;
-    padMap(&seen[HAND_LEFT], &seen[HAND_RIGHT], ctx->padGrip, startOk, ctx->padDeadzone, &s);
-    int plugged = padPlugged(ctx);
-    settlePad(ctx, plugged, plugged && !panelUp(ctx), &s, "a panel is up");
-}
-
-// Entering gamepad mode closes all panels and releases anything held.
-static void padPutPanelsAway(XrCtx* ctx, float* out) {
-    if (!ctx->padPutAway) {
-        return;
-    }
-    ctx->padPutAway = 0;
-    if (ctx->cogDragSlider >= 0) {
-        cogDragEnded(ctx, out);
-    }
-    if (ctx->grabMode != GRAB_NONE) {
-        ctx->grabMode = GRAB_NONE;
-        ctx->grabByGaze = 0;
-        ctx->poseDirty = 1;
-    }
-    if (panelUp(ctx)) {
-        LOGI("gamepad mode put the panels away");
-    }
-    ctx->cogOpen = 0;
-    ctx->pickerOpen = 0;
-    ctx->kbOpen = 0;
-    ctx->exitConfirmOpen = 0;
-    ctx->reportOpen = 0;
-    ctx->hintOpen = 0;
-    ctx->kofiOpen = 0;
-    ctx->buttonsDown = 0;
-}
-
-// Saves a corner-resized room screen size once the grab ends and the setting
-// slot is free; dropped if the room changed meanwhile.
-static void emitRoomScreen(XrCtx* ctx, float* out) {
-    int style = ctx->roomScreenUnsaved;
-    if (style == 0 || ctx->grabMode == GRAB_RESIZE || out[IN_SETTING] >= 0.0f) {
-        return;
-    }
-    ctx->roomScreenUnsaved = 0;
-    if (style != roomEffective(ctx)) {
-        return;
-    }
-    out[IN_SETTING] = (float)SETTING_ROOM_SCREEN;
-    out[IN_SETTING_VALUE] = (float)roomScreenPercent(ctx, style);
-    LOGEV("room %d screen percent %d from a corner", style, roomScreenPercent(ctx, style));
-}
-
 // Fills the state-derived output slots last, then copies everything to Java.
 static void handBack(JNIEnv* env, XrCtx* ctx, float* out, jfloatArray outArr) {
-    int readouts[READOUT_VALUES];
-    for (int i = 0; i < READOUT_VALUES; i++) {
-        readouts[i] = -1;
-    }
-    out[IN_SETTING_ROOM] = -1.0f;
     out[IN_STEREO] = 0.0f;
-    out[IN_TOAST] = -1.0f;
-    out[IN_TOAST_ARG] = 0.0f;
-    out[IN_CLICK] = 0.0f;
-    out[IN_MARKS] = -1.0f;
-    out[IN_COG_OPEN] = 0.0f;
-    out[IN_KB_MODS] = 0.0f;
-    out[IN_KB_SHEET] = -1.0f;
-    out[IN_REPORT_ZONE] = -1.0f;
     out[IN_PLAYER_BUTTONS] = 0.0f;
     out[IN_PLAYER_STICK_X] = 0.0f;
-    if (ctx != NULL && ctx->playerMode) {
+    if (ctx != NULL) {
         int buttons = 0;
         float stickX = 0.0f;
         for (int h = 0; h < HAND_COUNT; h++) {
@@ -3474,49 +2167,7 @@ static void handBack(JNIEnv* env, XrCtx* ctx, float* out, jfloatArray outArr) {
         }
         out[IN_PLAYER_BUTTONS] = (float)buttons;
         out[IN_PLAYER_STICK_X] = stickX;
-    }
-    if (ctx != NULL) {
-        out[IN_PAD] = ctx->padAttached ? 1.0f : 0.0f;
-        out[IN_PAD_BUTTONS] = (float)ctx->pad.buttons;
-        out[IN_PAD_LT] = (float)ctx->pad.leftTrigger;
-        out[IN_PAD_RT] = (float)ctx->pad.rightTrigger;
-        out[IN_PAD_LX] = (float)ctx->pad.leftX;
-        out[IN_PAD_LY] = (float)ctx->pad.leftY;
-        out[IN_PAD_RX] = (float)ctx->pad.rightX;
-        out[IN_PAD_RY] = (float)ctx->pad.rightY;
-        out[IN_REPORT_ZONE] = ctx->reportOpen ? (float)ctx->reportHoverZone : -1.0f;
-        // A closed keyboard holds no modifiers.
-        if (!ctx->kbOpen && ctx->kbMods != 0) {
-            LOGI("keyboard modifiers %d -> 0, keyboard closed", ctx->kbMods);
-            ctx->kbMods = 0;
-        }
-        out[IN_KB_MODS] = (float)ctx->kbMods;
-        out[IN_KB_SHEET] = ctx->kbOpen ? (float)ctx->kbState : -1.0f;
-        out[IN_CLICK] = ctx->clickPending ? 1.0f : 0.0f;
-        ctx->clickPending = 0;
-        // Display tab selections, while the panel is visible (including fade-out).
-        int showing = ctx->cogOpen || ctx->panelFades[FADE_COG].level > 0.0f;
-        out[IN_COG_OPEN] = showing ? 1.0f : 0.0f;
-        if (showing && cogFace(ctx) == COG_TAB_DISPLAY) {
-            for (int m = 0; m < COG_OPTION_COUNT; m++) {
-                out[IN_MARKS + m] = cogRowLive(ctx, COG_TAB_DISPLAY, m)
-                        ? (float)cogOptionValue(ctx, m, ctx->headLockedPref) : -1.0f;
-            }
-        }
-        // Next toast, held until the splash is gone.
-        Notice up;
-        if (noticeAdvance(&ctx->notices, nowNs(), ctx->splash.phase != SPLASH_GONE, &up)) {
-            out[IN_TOAST] = (float)up.kind;
-            out[IN_TOAST_ARG] = (float)up.arg;
-        }
-        emitRoomScreen(ctx, out);
-        // Room settings are per room.
-        out[IN_SETTING_ROOM] = (float)roomCellForStyle(roomEffective(ctx));
-        cogReadouts(ctx, readouts);
         out[IN_STEREO] = ctx->stereoMode != DEPTH_MODE_OFF && ctx->stereoLive ? 1.0f : 0.0f;
-    }
-    for (int i = 0; i < READOUT_VALUES; i++) {
-        out[IN_READOUT + i] = (float)readouts[i];
     }
     (*env)->SetFloatArrayRegion(env, outArr, 0, IN_SLOTS, out);
 }
@@ -3543,27 +2194,15 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
         updateControllerAwake(ctx);
         updateGazeBridge(ctx);
         ctx->prefCurvature = curvature;
-        // Before the early returns, so audio yaw and head aim run with the
-        // pointer off or focus lost.
-        updateAudioYaw(ctx, headLocked);
-        out[IN_HEAD_YAW] = ctx->audioYaw;
         ctx->inputFrames++;
-        updateHeadAim(ctx, headLocked, out);
     }
-    // -1 means "none"; a zeroed slot would be read as a real pick, setting or key.
-    out[IN_PICKER_PICK] = -1.0f;
-    out[IN_SETTING] = -1.0f;
-    out[IN_KEY] = -1.0f;
-    out[IN_REPORT] = -1.0f;
 
     // Release everything held when input is not read, including under the splash.
     if (ctx == NULL || !ctx->inputReady || !ctx->placementValid
             || ctx->sessionState != XR_SESSION_STATE_FOCUSED
             || ctx->splash.phase != SPLASH_GONE) {
         if (ctx != NULL) {
-            releaseInput(ctx, out);
-            restPad(ctx, "the session is not focused");
-            updateRumble(ctx, 0);
+            releaseInput(ctx);
         }
         handBack(env, ctx, out, outArr);
         return;
@@ -3578,31 +2217,21 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     sync.activeActionSets = &active;
     if (XR_FAILED(xrSyncActions(ctx->session, &sync))) {
         ctx->buttonsDown = 0;
-        restPad(ctx, "the controllers could not be read");
-        updateRumble(ctx, 0);
         handBack(env, ctx, out, outArr);
         return;
     }
     // Controller models read their grip poses after this sync.
     ctx->actionsSynced = 1;
 
-    // Before pointing, so a mode switch applies this frame.
-    updatePad(ctx);
-    updateRumble(ctx, 1);
     if (!pointerEnabled) {
-        // Pointer disabled in settings: only the pad is read.
-        releaseInput(ctx, out);
-        padPutPanelsAway(ctx, out);
+        releaseInput(ctx);
         handBack(env, ctx, out, outArr);
         return;
     }
 
-    // Stick click toggles the pointer, read through the chord filter when the
-    // chord uses it; ignored in gamepad mode.
-    int toggle = chordHasStickClick(ctx)
-            ? seenStickClick(ctx, HAND_LEFT) || seenStickClick(ctx, HAND_RIGHT)
-            : actionBool(ctx, ctx->toggleAction, -1);
-    if (toggle && !ctx->togglePrev && !ctx->padMode) {
+    // Stick click toggles the pointer
+    int toggle = actionBool(ctx, ctx->toggleAction, -1);
+    if (toggle && !ctx->togglePrev) {
         ctx->pointerOn = !ctx->pointerOn;
         LOGI("pointer %s", ctx->pointerOn ? "on" : "off");
     }
@@ -3655,41 +2284,9 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
 
     readSources(ctx, &f);
     gazeBridgeTrack(&ctx->gazeBridge, f.gazeAsked, f.gazeUsable, f.now);
-    // No hand lock in player mode: three quick pinches are just three clicks.
-    if (ctx->playerMode) {
-        ctx->handsLocked = 0;
-    }
-    else {
-        updateLockGesture(ctx, &f);
-    }
-    applyHandLock(ctx, &f);
+    gazeTrigger(ctx, &f);
     updatePointerWake(ctx, &f);
     pickPointingSource(ctx, &f);
-    clearHotState(ctx);
-    updateHintOpening(ctx, &f);
-    if (ctx->pickerOpen) {
-        updatePicker(ctx, &f);
-    }
-    else if (ctx->cogOpen) {
-        updateCogPanel(ctx, &f);
-    }
-    else if (ctx->exitConfirmOpen) {
-        updateExitPrompt(ctx, &f);
-    }
-    else if (ctx->reportOpen) {
-        updateReport(ctx, &f);
-    }
-    else if (ctx->hintOpen) {
-        updateHandHint(ctx, &f);
-    }
-    else if (ctx->kofiOpen) {
-        updateKofiSheet(ctx, &f);
-    }
-    else {
-        updateFurniture(ctx, &f);
-    }
-    dismissKeyboard(ctx, &f);
-    padPutPanelsAway(ctx, out);
     logInputSnapshot(ctx, &f);
 
     // UI panel hit, which Java treats as a touch.
@@ -3751,14 +2348,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
 
     // Only the picture itself moves the cursor.
     int hit = (f.hover == HOVER_SCREEN || f.hover == HOVER_CORNER) && f.hand != SRC_GAZE;
-    if ((f.hover == HOVER_BAR || f.hover == HOVER_ENVBUTTON || f.hover == HOVER_PICKER
-            || f.hover == HOVER_HINT || f.hover == HOVER_HALO || f.hover == HOVER_COGBUTTON
-            || f.hover == HOVER_COGPANEL || f.hover == HOVER_KBBUTTON
-            || f.hover == HOVER_KBPANEL || f.hover == HOVER_EXITBUTTON
-            || f.hover == HOVER_EXITPROMPT || f.hover == HOVER_STEREOBUTTON
-            || f.hover == HOVER_RAYBUTTON || f.hover == HOVER_AIMBUTTON
-            || f.hover == HOVER_PADBUTTON || f.hover == HOVER_REPORT || f.hover == HOVER_KOFI
-            || f.hover == HOVER_UIPANEL)
+    if ((f.hover == HOVER_BAR || f.hover == HOVER_HALO || f.hover == HOVER_UIPANEL)
             && f.headValid && f.hand >= 0) {
         beamToFurniture(ctx, &f);
     }
@@ -3768,7 +2358,6 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     beamIntoRoom(ctx, &f);
 
     writeInputPose(ctx, out);
-    out[IN_PICKER_PICK] = (float)ctx->pickerPick;
     handBack(env, ctx, out, outArr);
 }
 
@@ -3834,23 +2423,8 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetPlayerMode(JNIEnv* env, job
     }
     ctx->playerMode = on ? 1 : 0;
     if (ctx->playerMode) {
-        ctx->hintWanted = 0;
         // The player detects letterbox bars itself.
         ctx->ambiBarDetect = 0;
     }
     LOGI("player mode %s", ctx->playerMode ? "on" : "off");
-}
-
-// Whether this session may show the hand lock hint. Set before the first frame.
-JNIEXPORT void JNICALL
-Java_com_limelight_binding_video_XrRenderer_nativeSetHandHint(JNIEnv* env, jobject thiz,
-                                                              jlong handle, jboolean wanted) {
-    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
-    if (ctx == NULL) {
-        return;
-    }
-    ctx->hintWanted = wanted && ctx->handsEnabled && !ctx->playerMode;
-    LOGI("hand lock hint %s", ctx->hintWanted ? "shows the first time a hand points"
-                              : ctx->handsEnabled ? "put away for good in an earlier session"
-                                                  : "not wanted, hands are off");
 }

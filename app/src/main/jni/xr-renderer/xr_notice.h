@@ -1,5 +1,5 @@
-// Timing for panel fades, the startup splash (shown while panels, room and
-// depth model load) and the toast queue. No GL or OpenXR.
+// Timing for panel fades and the startup splash (shown while the room and depth
+// model load). No GL or OpenXR.
 
 #ifndef XR_NOTICE_H
 #define XR_NOTICE_H
@@ -64,38 +64,5 @@ float splashLevel(const Splash* splash, int64_t now, int64_t fadeNs);
 // Open logo wedges (also the sprite sheet row), cycling 0..SPLASH_WEDGES while
 // up; all of them once lifting, so it fades out whole.
 int splashWedges(const Splash* splash, int64_t now);
-
-// One toast at a time. Same-group notices replace the current one at once;
-// others wait NOTICE_MIN_NS. A full queue drops the oldest.
-#define NOTICE_SHOW_NS 4000000000LL
-#define NOTICE_MIN_NS 1500000000LL
-#define NOTICE_QUEUE 4
-
-typedef struct {
-    int kind;
-    int arg;
-} Notice;
-
-typedef struct {
-    Notice waiting[NOTICE_QUEUE];
-    int count;
-    // Current notice and its start; kind -1 when none
-    Notice current;
-    int64_t sinceNs;
-} NoticeBoard;
-
-void noticeInit(NoticeBoard* board);
-
-// Group key: on/off pairs of the same toggle share a group
-int noticeGroup(int kind);
-
-// Queues a notice; one in the same group already waiting is replaced in place
-void noticePush(NoticeBoard* board, int kind, int arg);
-
-// Shows the next notice when due, unless held. Returns 1 when one is shown.
-int noticeAdvance(NoticeBoard* board, int64_t now, int held, Notice* out);
-
-// Whether a notice is currently showing
-int noticeShowing(const NoticeBoard* board, int64_t now);
 
 #endif

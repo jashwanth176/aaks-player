@@ -598,13 +598,9 @@ static int initSwapchain(XrCtx* ctx) {
     LOGEV("swapchain %dx%d format %lld, %u images (stereo mode %d)", chainWidth, ctx->videoHeight,
          (long long)ctx->swapchainFormat, ctx->swapchainImageCount, ctx->stereoMode);
 
-    // Optional: playback continues without the overlay, splash or toast.
-    createArtSwapchain(ctx, OVERLAY_WIDTH, OVERLAY_HEIGHT, "create overlay swapchain",
-                       &ctx->overlaySwapchain, &ctx->overlayImages, &ctx->overlayImageCount);
+    // Optional: playback continues without the splash.
     createArtSwapchain(ctx, SPLASH_TEX_W, SPLASH_TEX_H, "create splash swapchain",
                        &ctx->splashSwapchain, &ctx->splashImages, &ctx->splashImageCount);
-    createArtSwapchain(ctx, TOAST_TEX_W, TOAST_TEX_H, "create toast swapchain",
-                       &ctx->toastSwapchain, &ctx->toastImages, &ctx->toastImageCount);
 
     return 1;
 }
@@ -746,12 +742,6 @@ static void pollEvents(XrCtx* ctx) {
                         (XrEventDataReferenceSpaceChangePending*)&event;
                 if (change->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
                     recentreScreen(ctx);
-                    // The head jumps when the change lands, which head
-                    // aim must not read as a turn. changeTime can be 0
-                    // or early, so also hold past the last frame.
-                    XrTime hold = ctx->predictedDisplayTime + HEAD_AIM_RECENTRE_HOLD_NS;
-                    ctx->headAimRecentring = 1;
-                    ctx->headAimRecentreAt = change->changeTime > hold ? change->changeTime : hold;
                 }
                 break;
             }
@@ -847,30 +837,14 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
     free(ctx->roomModelIndices);
 
     destroyArtSwapchain(ctx, &ctx->swapchain, &ctx->swapchainImages);
-    destroyArtSwapchain(ctx, &ctx->overlaySwapchain, &ctx->overlayImages);
     destroyArtSwapchain(ctx, &ctx->pointerSwapchain, &ctx->pointerImages);
     destroyArtSwapchain(ctx, &ctx->barSwapchain, &ctx->barImages);
     destroyArtSwapchain(ctx, &ctx->cornerSwapchain, &ctx->cornerImages);
-    destroyArtSwapchain(ctx, &ctx->pickerSwapchain, &ctx->pickerImages);
-    destroyArtSwapchain(ctx, &ctx->cogPanelSwapchain, &ctx->cogPanelImages);
-    destroyArtSwapchain(ctx, &ctx->cogThumbSwapchain, &ctx->cogThumbImages);
-    destroyArtSwapchain(ctx, &ctx->cogReadoutSwapchain, &ctx->cogReadoutImages);
-    destroyArtSwapchain(ctx, &ctx->cogMarksSwapchain, &ctx->cogMarksImages);
-    destroyArtSwapchain(ctx, &ctx->cogClockSwapchain, &ctx->cogClockImages);
-    destroyArtSwapchain(ctx, &ctx->kbPanelSwapchain, &ctx->kbPanelImages);
-    destroyArtSwapchain(ctx, &ctx->exitPromptSwapchain, &ctx->exitPromptImages);
-    destroyArtSwapchain(ctx, &ctx->reportSwapchain, &ctx->reportImages);
-    destroyArtSwapchain(ctx, &ctx->buttonSwapchain, &ctx->buttonImages);
-    destroyArtSwapchain(ctx, &ctx->hintSwapchain, &ctx->hintImages);
-    destroyArtSwapchain(ctx, &ctx->kofiSwapchain, &ctx->kofiImages);
     destroyUiPanels(ctx);
-    destroyArtSwapchain(ctx, &ctx->outlineSwapchain, &ctx->outlineImages);
     destroyArtSwapchain(ctx, &ctx->glowSwapchain, &ctx->glowImages);
     destroyArtSwapchain(ctx, &ctx->roomSwapchain, &ctx->roomImages);
     destroyArtSwapchain(ctx, &ctx->modelSwapchain, &ctx->modelImages);
     destroyArtSwapchain(ctx, &ctx->splashSwapchain, &ctx->splashImages);
-    destroyArtSwapchain(ctx, &ctx->toastSwapchain, &ctx->toastImages);
-    freeArtSheets(ctx);
     if (ctx->localSpace != XR_NULL_HANDLE) {
         xrDestroySpace(ctx->localSpace);
     }
@@ -983,16 +957,9 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
     ctx->panelSeparation = -1.0f;
     // Placeholder; the first endFrame writes the real value.
     ctx->separationCurrent = 0.005f;
-    // MiDaS defaults until Java sets the running model's.
-    ctx->defaultSeparation = 0.005f;
+    // Placeholders until Java sets the model's defaults.
+    ctx->defaultSeparation = 0.006f;
     ctx->defaultConvergence = 0.5f;
-    ctx->presetUnits[COG_PRESET_COMFORT] = 2;
-    ctx->presetUnits[COG_PRESET_BALANCED] = 5;
-    ctx->presetUnits[COG_PRESET_STRONG] = 8;
-    ctx->cogDragSlider = -1;
-    ctx->cogDragHand = -1;
-    ctx->cogDragFace = -1;
-    ctx->cogHoverSlider = -1;
     ctx->fadeNs = FADE_NS;
     for (int i = 0; i < 3; i++) {
         ctx->splashReadyMs[i] = -1;
@@ -1000,11 +967,6 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
     ctx->splashWedgesShown = -1;
     atomic_init(&ctx->depthMapsStaged, 0);
     atomic_init(&ctx->depthGaveUp, 0);
-    // -1 because kind 0 is a real notice.
-    noticeInit(&ctx->notices);
-    ctx->toastDrawnKind = -1;
-    // -1 because 0 is a real key.
-    ctx->kbHoverKey = -1;
     ctx->pointerMinCutoff = POINTER_MIN_CUTOFF;
     ctx->pointerBeta = POINTER_BETA;
     ctx->aimMinCutoff = AIM_MIN_CUTOFF;
@@ -1017,20 +979,6 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
     // Ray on until Java sets the setting.
     ctx->raySetting = 1;
     ctx->rayDrawnSaid = -1;
-    // Head aim off until Java sets the setting.
-    ctx->headAimSensitivity = HEAD_AIM_SENSITIVITY_DEFAULT;
-    ctx->headAimDeadZone = HEAD_AIM_DEADZONE_DEFAULT;
-    headAimReset(&ctx->headAim);
-    pointerNudgeReset(&ctx->headAimNudge);
-    ctx->headAimSaid = -1;
-    // Pointer mode at start. The pad starts resting so buttons
-    // already held on its first live frame are ignored.
-    ctx->padDeadzone = PAD_STICK_DEADZONE_DEFAULT;
-    ctx->padShortcut = PAD_SHORTCUT_MENU_GRIP;
-    padToggleReset(&ctx->padToggle);
-    padChordReset(&ctx->padChord, 0);
-    padRest(&ctx->pad);
-    ctx->padResting = 1;
     // Comfort depends on absolute disparity and perceived depth on the steps
     // between objects, so global shape is pulled toward the screen plane while
     // local detail is boosted. On captured frames this gave about 40% more depth at
@@ -1071,10 +1019,6 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
     ctx->ambiCrop[1] = 0.0f;
     ctx->ambiCrop[2] = 1.0f;
     ctx->ambiCrop[3] = 1.0f;
-    // -1 because cell 0 is a real choice.
-    ctx->loggedChoice = -1;
-    // All cells live until the art arrives with the real count.
-    ctx->pickerCells = PICKER_CELLS;
     (*env)->GetJavaVM(env, &ctx->vm);
     ctx->activity = (*env)->NewGlobalRef(env, activity);
 

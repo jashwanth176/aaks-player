@@ -465,13 +465,6 @@ void displayRateChanged(XrCtx* ctx, float from, float to) {
           hzText(to, toHz, sizeof(toHz)));
     ctx->displayRate = to;
     rateBudgetStart(&ctx->rateBudget, nowNs(), RATE_SETTLE_WINDOWS);
-    // Toast every change once the session's first rate has landed
-    if (ctx->rateSettled) {
-        noticePush(&ctx->notices, TOAST_RATE, (int)roundf(to));
-    }
-    else {
-        LOGI("display rate change not toasted, the session's first rate is still landing");
-    }
     if (ctx->rateAsked <= 0.0f) {
         return;
     }

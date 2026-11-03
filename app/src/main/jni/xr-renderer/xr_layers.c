@@ -8,9 +8,6 @@
 // The array is sized well past the worst case, since an overflow would smash the stack.
 #define FRAME_MAX_LAYERS 24
 
-// Display tab marks go back to Java one value per row.
-_Static_assert(MARK_VALUES == COG_OPTION_COUNT, "a mark for every display tab row");
-
 // Every layer a frame can carry; lives on nativeEndFrame's stack until xrEndFrame.
 typedef struct {
     // Real room under everything in the player, scaled by the picture.
@@ -23,40 +20,13 @@ typedef struct {
     XrCompositionLayerCylinderKHR glowCylinder;
     XrCompositionLayerQuad video[2];
     XrCompositionLayerCylinderKHR cylinder[2];
-    XrCompositionLayerQuad overlay;
     XrCompositionLayerQuad handle;
-    XrCompositionLayerQuad envButton;
-    XrCompositionLayerQuad cogButton;
-    XrCompositionLayerQuad kbButton;
-    XrCompositionLayerQuad exitButton;
-    XrCompositionLayerQuad stereoButton;
-    XrCompositionLayerQuad rayButton;
-    XrCompositionLayerQuad aimButton;
-    XrCompositionLayerQuad padButton;
-    XrCompositionLayerQuad exitPrompt;
-    XrCompositionLayerQuad report;
-    XrCompositionLayerQuad hint;
-    XrCompositionLayerQuad kofi;
-    XrCompositionLayerQuad picker;
-    XrCompositionLayerQuad outline[2];
-    XrCompositionLayerQuad cogPanel;
-    // One per option row for the chosen cell, plus one for the hover.
-    XrCompositionLayerQuad cogMark[COG_OPTION_COUNT + 1];
-    XrCompositionLayerQuad cogReadout;
-    XrCompositionLayerQuad cogMarks;
-    XrCompositionLayerQuad cogClock;
-    // One per row of the tab with the most; the display tab's glow track is its last row.
-    XrCompositionLayerQuad cogThumb[COG_DISPLAY_SLIDER_ROW + 1 > COG_SCREEN_ROW_COUNT
-                                    ? COG_DISPLAY_SLIDER_ROW + 1 : COG_SCREEN_ROW_COUNT];
-    XrCompositionLayerQuad kbPanel;
-    XrCompositionLayerQuad kbMark;
     XrCompositionLayerQuad uiPanel[UI_PANEL_COUNT];
     XrCompositionLayerQuad beam;
     XrCompositionLayerQuad dot;
     // Over the picture and panels, under the beam and dot.
     XrCompositionLayerProjection models;
     XrCompositionLayerProjectionView modelViews[ROOM_EYES];
-    XrCompositionLayerQuad toast;
     XrCompositionLayerQuad splashGround;
     XrCompositionLayerQuad splashSheet;
     XrCompositionLayerSettingsFB settings;
@@ -431,28 +401,6 @@ static void addVideoLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layer
     }
 }
 
-// The stats overlay in the corner of the picture.
-static void addOverlayLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    // Top left of the screen at screen depth, both eyes, so no disparity.
-    // Gated on visibility, since the last text stays in the swapchain.
-    if (ctx->overlayHasContent && ctx->overlayVisible
-            && ctx->overlaySwapchain != XR_NULL_HANDLE) {
-        float overlayW = view->screenWidth * 0.30f;
-        float overlayH = overlayW * (float)OVERLAY_HEIGHT / (float)OVERLAY_WIDTH;
-        float margin = view->screenWidth * 0.02f;
-
-        Vec3 statsLocal = { -view->screenWidth * 0.5f + overlayW * 0.5f + margin,
-                            view->screenHeight * 0.5f - overlayH * 0.5f - margin,
-                            // In front, to avoid z-fighting.
-                            0.01f };
-        quadLayer(&layers->overlay, layers->settingsChain,
-                  XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->overlaySwapchain,
-                  OVERLAY_WIDTH, OVERLAY_HEIGHT, view->space,
-                  poseOffset(view->screenPose, statsLocal), overlayW, overlayH);
-        pushLayer(ctx, layers, &layers->overlay);
-    }
-}
-
 // The move bar or resize corner under the ray.
 static void addHandleLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
     // In the screen's frame. The bar never shows in a room (the buttons
@@ -503,10 +451,10 @@ static void addHandleLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layer
     }
 }
 
-// Logs where the bar row hangs when it moves by 1 cm or more. Skipped
-// while a handle or the Size row is dragged, which move it every frame.
+// Logs where the bar hangs when it moves by 1 cm or more. Skipped while a
+// handle is dragged, which moves it every frame.
 static void logBarPlacement(XrCtx* ctx, const BarFrame* frame) {
-    if (ctx->grabMode != GRAB_NONE || ctx->cogDragSlider >= 0) {
+    if (ctx->grabMode != GRAB_NONE) {
         return;
     }
     Vec3 edgeLocal = { 0.0f, -frame->height * 0.5f, 0.0f };
@@ -521,199 +469,12 @@ static void logBarPlacement(XrCtx* ctx, const BarFrame* frame) {
     }
     ctx->barSaidWidth = frame->width;
     ctx->barSaidEdge = e;
-    LOGI("bar row: picture's bottom edge at %.2f %.2f %.2f, %.2f m off; bar at %.2f %.2f %.2f, "
-         "%.2f m off, %.2f m wide, buttons %.3f m, %s",
+    LOGI("bar: picture's bottom edge at %.2f %.2f %.2f, %.2f m off; bar at %.2f %.2f %.2f, "
+         "%.2f m off, %.2f m wide, %s",
          e.x, e.y, e.z, sqrtf(vecDot(e, e)), b.x, b.y, b.z, sqrtf(vecDot(b, b)),
-         frame->width * BAR_WIDTH_FRAC, frame->width * COG_BUTTON_FRAC,
+         frame->width * BAR_WIDTH_FRAC,
          roomEffective(ctx) > 0 ? "a room's picture at the stand in's size"
                                 : frame->curved ? "on the curved picture" : "on the picture");
-}
-
-// A button in the bar row, showing its cell of the button texture. On a curved
-// picture the row follows the surface so hit tests on the cylinder line up.
-static void addBarButton(XrCtx* ctx, const FrameView* view, FrameLayers* layers,
-                         XrCompositionLayerQuad* quad, int cell, int slot, int hot,
-                         const void* next) {
-    const BarFrame* frame = &view->bar;
-    Vec3 local;
-    float side;
-    barSlotPlacement(slot, frame->width, frame->height, &local, &side);
-    float yaw = 0.0f;
-    curveLocal(&local, frame->radius, frame->curved, &yaw);
-    // Grows under the ray; the only hover feedback a quad layer can give.
-    float scale = hot ? 1.18f : 1.0f;
-    int cellX, cellY;
-    buttonCellOrigin(cell, &cellX, &cellY);
-    quadLayerRect(quad, next, XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                  ctx->buttonSwapchain, cellX, cellY, BUTTON_TEX, BUTTON_TEX, view->space,
-                  poseOffset(frame->pose, local), side * scale, side * scale);
-    if (yaw != 0.0f) {
-        Vec3 up = { 0.0f, 1.0f, 0.0f };
-        quad->pose.orientation = quatNorm(quatMul(frame->pose.orientation,
-                                                  axisAngleQuat(up, yaw)));
-    }
-    pushLayer(ctx, layers, quad);
-}
-
-// Whether a button that stays up with its panel is shown, and its chain:
-// the panel's fade while the panel fades out, so they go together.
-static int panelButton(XrCtx* ctx, const FrameView* view, FrameLayers* layers, int panel,
-                       int open, const void** next) {
-    float level = ctx->panelFades[panel].level;
-    *next = NULL;
-    if (view->barArea || open) {
-        return 1;
-    }
-    if (level > 0.0f) {
-        *next = fadeNext(ctx, layers, panel, 0, level);
-        return 1;
-    }
-    return 0;
-}
-
-// The buttons along the bar.
-static void addBarButtonLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    const void* next = NULL;
-    // Environment grid button, left of the move bar. Stays up while the grid is open.
-    if (ctx->envButtonReady
-            && panelButton(ctx, view, layers, FADE_PICKER, ctx->pickerOpen, &next)) {
-        addBarButton(ctx, view, layers, &layers->envButton, BTN_CELL_ENV,
-                     BAR_SLOT_ENV, ctx->envButtonHot, next);
-    }
-
-    // Settings button, right of the move bar. Same rules as the environment button.
-    int kofi = ctx->kofiOpen || ctx->panelFades[FADE_KOFI].level > 0.0f;
-    if (ctx->cogButtonReady
-            && panelButton(ctx, view, layers, kofi ? FADE_KOFI : FADE_COG,
-                           ctx->cogOpen || ctx->kofiOpen, &next)) {
-        addBarButton(ctx, view, layers, &layers->cogButton, BTN_CELL_COG,
-                     BAR_SLOT_COG, ctx->cogButtonHot || ctx->cogOpen || ctx->kofiOpen, next);
-    }
-
-    // Keyboard button, one place further out. Hidden while
-    // the keyboard is up, which covers the bar anyway.
-    if (ctx->kbButtonReady && view->barArea) {
-        addBarButton(ctx, view, layers, &layers->kbButton, BTN_CELL_KB,
-                     BAR_SLOT_KB, ctx->kbButtonHot, NULL);
-    }
-
-    // Exit button, furthest left. Stays up while its prompt is open.
-    if (ctx->exitButtonReady
-            && panelButton(ctx, view, layers, FADE_EXIT, ctx->exitConfirmOpen, &next)) {
-        addBarButton(ctx, view, layers, &layers->exitButton, BTN_CELL_EXIT,
-                     BAR_SLOT_EXIT, ctx->exitButtonHot || ctx->exitConfirmOpen, next);
-    }
-
-    // Gamepad mode switch, past the exit button.
-    if (ctx->padButtonReady && view->barArea) {
-        addBarButton(ctx, view, layers, &layers->padButton,
-                     BTN_CELL_PAD + (ctx->padMode ? 1 : 0),
-                     BAR_SLOT_PAD, ctx->padButtonHot, NULL);
-    }
-
-    // Head aim switch, only where head aim can act.
-    if (ctx->aimButtonReady && view->barArea && headAimCanAct(ctx)) {
-        addBarButton(ctx, view, layers, &layers->aimButton,
-                     BTN_CELL_AIM + (headAimSwitchOn(ctx->headAimSetting,
-                                                     ctx->headAimFlipped) ? 1 : 0),
-                     BAR_SLOT_AIM, ctx->aimButtonHot, NULL);
-    }
-
-    // Ray switch, past the keyboard.
-    if (ctx->rayButtonReady && view->barArea) {
-        addBarButton(ctx, view, layers, &layers->rayButton,
-                     BTN_CELL_RAY + (raySwitchOn(ctx->raySetting, ctx->rayFlipped) ? 1 : 0),
-                     BAR_SLOT_RAY, ctx->rayButtonHot, NULL);
-    }
-
-    // 3D switch, furthest right. Never ready without stereo.
-    if (ctx->stereoButtonReady && view->barArea) {
-        addBarButton(ctx, view, layers, &layers->stereoButton,
-                     BTN_CELL_STEREO + (ctx->stereoLive ? 1 : 0),
-                     BAR_SLOT_STEREO, ctx->stereoButtonHot, NULL);
-    }
-}
-
-// The exit prompt.
-static void addExitPromptLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    // On the pose frozen at open; the sheet shown is the
-    // hovered button's. Sharpened, since it is text.
-    float level = ctx->panelFades[FADE_EXIT].level;
-    if (level > 0.0f && showExitSheet(ctx, ctx->exitHoverZone)) {
-        quadLayer(&layers->exitPrompt, fadeNext(ctx, layers, FADE_EXIT, 1, level),
-                  XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                  ctx->exitPromptSwapchain, EXIT_TEX_W, EXIT_TEX_H,
-                  view->space, ctx->exitPose, ctx->exitW, ctx->exitH);
-        pushLayer(ctx, layers, &layers->exitPrompt);
-    }
-}
-
-// The report sheet, once Java has drawn it for this opening. Sharpened: it is text.
-static void addReportLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    float level = ctx->panelFades[FADE_REPORT].level;
-    if (level > 0.0f && ctx->reportReady) {
-        quadLayer(&layers->report, fadeNext(ctx, layers, FADE_REPORT, 1, level),
-                  XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                  ctx->reportSwapchain, REPORT_TEX_W, REPORT_TEX_H, view->space,
-                  ctx->reportPose, ctx->reportW, ctx->reportH);
-        pushLayer(ctx, layers, &layers->report);
-    }
-}
-
-// The hand-lock hint and the ring on the hovered button,
-// in the hover ring's slot. Sharpened: it is text.
-static void addHandHintLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    float level = ctx->panelFades[FADE_HINT].level;
-    if (level <= 0.0f || !ctx->hintReady) {
-        return;
-    }
-    quadLayer(&layers->hint, fadeNext(ctx, layers, FADE_HINT, 1, level),
-              XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->hintSwapchain,
-              HINT_TEX_W, HINT_TEX_H, view->space, ctx->hintPose, ctx->hintW, ctx->hintH);
-    pushLayer(ctx, layers, &layers->hint);
-
-    int zone = ctx->hintHoverZone;
-    if (!ctx->hintOpen || zone == HINT_ZONE_NONE || !ctx->outlineReady) {
-        return;
-    }
-    float l = zone == HINT_ZONE_OK ? HINT_OK_L : HINT_NEVER_L;
-    float r = zone == HINT_ZONE_OK ? HINT_OK_R : HINT_NEVER_R;
-    Vec3 local;
-    local.x = ((l + r) * 0.5f - 0.5f) * ctx->hintW;
-    local.y = (0.5f - (HINT_BTN_T + HINT_BTN_B) * 0.5f) * ctx->hintH;
-    local.z = 0.004f;
-    XrCompositionLayerQuad* mark = &layers->cogMark[COG_OPTION_COUNT];
-    quadLayer(mark, fadeNext(ctx, layers, FADE_HINT, 0, level),
-              XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->outlineSwapchain,
-              OUTLINE_TEX, OUTLINE_TEX, view->space, poseOffset(ctx->hintPose, local),
-              (r - l) * ctx->hintW * 1.04f, (HINT_BTN_B - HINT_BTN_T) * ctx->hintH * 1.12f);
-    pushLayer(ctx, layers, mark);
-}
-
-static void addKofiLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    float level = ctx->panelFades[FADE_KOFI].level;
-    if (level <= 0.0f || !ctx->kofiReady) {
-        return;
-    }
-    quadLayer(&layers->kofi, fadeNext(ctx, layers, FADE_KOFI, 1, level),
-              XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->kofiSwapchain,
-              KOFI_TEX_W, KOFI_TEX_H, view->space, ctx->kofiPose, ctx->kofiW, ctx->kofiH);
-    pushLayer(ctx, layers, &layers->kofi);
-
-    if (!ctx->kofiOpen || ctx->kofiHoverZone != KOFI_ZONE_CLOSE || !ctx->outlineReady) {
-        return;
-    }
-    Vec3 local;
-    local.x = ((KOFI_CLOSE_L + KOFI_CLOSE_R) * 0.5f - 0.5f) * ctx->kofiW;
-    local.y = (0.5f - (KOFI_BTN_T + KOFI_BTN_B) * 0.5f) * ctx->kofiH;
-    local.z = 0.004f;
-    XrCompositionLayerQuad* mark = &layers->cogMark[COG_OPTION_COUNT];
-    quadLayer(mark, fadeNext(ctx, layers, FADE_KOFI, 0, level),
-              XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->outlineSwapchain,
-              OUTLINE_TEX, OUTLINE_TEX, view->space, poseOffset(ctx->kofiPose, local),
-              (KOFI_CLOSE_R - KOFI_CLOSE_L) * ctx->kofiW * 1.04f,
-              (KOFI_BTN_B - KOFI_BTN_T) * ctx->kofiH * 1.12f);
-    pushLayer(ctx, layers, mark);
 }
 
 // Player panels, back to front.
@@ -734,264 +495,6 @@ static void addUiPanelLayers(XrCtx* ctx, const FrameView* view, FrameLayers* lay
                   XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->ui[id].chain,
                   ctx->ui[id].texW, ctx->ui[id].texH, view->space, pose, w, h);
         pushLayer(ctx, layers, &layers->uiPanel[id]);
-    }
-}
-
-// The environment grid and the rings on its hovered and chosen cells.
-static void addPickerLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    float level = ctx->panelFades[FADE_PICKER].level;
-    if (level > 0.0f && ctx->pickerReady) {
-        float pickW, pickH;
-        XrPosef pickPose = pickerPose(ctx, &pickW, &pickH);
-
-        quadLayer(&layers->picker, fadeNext(ctx, layers, FADE_PICKER, 1, level),
-                  XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->pickerSwapchain,
-                  PICKER_TEX_W, PICKER_TEX_H, view->space, pickPose, pickW, pickH);
-        pushLayer(ctx, layers, &layers->picker);
-
-        if (ctx->outlineReady) {
-            float cellW = pickW / (float)PICKER_COLS;
-            float cellH = pickH * (float)PICKER_CELL_PX / (float)PICKER_TEX_H;
-            // The hover ring is full size, the choice inset, so both read when they coincide.
-            int marks[2] = { ctx->pickerHover, ctx->pickerChoice };
-            float scales[2] = { 1.0f, 0.84f };
-
-            for (int m = 0; m < 2; m++) {
-                int cell = marks[m];
-                // Blank tiles are not cells.
-                if (cell < 0 || cell >= ctx->pickerCells) {
-                    continue;
-                }
-                int col = cell % PICKER_COLS;
-                int row = cell / PICKER_COLS;
-                // Down past the band's header to the middle of its row of cells.
-                float centreV = (row * PICKER_BAND_PX + PICKER_HEADER_PX
-                                 + PICKER_CELL_PX * 0.5f) / (float)PICKER_TEX_H;
-                Vec3 local;
-                local.x = ((col + 0.5f) / PICKER_COLS - 0.5f) * pickW;
-                local.y = (0.5f - centreV) * pickH;
-                local.z = 0.004f;
-
-                XrCompositionLayerQuad* mark = &layers->outline[m];
-                quadLayer(mark, fadeNext(ctx, layers, FADE_PICKER, 0, level),
-                          XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                          ctx->outlineSwapchain, OUTLINE_TEX, OUTLINE_TEX, view->space,
-                          poseOffset(pickPose, local), cellW * scales[m], cellH * scales[m]);
-                pushLayer(ctx, layers, mark);
-            }
-        }
-    }
-}
-
-// A ring over one cell of a settings panel row, marking it without an upload.
-static void addCogRing(XrCtx* ctx, const FrameView* view, FrameLayers* layers,
-                       XrCompositionLayerQuad* mark, int face, int row, int cell, int cells,
-                       float scale) {
-    float span = (COG_TRACK_R - COG_TRACK_L) / cells;
-    Vec3 local;
-    local.x = (COG_TRACK_L + (cell + 0.5f) * span - 0.5f) * ctx->cogW;
-    local.y = (0.5f - cogRowV(face, row)) * ctx->cogH;
-    local.z = 0.004f;
-    quadLayer(mark, fadeNext(ctx, layers, FADE_COG, 0, ctx->panelFades[FADE_COG].level),
-              XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-              ctx->outlineSwapchain, OUTLINE_TEX, OUTLINE_TEX, view->space,
-              poseOffset(ctx->cogPose, local), span * ctx->cogW * scale,
-              2.0f * cogCellHalf(face) * ctx->cogH * scale);
-    pushLayer(ctx, layers, mark);
-}
-
-// The settings panel, rings on its cell rows, slider thumbs,
-// and the value readouts on the Room, Picture and Screen tabs.
-static void addCogLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    // Each tab's sheet is cached, so a tab change is one upload. Sharpened: it is text.
-    int art = cogArt(ctx);
-    int face = cogFace(ctx);
-    float level = ctx->panelFades[FADE_COG].level;
-    if (level > 0.0f && showCogArt(ctx, art)) {
-        quadLayer(&layers->cogPanel, fadeNext(ctx, layers, FADE_COG, 1, level),
-                  XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                  ctx->cogPanelSwapchain, COG_TEX_W, COG_TEX_H, view->space,
-                  ctx->cogPose, ctx->cogW, ctx->cogH);
-        pushLayer(ctx, layers, &layers->cogPanel);
-
-        // Time and battery on a strip over the top edge.
-        if (ctx->cogClockReady) {
-            float stripW = (float)COG_CLOCK_TEX_W / (float)COG_TEX_W * ctx->cogW;
-            float stripH = (float)COG_CLOCK_TEX_H / (float)COG_TEX_H * ctx->cogH;
-            Vec3 local = { 0.0f, ctx->cogH * 0.5f + stripH * 0.75f, 0.0f };
-            quadLayer(&layers->cogClock, fadeNext(ctx, layers, FADE_COG, 1, level),
-                      XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                      ctx->cogClockSwapchain, COG_CLOCK_TEX_W, COG_CLOCK_TEX_H, view->space,
-                      poseOffset(ctx->cogPose, local), stripW, stripH);
-            pushLayer(ctx, layers, &layers->cogClock);
-        }
-
-        // Cells are baked into the sheet, so selection and hover are separate marks.
-        // The display tab's selections are one strip drawn by Java, plus a hover ring.
-        if (face == COG_TAB_DISPLAY) {
-            if (ctx->cogMarksReady) {
-                float stripW = (float)COG_MARKS_TEX_W / (float)COG_TEX_W;
-                float stripH = (float)COG_MARKS_TEX_H / (float)COG_TEX_H;
-                Vec3 local;
-                local.x = (COG_MARKS_L + stripW * 0.5f - 0.5f) * ctx->cogW;
-                local.y = (0.5f - (COG_MARKS_T + stripH * 0.5f)) * ctx->cogH;
-                local.z = 0.003f;
-                quadLayer(&layers->cogMarks, fadeNext(ctx, layers, FADE_COG, 0, level),
-                          XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                          ctx->cogMarksSwapchain, COG_MARKS_TEX_W, COG_MARKS_TEX_H, view->space,
-                          poseOffset(ctx->cogPose, local), stripW * ctx->cogW,
-                          stripH * ctx->cogH);
-                pushLayer(ctx, layers, &layers->cogMarks);
-            }
-            int option = ctx->cogHoverSlider;
-            if (ctx->outlineReady && option >= 0 && option < COG_OPTION_COUNT
-                    && ctx->cogHoverCell >= 0) {
-                addCogRing(ctx, view, layers, &layers->cogMark[COG_OPTION_COUNT], face, option,
-                           ctx->cogHoverCell, cogOptionCells(option), 1.12f);
-            }
-        }
-        else if ((face == COG_FACE_ROOM || face == COG_TAB_3D) && ctx->outlineReady) {
-            // The Room and 3D tabs mix cells and tracks. Each live
-            // cell row rings the cell in force, if any (the presets
-            // ring none once the depth track is moved off them).
-            int marks = 0;
-            int rowCount = cogTabRowCount(face);
-            for (int row = 0; row < rowCount && marks < COG_OPTION_COUNT; row++) {
-                if (cogRowIsTrack(face, row) || !cogRowLive(ctx, face, row)) {
-                    continue;
-                }
-                int cell = cogCellInForce(ctx, face, row);
-                if (cell >= 0) {
-                    addCogRing(ctx, view, layers, &layers->cogMark[marks++], face, row, cell,
-                               cogRowCells(face, row), 1.0f);
-                }
-            }
-            int hoverRow = ctx->cogHoverSlider;
-            if (hoverRow >= 0 && !cogRowIsTrack(face, hoverRow) && ctx->cogHoverCell >= 0) {
-                addCogRing(ctx, view, layers, &layers->cogMark[COG_OPTION_COUNT], face,
-                           hoverRow, ctx->cogHoverCell, cogRowCells(face, hoverRow), 1.12f);
-            }
-        }
-
-        // The About tab's buttons share the hover ring slot.
-        if (face == COG_TAB_ABOUT && (ctx->cogReportHot || ctx->cogKofiHot)
-                && ctx->outlineReady) {
-            float l = ctx->cogKofiHot ? COG_KOFI_L : COG_REPORT_L;
-            float r = ctx->cogKofiHot ? COG_KOFI_R : COG_REPORT_R;
-            float t = ctx->cogKofiHot ? COG_KOFI_T : COG_REPORT_T;
-            float b = ctx->cogKofiHot ? COG_KOFI_B : COG_REPORT_B;
-            Vec3 local;
-            local.x = ((l + r) * 0.5f - 0.5f) * ctx->cogW;
-            local.y = (0.5f - (t + b) * 0.5f) * ctx->cogH;
-            local.z = 0.004f;
-            XrCompositionLayerQuad* mark = &layers->cogMark[COG_OPTION_COUNT];
-            quadLayer(mark, fadeNext(ctx, layers, FADE_COG, 0, level),
-                      XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                      ctx->outlineSwapchain, OUTLINE_TEX, OUTLINE_TEX, view->space,
-                      poseOffset(ctx->cogPose, local), (r - l) * ctx->cogW * 1.04f,
-                      (b - t) * ctx->cogH * 1.12f);
-            pushLayer(ctx, layers, mark);
-        }
-
-        // A hovered step button also uses the hover ring slot.
-        int stepRow = ctx->cogHoverSlider;
-        if (ctx->outlineReady && ctx->cogHoverStep != 0 && stepRow >= 0
-                && cogRowIsTrack(face, stepRow)) {
-            float centre = ctx->cogHoverStep > 0 ? COG_TRACK_R - COG_CHEVRON_W * 0.5f
-                                                 : COG_TRACK_L + COG_CHEVRON_W * 0.5f;
-            Vec3 local;
-            local.x = (centre - 0.5f) * ctx->cogW;
-            local.y = (0.5f - cogRowV(face, stepRow)) * ctx->cogH;
-            local.z = 0.004f;
-            XrCompositionLayerQuad* mark = &layers->cogMark[COG_OPTION_COUNT];
-            quadLayer(mark, fadeNext(ctx, layers, FADE_COG, 0, level),
-                      XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                      ctx->outlineSwapchain, OUTLINE_TEX, OUTLINE_TEX, view->space,
-                      poseOffset(ctx->cogPose, local), COG_CHEVRON_W * ctx->cogW * 1.12f,
-                      2.0f * cogCellHalf(face) * ctx->cogH * 1.12f);
-            pushLayer(ctx, layers, mark);
-        }
-
-        // Readout strip, shown only once Java has drawn the
-        // current values; a stale strip stays down until redrawn.
-        if ((face == COG_FACE_ROOM || face == COG_TAB_PICTURE || face == COG_TAB_SCREEN)
-                && ctx->cogReadoutReady) {
-            int readouts[READOUT_VALUES];
-            cogReadouts(ctx, readouts);
-            if (readouts[0] >= 0
-                    && memcmp(readouts, ctx->cogReadoutDrawn, sizeof(readouts)) == 0) {
-                float stripW = (float)COG_READOUT_TEX_W / (float)COG_TEX_W;
-                float stripH = (float)COG_READOUT_TEX_H / (float)COG_TEX_H;
-                Vec3 local;
-                local.x = (COG_READOUT_L + stripW * 0.5f - 0.5f) * ctx->cogW;
-                local.y = (0.5f - (COG_READOUT_T + stripH * 0.5f)) * ctx->cogH;
-                local.z = 0.003f;
-                quadLayer(&layers->cogReadout, fadeNext(ctx, layers, FADE_COG, 1, level),
-                          XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                          ctx->cogReadoutSwapchain, COG_READOUT_TEX_W, COG_READOUT_TEX_H,
-                          view->space, poseOffset(ctx->cogPose, local), stripW * ctx->cogW,
-                          stripH * ctx->cogH);
-                pushLayer(ctx, layers, &layers->cogReadout);
-            }
-        }
-
-        if (ctx->cogThumbReady) {
-            float thumbSize = ctx->cogH * cogThumbSize(face);
-            int rowCount = cogTabRowCount(face);
-            for (int s = 0; s < rowCount; s++) {
-                // No thumb on rows that cannot be dragged or on cell rows.
-                if (!cogRowLive(ctx, face, s) || !cogRowIsTrack(face, s)) {
-                    continue;
-                }
-                float t = cogSliderValue(ctx, face, s);
-                Vec3 local;
-                local.x = (cogRunU(t) - 0.5f) * ctx->cogW;
-                local.y = (0.5f - cogRowV(face, s)) * ctx->cogH;
-                local.z = 0.004f;
-                // Grows under the ray, except while the ray is on a step button.
-                float grow = ((ctx->cogHoverSlider == s && ctx->cogHoverStep == 0)
-                              || ctx->cogDragSlider == s) ? 1.25f : 1.0f;
-
-                XrCompositionLayerQuad* thumb = &layers->cogThumb[s];
-                quadLayer(thumb, fadeNext(ctx, layers, FADE_COG, 0, level),
-                          XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                          ctx->cogThumbSwapchain, COG_THUMB_TEX, COG_THUMB_TEX, view->space,
-                          poseOffset(ctx->cogPose, local), thumbSize * grow, thumbSize * grow);
-                pushLayer(ctx, layers, thumb);
-            }
-        }
-    }
-}
-
-// The keyboard and the ring on the key under the ray.
-static void addKeyboardLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    // Sharpened, since it is text. Hidden while a modal is up (the two together
-    // would crowd the layer limit), except the report sheet it types into.
-    float level = ctx->panelFades[FADE_KB].level;
-    if (level > 0.0f && showKbSheet(ctx, ctx->kbState)) {
-        quadLayer(&layers->kbPanel, fadeNext(ctx, layers, FADE_KB, 1, level),
-                  XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                  ctx->kbPanelSwapchain, KB_TEX_W, KB_TEX_H, view->space,
-                  ctx->kbPose, ctx->kbW, ctx->kbH);
-        pushLayer(ctx, layers, &layers->kbPanel);
-
-        if (ctx->outlineReady && ctx->kbHoverKey >= 0
-                && ctx->kbHoverKey < ctx->kbKeyCount) {
-            const float* r = &ctx->kbKeyRects[ctx->kbHoverKey * 4];
-            Vec3 local;
-            local.x = ((r[0] + r[2]) * 0.5f - 0.5f) * ctx->kbW;
-            local.y = (0.5f - (r[1] + r[3]) * 0.5f) * ctx->kbH;
-            local.z = 0.004f;
-            // Grows while the trigger is held, as press feedback.
-            float grow = ctx->kbKeyDown ? 1.12f : 1.0f;
-
-            quadLayer(&layers->kbMark, fadeNext(ctx, layers, FADE_KB, 0, level),
-                      XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
-                      ctx->outlineSwapchain, OUTLINE_TEX, OUTLINE_TEX, view->space,
-                      poseOffset(ctx->kbPose, local), (r[2] - r[0]) * ctx->kbW * grow,
-                      (r[3] - r[1]) * ctx->kbH * grow);
-            pushLayer(ctx, layers, &layers->kbMark);
-        }
     }
 }
 
@@ -1032,7 +535,7 @@ static void addPointerLayers(XrCtx* ctx, const FrameView* view, FrameLayers* lay
     }
     // The beam (hands included) hides when the ray is
     // switched off, unless a panel is up. The dot stays.
-    int beamShown = rayDrawn(ctx->raySetting, ctx->rayFlipped, panelUp(ctx));
+    int beamShown = rayDrawn(ctx->raySetting, ctx->rayFlipped, 0);
     if (beamShown != ctx->rayDrawnSaid) {
         if (ctx->rayDrawnSaid >= 0 || !beamShown) {
             LOGI("ray %s", beamShown ? (raySwitchOn(ctx->raySetting, ctx->rayFlipped)
@@ -1134,74 +637,11 @@ static void addPointerLayers(XrCtx* ctx, const FrameView* view, FrameLayers* lay
     }
 }
 
-// The toast, head locked ahead and slightly below the gaze. Not
-// hit tested. Shown while its notice is current, then fades out.
-static void addToastLayer(XrCtx* ctx, FrameLayers* layers, int64_t now) {
-    int shown = ctx->toastArtReady && noticeShowing(&ctx->notices, now)
-            && ctx->toastDrawnKind == ctx->notices.current.kind
-            && ctx->toastDrawnArg == ctx->notices.current.arg;
-    fadeStep(&ctx->toastFade, shown, now, ctx->fadeNs, ctx->colorScaleSupported);
-    float level = ctx->toastFade.level;
-    if (level <= 0.0f || !ctx->toastArtReady) {
-        return;
-    }
-    XrPosef pose;
-    memset(&pose, 0, sizeof(pose));
-    pose.orientation.w = 1.0f;
-    pose.position.y = -TOAST_DROP_M;
-    pose.position.z = -TOAST_DISTANCE_M;
-    quadLayer(&layers->toast, fadeNext(ctx, layers, FADE_SLOT_TOAST, 1, level),
-              XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->toastSwapchain,
-              TOAST_TEX_W, TOAST_TEX_H, ctx->viewSpace, pose, TOAST_W_M,
-              TOAST_W_M * TOAST_TEX_H / TOAST_TEX_W);
-    pushLayer(ctx, layers, &layers->toast);
-}
-
-// Steps each panel's fade. An opening panel cuts any other's fade-out short,
-// so two are never up together; the keyboard hides at once for a modal.
-static void stepPanelFades(XrCtx* ctx, int64_t now) {
-    static const char* const NAMES[FADE_PANELS] = {
-        "settings panel", "picker", "keyboard", "exit prompt", "report sheet", "hand lock hint",
-        "Ko-fi sheet"
-    };
-    int modal = ctx->pickerOpen || ctx->cogOpen || ctx->exitConfirmOpen || ctx->reportOpen
-            || ctx->hintOpen || ctx->kofiOpen;
-    int shown[FADE_PANELS];
-    shown[FADE_COG] = ctx->cogOpen;
-    shown[FADE_PICKER] = ctx->pickerOpen;
-    // Stays up under the report sheet, which it types into.
-    shown[FADE_KB] = ctx->kbOpen && (!modal || ctx->reportOpen);
-    shown[FADE_EXIT] = ctx->exitConfirmOpen;
-    shown[FADE_REPORT] = ctx->reportOpen;
-    shown[FADE_HINT] = ctx->hintOpen;
-    shown[FADE_KOFI] = ctx->kofiOpen;
-    ctx->panelFadingOut = 0;
-    for (int p = 0; p < FADE_PANELS; p++) {
-        Fade* fade = &ctx->panelFades[p];
-        if (modal && !shown[p]) {
-            fade->level = 0.0f;
-            fade->running = 0;
-        }
-        int landed = fadeStep(fade, shown[p], now, ctx->fadeNs, ctx->colorScaleSupported);
-        if (landed != FADE_NONE) {
-            LOGI("%s faded %s over %ld ms, %d frames", NAMES[p],
-                 landed == FADE_IN_DONE ? "in" : "out", (long)((now - fade->fromNs) / 1000000L),
-                 fade->frames);
-        }
-        if (!shown[p] && fade->level > 0.0f) {
-            ctx->panelFadingOut = 1;
-        }
-    }
-}
-
 // What the splash still waits on: panel art, the room built
 // and drawn, and the first depth map, each only if wanted.
 // A failed room or a model that gave up is not waited on.
 static int splashWaiting(XrCtx* ctx) {
     int waiting = 0;
-    if (!ctx->panelArtArrived) {
-        waiting |= SPLASH_WAIT_PANELS;
-    }
     int style = roomEffective(ctx);
     if (style > 0 && !ctx->roomFailed
             && !(ctx->roomRendered && ctx->roomBuiltStyle == style)) {
@@ -1416,22 +856,10 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     view.screenCurved = view.curve > 0.01f && ctx->cylinderSupported;
     view.bar = barFrame(ctx);
     logBarPlacement(ctx, &view.bar);
-    // A panel fading out keeps the furniture down, as an open one does.
     int64_t frameNs = nowNs();
-    stepPanelFades(ctx, frameNs);
     stepSplash(ctx, frameNs);
     int splashUp = ctx->splash.phase == SPLASH_UP;
-    view.barArea = !ctx->pickerOpen && !ctx->cogOpen && !ctx->kbOpen
-            && !ctx->exitConfirmOpen && !ctx->reportOpen && !ctx->hintOpen && !ctx->kofiOpen
-            && !ctx->panelFadingOut
-            && (ctx->hoverKind == HOVER_BAR || ctx->backHover || ctx->hoverKind == HOVER_ENVBUTTON
-                || ctx->hoverKind == HOVER_COGBUTTON
-                || ctx->hoverKind == HOVER_KBBUTTON
-                || ctx->hoverKind == HOVER_EXITBUTTON
-                || ctx->hoverKind == HOVER_STEREOBUTTON
-                || ctx->hoverKind == HOVER_RAYBUTTON
-                || ctx->hoverKind == HOVER_AIMBUTTON
-                || ctx->hoverKind == HOVER_PADBUTTON);
+    view.barArea = ctx->hoverKind == HOVER_BAR || ctx->backHover;
 
     XrFrameEndInfo endInfo = { XR_TYPE_FRAME_END_INFO };
     endInfo.displayTime = ctx->predictedDisplayTime;
@@ -1490,51 +918,19 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
             if (ctx->playerMode && !glowUnder) {
                 addGlowLayer(ctx, &view, &layers);
             }
-            addOverlayLayer(ctx, &view, &layers);
         }
         addHandleLayer(ctx, &view, &layers);
-        // The player uses its own UI panels instead.
-        if (!ctx->playerMode) {
-            addBarButtonLayers(ctx, &view, &layers);
-            addExitPromptLayer(ctx, &view, &layers);
-            addPickerLayers(ctx, &view, &layers);
-            addCogLayers(ctx, &view, &layers);
-            addReportLayer(ctx, &view, &layers);
-            addHandHintLayers(ctx, &view, &layers);
-            addKofiLayers(ctx, &view, &layers);
-            addKeyboardLayers(ctx, &view, &layers);
-        }
-        else {
-            stepUiPanels(ctx, frameNs);
-            addUiPanelLayers(ctx, &view, &layers);
-        }
+        stepUiPanels(ctx, frameNs);
+        addUiPanelLayers(ctx, &view, &layers);
         addModelLayer(ctx, &layers);
         addPointerLayers(ctx, &view, &layers);
     }
-    // Over the scene but under the splash, which holds it back.
-    if (!ctx->playerMode) {
-        addToastLayer(ctx, &layers, frameNs);
-    }
     addSplashLayers(ctx, &layers, frameNs);
 
-    // Over the runtime's limit the frame is refused whole, so shed layers in order
-    // of least loss: the toast (transient), the controller models (the beam and
-    // dot still point), the hover ring (the cursor shows where the ray is), the
-    // cog button (pressing off the panel closes it too), then the panel's clock.
-    if (layers.count > (uint32_t)ctx->maxLayerCount) {
-        dropLayer(&layers, &layers.toast);
-    }
+    // Over the runtime's limit the frame is refused whole, so shed the controller
+    // models first: the beam and dot still point.
     if (layers.count > (uint32_t)ctx->maxLayerCount) {
         dropLayer(&layers, &layers.models);
-    }
-    if (layers.count > (uint32_t)ctx->maxLayerCount) {
-        dropLayer(&layers, &layers.cogMark[COG_OPTION_COUNT]);
-    }
-    if (layers.count > (uint32_t)ctx->maxLayerCount) {
-        dropLayer(&layers, &layers.cogButton);
-    }
-    if (layers.count > (uint32_t)ctx->maxLayerCount) {
-        dropLayer(&layers, &layers.cogClock);
     }
 
     // Warn once; a frame that crowds the limit usually repeats. Nothing

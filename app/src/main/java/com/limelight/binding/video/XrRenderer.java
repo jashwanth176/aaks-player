@@ -16,7 +16,6 @@ import com.limelight.R;
 import com.limelight.binding.input.EyeTrackingPermission;
 import com.limelight.preferences.PreferenceConfiguration;
 import com.limelight.preferences.XrDisplayRates;
-import com.limelight.utils.BugReport;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -118,9 +117,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     // Native input results, indexed by the IN_ constants in XrShared
     private final float[] inputState = new float[IN_SLOTS];
     private int heldButtons;
-    // Gamepad mode's pad as last reported: plugged in, then the IN_PAD_ values. Frame loop only.
-    private boolean padPlugged;
-    private final int[] padSent = new int[IN_PAD_RY - IN_PAD_BUTTONS + 1];
     private InputListener inputListener;
     private volatile SessionListener sessionListener;
     private Context prefsContext;
@@ -131,80 +127,9 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     // Drawn at each hand when the setting is on, painted from its vertex colours
     private static final String CONTROLLER_MODEL = "models/controller.room";
 
-    // Panel art drawn by XrPanels on the loader thread, uploaded by the frame loop, which owns
-    // the GL context. The splash is drawn before the frame loop starts.
+    // The splash, drawn before the frame loop starts and uploaded by it, since it owns the
+    // GL context
     private final AtomicReference<ByteBuffer> pendingSplash = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer[]> pendingKbSheets = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingKbButton = new AtomicReference<>();
-    // Built next to the art and read on the frame loop when it uploads
-    private volatile float[] kbKeyRects;
-    private volatile int[][] kbCodes;
-    // Modifiers each keyboard sheet was last drawn with, and those reported held. Frame loop only.
-    private final int[] kbSheetMods = new int[KB_STATE_COUNT];
-    private boolean kbArtUp;
-    private int heldKbMods;
-    // A sheet redrawn off the frame loop, one at a time
-    private final AtomicReference<KbSheet> pendingKbSheet = new AtomicReference<>();
-    private boolean kbSheetDrawing;
-
-    // Report sheet state, frame loop only. The sheet is redrawn on its own thread when its
-    // contents change, and uploaded only if still for the current opening.
-    private final XrReportForm reportForm = new XrReportForm();
-    private volatile XrPanels.ReportSheet reportArt;
-    private int reportOpening;
-    private String reportDrawn;
-    private boolean reportDrawing;
-    private boolean reportSendHanded;
-    private final AtomicReference<ReportDrawing> pendingReport = new AtomicReference<>();
-
-    private final AtomicReference<ByteBuffer> pendingExitButton = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingExitPlain = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingExitHot = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingCancelHot = new AtomicReference<>();
-
-    private final AtomicReference<ByteBuffer> pendingPickerArt = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingEnvButton = new AtomicReference<>();
-    // Every sheet of the settings panel, in COG_ART_ order
-    private final AtomicReference<ByteBuffer[]> pendingCogSheets = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingCogButton = new AtomicReference<>();
-    // Values beside the Room or Picture tab's tracks, and the values last drawn
-    private XrPanels.Readout cogReadout;
-    private final int[] readoutDrawn = new int[READOUT_VALUES];
-    private final int[] readoutWanted = new int[READOUT_VALUES];
-    // Toast sheet. Notices raised from Java are queued from any thread, then held in slots the
-    // native side refers to.
-    private XrPanels.Toast toast;
-    // Marks on the display tab's cells, and the cells last drawn
-    private XrPanels.Marks cogMarks;
-    // Time and battery for the strip over the settings panel, and the line last drawn
-    private volatile XrClock clock;
-    private XrPanels.ClockStrip cogClock;
-    private String cogClockDrawn;
-    private final int[] marksDrawn = new int[MARK_VALUES];
-    private final int[] marksWanted = new int[MARK_VALUES];
-    // Click sound: built once off the frame loop, fed from it. A sound ready after the session
-    // has ended is released. Handed over under clickLock.
-    private final Object clickLock = new Object();
-    private volatile XrClickSound clickSound;
-    private boolean clickSoundStarting;
-    private boolean clickSessionOver;
-    private final ConcurrentLinkedQueue<NoticeWords> pendingNotices = new ConcurrentLinkedQueue<>();
-    private final NoticeWords[] noticeTexts = new NoticeWords[TOAST_TEXT_SLOTS];
-    private int noticeSlot;
-    // The hand lock hint's sheet, only drawn in a session that may show it
-    private final AtomicReference<ByteBuffer> pendingHandHint = new AtomicReference<>();
-    // The 3D switch's two faces, only drawn in a session with stereo to switch
-    private final AtomicReference<ByteBuffer> pendingStereoOff = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingStereoOn = new AtomicReference<>();
-    // The ray toggle's two faces
-    private final AtomicReference<ByteBuffer> pendingRayOff = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingRayOn = new AtomicReference<>();
-    // Head aim toggle's two faces
-    private final AtomicReference<ByteBuffer> pendingAimOff = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingAimOn = new AtomicReference<>();
-    // Gamepad mode toggle's two faces
-    private final AtomicReference<ByteBuffer> pendingPadOff = new AtomicReference<>();
-    private final AtomicReference<ByteBuffer> pendingPadOn = new AtomicReference<>();
     // A baked room on its way to the GPU. Mesh, atlases and cell travel together, so a room picked
     // mid-read never leaves the native side with half of each. The void shows until it lands.
     private static final class RoomAssets {
@@ -230,7 +155,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private final Object roomLock = new Object();
     private int roomTicket;
     private int parkedRoomCell = -1;
-    private XrPanels panels;
     private volatile int environmentChoice = ENV_CELL_VOID;
     private volatile boolean passthroughOn;
 
@@ -240,28 +164,12 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
      */
     public interface InputListener {
         void onVrPointerMove(float u, float v);
-        // Relative motion, right and down positive: head aim's turn plus pointer nudges
-        void onVrMouseMove(int dx, int dy);
         void onVrButton(int button, boolean down);
         void onVrScroll(int clicks);
         // Player controller reads every frame: face buttons as bits (A 1, B 2, X 4, Y 8) and
         // thumbstick X, -1 to 1
         default void onVrPlayerInput(int buttons, float stickX) {
         }
-        // Gamepad mode: both controllers as one Xbox pad, plugged in before its first state and
-        // released before unplugging. PAD_ button bits, triggers 0 to 255, sticks -32766 to 32766,
-        // up positive.
-        void onVrGamepadPlugged(boolean plugged);
-        void onVrGamepadState(int buttons, int leftTrigger, int rightTrigger,
-                              int leftX, int leftY, int rightX, int rightY);
-        // A key from the in-world keyboard: Unicode with shift applied, backspace, tab, enter and
-        // space as control codes, or a virtual key code above KB_CODE_VK. modifiers are KB_MOD_
-        // bits.
-        void onVrKey(int code, int modifiers);
-        // Ctrl, Alt and Win as lit on the keyboard now, KB_MOD_ bits
-        void onVrModifiers(int modifiers);
-        // Exit prompt confirmed
-        void onVrExit();
     }
 
     public void setInputListener(InputListener listener) {
@@ -530,34 +438,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     /**
-     * Shows a notice on the in-session toast: a line, and a quieter one under it or null. Any
-     * thread; it goes up on the next frame.
-     */
-    public void showNotice(String text, String more) {
-        showNotice(text, more, false);
-    }
-
-    // As above; a path second line is cut from the middle so both ends stay visible
-    private void showNotice(String text, String more, boolean path) {
-        if (text != null) {
-            pendingNotices.add(new NoticeWords(text, more, path));
-        }
-    }
-
-    // A notice raised from Java, waiting its turn
-    private static final class NoticeWords {
-        final String text;
-        final String more;
-        final boolean path;
-
-        NoticeWords(String text, String more, boolean path) {
-            this.text = text;
-            this.more = more;
-            this.path = path;
-        }
-    }
-
-    /**
      * Session events for the activity, so a failed start can be shown rather than leaving a
      * window the headset never displays. Called off the main thread.
      */
@@ -634,26 +514,14 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private native void nativeUploadControllerModel(long ctx, ByteBuffer mesh, int length);
     // Whether the controller model is drawn; the Display tab's row changes it
     private native void nativeSetControllerModel(long ctx, boolean on);
-    private native void nativeUploadPicker(long ctx, ByteBuffer grid, ByteBuffer button, int cells);
-    private native void nativeUploadCog(long ctx, ByteBuffer[] sheets, ByteBuffer button);
-    private native void nativeUploadCogReadout(long ctx, ByteBuffer strip, int[] values);
     // One room's own Room tab values, by the picker cell that shows it
     private native void nativeSetRoomLevels(long ctx, int cell, int brightness, boolean glow,
                                             int light, int screen);
     // The running model's default separation and convergence (preference units) for the 3D
     // tab's reset, and the preset separations in cell order
-    private native void nativeSetDepthDefaults(long ctx, int separation, int convergence,
-                                               int[] presets);
+    private native void nativeSetDepthDefaults(long ctx, int separation, int convergence);
     // Brightness, contrast, gamma and saturation, in PICTURE_ order and units
     private native void nativeSetPicture(long ctx, int[] picture);
-    // The sheets and the code tables in KB_STATE_ order
-    private native void nativeUploadKeyboard(long ctx, ByteBuffer[] sheets, ByteBuffer buttonIcon,
-                                             float[] keyRects, int[][] codes);
-    private native void nativeUploadKeyboardSheet(long ctx, int state, ByteBuffer sheet);
-    private native void nativeUploadReport(long ctx, ByteBuffer sheet);
-    private native void nativeSetReportSend(long ctx, boolean ready);
-    private native void nativeUploadExit(long ctx, ByteBuffer button, ByteBuffer promptPlain,
-                                         ByteBuffer promptExitHot, ByteBuffer promptCancelHot);
     private native boolean nativeGetCylinderSupported(long ctx);
     // A PRESENCE_ value
     private native int nativeGetPresence(long ctx);
@@ -662,9 +530,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     // Why the runtime ended the frame loop, or null
     private native String nativeGetExitReason(long ctx);
     private native String nativeGetRuntime(long ctx);
-    private native void nativeUploadHandHint(long ctx, ByteBuffer sheet);
-    // Whether this session may show the hand lock hint, before the first frame
-    private native void nativeSetHandHint(long ctx, boolean wanted);
     private native void nativeSetPlayerMode(long ctx, boolean on);
     private native void nativeSetPlayerLighting(long ctx, float ambient, float brightness);
     private native void nativeSetPlayerContent(long ctx, float top, float bottom);
@@ -678,24 +543,9 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private native void nativeSetUiPanel(long ctx, int panel, boolean visible, int anchor,
                                          boolean fixed, float widthFrac, float gapFrac, float xOff);
     private native void nativeSetUiPanelDepth(long ctx, int panel, float k);
-    private native void nativeUploadStereoButton(long ctx, ByteBuffer off, ByteBuffer on);
-    private native void nativeUploadRayButton(long ctx, ByteBuffer off, ByteBuffer on);
-    private native void nativeUploadAimButton(long ctx, ByteBuffer off, ByteBuffer on);
-    private native void nativeUploadPadButton(long ctx, ByteBuffer off, ByteBuffer on);
     private native void nativeUploadSplash(long ctx, ByteBuffer sheet);
-    // The toast sheet for a notice just shown, and a Java notice to queue (TOAST_TEXT and its slot)
-    private native void nativeUploadToast(long ctx, ByteBuffer sheet, int kind, int arg);
-    private native void nativePushNotice(long ctx, int kind, int arg);
-    private native void nativeUploadCogMarks(long ctx, ByteBuffer strip);
-    private native void nativeUploadCogClock(long ctx, ByteBuffer strip);
-    // Whether a press clicks
-    private native void nativeSetClickSound(long ctx, boolean on);
     // Whether sessions start with the ray drawn
     private native void nativeSetShowRay(long ctx, boolean on);
-    // Head aim at session start: sensitivity in pixels per degree, dead zone in degrees per second
-    private native void nativeSetHeadAim(long ctx, boolean on, int sensitivity, int deadZone);
-    // Gamepad mode's shortcut, and the sticks' dead zone in whole percent
-    private native void nativeSetGamepad(long ctx, int shortcut, int deadzonePercent);
     // The depth model will make no maps this session, so the splash stops waiting. Any thread.
     private native void nativeDepthGaveUp(long ctx);
     private native void nativeSetEnvironment(long ctx, int choice);
@@ -759,24 +609,13 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
 
                 prefsContext = activity.getApplicationContext();
                 gazeAllowed = EyeTrackingPermission.gazeAllowed(prefsContext);
-                // Kept for a report made after this session; a successful start clears an earlier
-                // failure
-                SharedPreferences.Editor kept =
-                        PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                                .remove(BugReport.START_FAILURE_PREF);
-                String runtime = nativeGetRuntime(nativeCtx);
-                if (runtime != null) {
-                    kept.putString(BugReport.RUNTIME_PREF, runtime);
-                }
-                kept.apply();
                 // Lets the frame rate list use the runtime's rates rather than the Android
                 // display's
                 XrDisplayRates.remember(prefsContext, nativeGetOfferedRates(nativeCtx));
                 // Kept: the panel's settings rows write back to this same instance
                 prefConfig = prefs;
                 nativeSetDepthDefaults(nativeCtx, depthSpec.defaultSeparation,
-                        depthSpec.defaultConvergence,
-                        DepthPresets.values(depthSpec.defaultSeparation));
+                        depthSpec.defaultConvergence);
                 nativeSetPicture(nativeCtx, prefs.vrPicture);
                 nativeSetDepthRate(nativeCtx, prefs.vrDepthRate);
                 nativeSetPlayerMode(nativeCtx, playerMode);
@@ -799,7 +638,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 startEnvironment(prefs);
                 // A few milliseconds, so the first frame has it
                 long splashStartNs = System.nanoTime();
-                pendingSplash.set(panels.buildSplash());
+                pendingSplash.set(XrSplash.buildSplash());
                 LimeLog.info("Splash sheet drawn in "
                         + msPer(System.nanoTime() - splashStartNs, 1) + " ms, "
                         + SPLASH_ROWS + " rows");
@@ -830,19 +669,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                     String reason = nativeGetExitReason(nativeCtx);
                     endedFor = reason != null ? reason : "unknown";
                 }
-                // The pad unplugs with the session
-                unplugPad();
-
                 stopDepthThread();
-                XrClickSound click;
-                synchronized (clickLock) {
-                    clickSessionOver = true;
-                    click = clickSound;
-                    clickSound = null;
-                }
-                if (click != null) {
-                    click.release();
-                }
 
                 // On the GL thread, under the lock so no other thread reaches a half-freed context.
                 // The SurfaceTexture and Surface stay alive for the codec until cleanup().
@@ -889,12 +716,9 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
         return true;
     }
 
-    // Logs a failed start as one block and keeps it for a later report
+    // Logs a failed start as one block
     private static void keepStartFailure(Activity activity, XrStartFailure failure) {
         LimeLog.severe(failure.block(null));
-        String when = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date());
-        PreferenceManager.getDefaultSharedPreferences(activity.getApplicationContext()).edit()
-                .putString(BugReport.START_FAILURE_PREF, failure.block(when)).apply();
     }
 
     /**
@@ -1213,12 +1037,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             }
             trackPresence();
             if (r == FRAME_IDLE) {
-                // The native side already slept. The click track is fed anyway so it plays on
-                // resume.
-                XrClickSound click = clickSound;
-                if (click != null) {
-                    click.feed();
-                }
+                // The native side already slept
                 continue;
             }
 
@@ -1230,13 +1049,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             nativeUpdateInput(nativeCtx, distance, quadWidth, curvature, headLocked,
                     pointer, gaze && gazeAllowed, prefs.vrPointerSleep, inputState);
             dispatchInput();
-            updateReport();
-            updateCogReadout();
-            updateCogMarks();
-            updateCogClock();
-            updateKeyboardSheet();
-            updateToast();
-            updateClickSound(prefs);
 
             // Off: the warp draws flat and the model idles. Back on: capture the frame in hand at
             // once, whatever the depth rate says.
@@ -1292,62 +1104,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 uploadPendingUiSheets();
             }
 
-            ByteBuffer grid = pendingPickerArt.getAndSet(null);
-            ByteBuffer button = pendingEnvButton.getAndSet(null);
-            if (grid != null || button != null) {
-                nativeUploadPicker(nativeCtx, grid, button, ENV_CELL_COUNT);
-            }
-
-            ByteBuffer[] cogSheets = pendingCogSheets.getAndSet(null);
-            ByteBuffer cog = pendingCogButton.getAndSet(null);
-            if (cogSheets != null || cog != null) {
-                nativeUploadCog(nativeCtx, cogSheets, cog);
-            }
-
-            ByteBuffer[] kbSheets = pendingKbSheets.getAndSet(null);
-            ByteBuffer kbButton = pendingKbButton.getAndSet(null);
-            if (kbSheets != null || kbButton != null) {
-                nativeUploadKeyboard(nativeCtx, kbSheets, kbButton, kbKeyRects, kbCodes);
-                kbArtUp |= kbSheets != null;
-            }
-
-            ByteBuffer exitButton = pendingExitButton.getAndSet(null);
-            ByteBuffer exitPlain = pendingExitPlain.getAndSet(null);
-            ByteBuffer exitHot = pendingExitHot.getAndSet(null);
-            ByteBuffer cancelHot = pendingCancelHot.getAndSet(null);
-            if (exitButton != null || exitPlain != null || exitHot != null || cancelHot != null) {
-                nativeUploadExit(nativeCtx, exitButton, exitPlain, exitHot, cancelHot);
-            }
-
-            ByteBuffer hint = pendingHandHint.getAndSet(null);
-            if (hint != null) {
-                nativeUploadHandHint(nativeCtx, hint);
-            }
-
-            ByteBuffer stereoOff = pendingStereoOff.getAndSet(null);
-            ByteBuffer stereoOnArt = pendingStereoOn.getAndSet(null);
-            if (stereoOff != null && stereoOnArt != null) {
-                nativeUploadStereoButton(nativeCtx, stereoOff, stereoOnArt);
-            }
-
-            ByteBuffer rayOff = pendingRayOff.getAndSet(null);
-            ByteBuffer rayOn = pendingRayOn.getAndSet(null);
-            if (rayOff != null && rayOn != null) {
-                nativeUploadRayButton(nativeCtx, rayOff, rayOn);
-            }
-
-            ByteBuffer aimOff = pendingAimOff.getAndSet(null);
-            ByteBuffer aimOn = pendingAimOn.getAndSet(null);
-            if (aimOff != null && aimOn != null) {
-                nativeUploadAimButton(nativeCtx, aimOff, aimOn);
-            }
-
-            ByteBuffer padOff = pendingPadOff.getAndSet(null);
-            ByteBuffer padOn = pendingPadOn.getAndSet(null);
-            if (padOff != null && padOn != null) {
-                nativeUploadPadButton(nativeCtx, padOff, padOn);
-            }
-
             ByteBuffer controller = pendingControllerModel.getAndSet(null);
             if (controller != null) {
                 nativeUploadControllerModel(nativeCtx, controller, controller.remaining());
@@ -1372,7 +1128,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
      * which would otherwise hold up the first frame.
      */
     private void startEnvironment(PreferenceConfiguration prefs) {
-        panels = new XrPanels(prefsContext, prefs.vrGamepadToggle);
 
         SharedPreferences saved = PreferenceManager.getDefaultSharedPreferences(prefsContext);
         int id = saved.getInt(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING, -1);
@@ -1416,101 +1171,23 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             nativeSetRoomLevels(nativeCtx, roomCell, levels.brightness, levels.glow,
                     levels.light, levels.screen);
         }
-        cogReadout = new XrPanels.Readout();
-        // Nothing drawn yet, so the first look at either tab draws it
-        Arrays.fill(readoutDrawn, -2);
-        toast = new XrPanels.Toast();
-        cogMarks = new XrPanels.Marks();
-        cogClock = new XrPanels.ClockStrip();
-        clock = new XrClock(prefsContext);
-        // Nothing drawn yet, so the first look at the tab draws them
-        Arrays.fill(marksDrawn, -2);
-        nativeSetClickSound(nativeCtx, prefs.vrClickSound);
         nativeSetShowRay(nativeCtx, prefs.vrShowRay);
-        nativeSetHeadAim(nativeCtx, prefs.vrHeadAim, prefs.vrHeadAimSensitivity,
-                prefs.vrHeadAimDeadZone);
-        // Sessions start in pointer mode; the chosen shortcut switches to the pad
-        nativeSetGamepad(nativeCtx, prefs.vrGamepadToggle, prefs.deadzonePercentage);
         nativeSetControllerModel(nativeCtx, prefs.vrControllerModel);
-        final boolean handHint = prefs.vrHandTracking && !prefs.vrHandLockHintSeen;
-        nativeSetHandHint(nativeCtx, handHint);
 
         final int startRoom = cell;
         final int roomTicketAtStart;
         synchronized (roomLock) {
             roomTicketAtStart = ++roomTicket;
         }
-        final boolean click = prefs.vrClickSound;
-        if (click) {
-            synchronized (clickLock) {
-                clickSoundStarting = true;
-            }
-        }
         Thread loader = new Thread() {
             @Override
             public void run() {
-                if (click) {
-                    startClickSound();
-                }
-                buildPanelArt(handHint);
                 pendingControllerModel.set(readAsset(CONTROLLER_MODEL));
                 loadRoomAssets(startRoom, roomTicketAtStart);
             }
         };
         loader.setName("Video - XR Environment");
         loader.start();
-    }
-
-    // Draws every panel once and parks it for the frame loop. The hand lock hint only if it may
-    // show.
-    private void buildPanelArt(boolean handHint) {
-        pendingPickerArt.set(panels.buildPickerGrid());
-        pendingEnvButton.set(panels.buildEnvButton());
-        if (handHint) {
-            pendingHandHint.set(panels.buildHandHint());
-        }
-
-        // Curvature needs a layer type the runtime may not offer; the slider is greyed rather than
-        // hidden
-        boolean curveOk;
-        synchronized (nativeLock) {
-            curveOk = nativeCtx != 0 && nativeGetCylinderSupported(nativeCtx);
-        }
-        // Likewise the 3D rows with stereo off in settings. Their ticks mark the running model's
-        // pair.
-        boolean stereoOk = prefConfig != null && prefConfig.vrDepthMode != DEPTH_MODE_OFF;
-        MidasDepthSource.Spec spec = MidasDepthSource.specFor(
-                prefConfig != null ? prefConfig.vrDepthModel : null);
-        pendingCogSheets.set(panels.buildCogTabs(curveOk, stereoOk, spec.defaultSeparation,
-                spec.defaultConvergence));
-        pendingCogButton.set(panels.buildCogButton());
-        // No 3D toggle on the bar without stereo; the 3D tab says why
-        if (stereoOk) {
-            ByteBuffer[] faces = panels.buildStereoButtons();
-            pendingStereoOff.set(faces[0]);
-            pendingStereoOn.set(faces[1]);
-        }
-        ByteBuffer[] rayFaces = panels.buildRayButtons();
-        pendingRayOff.set(rayFaces[0]);
-        pendingRayOn.set(rayFaces[1]);
-        ByteBuffer[] aimFaces = panels.buildAimButtons();
-        pendingAimOff.set(aimFaces[0]);
-        pendingAimOn.set(aimFaces[1]);
-        ByteBuffer[] padFaces = panels.buildPadButtons();
-        pendingPadOff.set(padFaces[0]);
-        pendingPadOn.set(padFaces[1]);
-
-        XrPanels.Keyboard keyboard = panels.buildKeyboard();
-        kbKeyRects = keyboard.keyRects;
-        kbCodes = keyboard.codes;
-        pendingKbSheets.set(keyboard.sheets);
-        pendingKbButton.set(keyboard.button);
-
-        ByteBuffer[] exit = panels.buildExitArt();
-        pendingExitButton.set(exit[0]);
-        pendingExitPlain.set(exit[1]);
-        pendingExitHot.set(exit[2]);
-        pendingCancelHot.set(exit[3]);
     }
 
     // Cells past the real ones are blank tiles
@@ -1624,7 +1301,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             LimeLog.warning("Asset " + path + " failed: " + e);
             return null;
         } finally {
-            XrPanels.closeQuietly(in);
+            XrSplash.closeQuietly(in);
         }
     }
 
@@ -1640,13 +1317,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             if (inputState[IN_HIT] != 0.0f) {
                 inputListener.onVrPointerMove(inputState[IN_U], inputState[IN_V]);
             }
-            // Head aim's turn plus pointer nudges as one relative move; no hit is set in that mode
-            int dx = (int)inputState[IN_MOUSE_DX];
-            int dy = (int)inputState[IN_MOUSE_DY];
-            if (dx != 0 || dy != 0) {
-                inputListener.onVrMouseMove(dx, dy);
-            }
-
             int buttons = (int)inputState[IN_BUTTONS];
             int changed = buttons ^ heldButtons;
             if (changed != 0) {
@@ -1667,58 +1337,11 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 inputListener.onVrPlayerInput((int)inputState[IN_PLAYER_BUTTONS],
                         inputState[IN_PLAYER_STICK_X]);
             }
-
-            dispatchPad();
-
-            // A key (the sentinel is negative), sent before the modifiers are released since it was
-            // typed with them held. While the report sheet is up the keys are its own, below.
-            int key = (int)inputState[IN_KEY];
-            if (key >= 0 && inputState[IN_REPORT_ZONE] < 0.0f) {
-                inputListener.onVrKey(key, (int)inputState[IN_KEY_MODS]);
-            }
-            int mods = (int)inputState[IN_KB_MODS];
-            if (mods != heldKbMods) {
-                heldKbMods = mods;
-                inputListener.onVrModifiers(mods);
-            }
-
-            // Cleared here too, so a frame landing while the activity exits cannot ask twice
-            if (inputState[IN_EXIT] != 0.0f) {
-                inputState[IN_EXIT] = 0.0f;
-                inputListener.onVrExit();
-            }
-        }
-
-        // While the report sheet is up its fields take the keys. Typed text stays out of the log.
-        int reportKey = (int)inputState[IN_KEY];
-        if (reportKey >= 0 && inputState[IN_REPORT_ZONE] >= 0.0f && reportForm.type(reportKey)) {
-            LimeLog.info("Report sheet: " + reportForm.note().length() + " characters in the note, "
-                    + reportForm.address().length() + " in the address, the keys on the "
-                    + (reportForm.focus() == REPORT_ZONE_NOTE ? "note" : "address")
-                    + (reportForm.canSend() ? ", ready to send" : ""));
         }
 
         // A 3D room puts the screen on its wall, so that placement is not saved
         if (inputState[IN_POSE_DIRTY] != 0.0f && !EnvironmentIds.isRoomCell(environmentChoice)) {
             saveScreenPose();
-        }
-
-        int pick = (int)inputState[IN_PICKER_PICK];
-        if (pick >= 0) {
-            chooseEnvironment(pick);
-        }
-
-        // "Don't show this again" on the hand lock hint
-        if (inputState[IN_HINT] != 0.0f && prefsContext != null) {
-            PreferenceConfiguration.markHandLockHintSeen(
-                    PreferenceManager.getDefaultSharedPreferences(prefsContext));
-            FileLog.event("hand lock hint put away for good");
-        }
-
-        int setting = (int)inputState[IN_SETTING];
-        if (setting >= 0) {
-            applySetting(setting, (int)inputState[IN_SETTING_VALUE],
-                    (int)inputState[IN_SETTING_ROOM]);
         }
     }
 
@@ -1758,643 +1381,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 listener.onVrSessionBack();
             }
         }
-    }
-
-    // Reports plug in, state changes and unplug, in that order and only on a change; the native
-    // side fills the slots every frame
-    private void dispatchPad() {
-        boolean plugged = inputState[IN_PAD] != 0.0f;
-        if (plugged && !padPlugged) {
-            padPlugged = true;
-            inputListener.onVrGamepadPlugged(true);
-            // Nothing sent yet, so the first state always goes
-            Arrays.fill(padSent, Integer.MIN_VALUE);
-        }
-        if (!plugged) {
-            unplugPad();
-            return;
-        }
-        boolean changed = false;
-        for (int i = 0; i < padSent.length; i++) {
-            int value = (int)inputState[IN_PAD_BUTTONS + i];
-            if (value != padSent[i]) {
-                padSent[i] = value;
-                changed = true;
-            }
-        }
-        if (changed) {
-            inputListener.onVrGamepadState(padSent[0], padSent[1], padSent[2], padSent[3],
-                    padSent[4], padSent[5], padSent[6]);
-        }
-    }
-
-    // The pad out, if it was in. Frame loop only.
-    private void unplugPad() {
-        if (padPlugged) {
-            padPlugged = false;
-            if (inputListener != null) {
-                inputListener.onVrGamepadPlugged(false);
-            }
-        }
-    }
-
-    // Report sheet events: opening, field focus and Send. Redraws when the contents change and
-    // passes Send's readiness down. Cancel needs nothing: each opening starts afresh.
-    private void updateReport() {
-        int event = (int)inputState[IN_REPORT];
-        int zone = (int)inputState[IN_REPORT_ZONE];
-        if (event == REPORT_OPENED) {
-            reportOpening++;
-            reportForm.open(prefsContext != null ? PreferenceManager
-                    .getDefaultSharedPreferences(prefsContext).getString(BugReport.EMAIL_PREF, "")
-                    : "");
-            reportDrawn = null;
-            // Each opening starts with Send held on the native side
-            reportSendHanded = false;
-        }
-        else if (event == REPORT_ZONE_NOTE || event == REPORT_ZONE_EMAIL) {
-            reportForm.focus(event);
-        }
-        else if (event == REPORT_ZONE_SEND) {
-            sendReport();
-        }
-
-        ReportDrawing drawn = pendingReport.getAndSet(null);
-        if (drawn != null) {
-            reportDrawing = false;
-            if (drawn.opening == reportOpening && zone >= 0 && drawn.pixels != null) {
-                nativeUploadReport(nativeCtx, drawn.pixels);
-                reportDrawn = drawn.key;
-                LimeLog.info("Report sheet drawn in " + drawn.ms + " ms, off the frame loop");
-            }
-        }
-        if (zone < 0) {
-            return;
-        }
-
-        boolean ready = reportForm.canSend();
-        if (ready != reportSendHanded) {
-            nativeSetReportSend(nativeCtx, ready);
-            reportSendHanded = ready;
-        }
-        final int opening = reportOpening;
-        final String note = reportForm.note();
-        final String address = reportForm.address();
-        final int focus = reportForm.focus();
-        final boolean wrong = reportForm.addressWrong();
-        final String key = opening + "|" + focus + "|" + zone + "|" + ready + "|" + wrong + "|"
-                + note + "\u0000" + address;
-        if (reportDrawing || key.equals(reportDrawn) || prefsContext == null) {
-            return;
-        }
-        reportDrawing = true;
-        final int hover = zone;
-        final boolean sendable = ready;
-        final Context context = prefsContext;
-        Thread draw = new Thread() {
-            @Override
-            public void run() {
-                long start = System.nanoTime();
-                ByteBuffer pixels = null;
-                try {
-                    XrPanels.ReportSheet art = reportArt;
-                    if (art == null) {
-                        art = new XrPanels.ReportSheet(context);
-                        reportArt = art;
-                    }
-                    pixels = art.draw(note, address, focus, hover, sendable, wrong);
-                } catch (RuntimeException | OutOfMemoryError e) {
-                    LimeLog.warning("Report sheet failed to draw: " + e);
-                }
-                pendingReport.set(new ReportDrawing(opening, key, pixels,
-                        msPer(System.nanoTime() - start, 1)));
-            }
-        };
-        draw.setName("Video - XR Report");
-        draw.start();
-    }
-
-    // A drawing of the report sheet, waiting to go up
-    private static final class ReportDrawing {
-        final int opening;
-        final String key;
-        final ByteBuffer pixels;
-        final String ms;
-
-        ReportDrawing(int opening, String key, ByteBuffer pixels, String ms) {
-            this.opening = opening;
-            this.key = key;
-            this.pixels = pixels;
-            this.ms = ms;
-        }
-    }
-
-    // Saves the address, then builds and posts the report on its own thread, saving it to a file
-    // where it cannot be sent. The toast says how it went.
-    private void sendReport() {
-        final Context context = prefsContext;
-        final String note = reportForm.note();
-        final String address = reportForm.address().trim();
-        if (context == null || !BugReport.canSend(note, address)) {
-            return;
-        }
-        PreferenceManager.getDefaultSharedPreferences(context).edit()
-                .putString(BugReport.EMAIL_PREF, address).apply();
-        final String session = "environment " + environmentName(environmentChoice)
-                + ", 3d " + (stereoLive ? "on" : "off")
-                + ", display " + Math.round(nativeGetDisplayRate(nativeCtx)) + " Hz";
-        FileLog.event("report from the session: " + note.length() + " characters, "
-                + (address.isEmpty() ? "no address" : "an address") + ", "
-                + (BugReport.collectorConfigured() ? "sending" : "no collector, saving"));
-        if (BugReport.collectorConfigured()) {
-            showNotice(context.getString(R.string.bug_report_sending), null);
-        }
-        Thread send = new Thread() {
-            @Override
-            public void run() {
-                BugReport.Outcome outcome = BugReport.send(context, note, address, session);
-                FileLog.event("report " + outcome.result.name().toLowerCase(Locale.ROOT)
-                        + (outcome.path != null ? " at " + outcome.path : "")
-                        + (outcome.detail != null ? ": " + outcome.detail : ""));
-                // The reason on the first line, the saved path under it
-                String where = BugReport.shortPath(outcome.path);
-                switch (outcome.result) {
-                    case SENT:
-                        showNotice(context.getString(R.string.bug_report_sent), null);
-                        break;
-                    case NOT_SENT:
-                        showNotice(context.getString(R.string.bug_report_not_sent_at), where, true);
-                        break;
-                    case BUSY:
-                        showNotice(context.getString(R.string.bug_report_busy_at), where, true);
-                        break;
-                    case NO_COLLECTOR:
-                        showNotice(context.getString(R.string.bug_report_no_collector_at), where,
-                                true);
-                        break;
-                    default:
-                        showNotice(context.getString(R.string.vr_report_not_written),
-                                outcome.detail);
-                        break;
-                }
-            }
-        };
-        send.setName("Video - XR Report send");
-        send.start();
-    }
-
-    // The environment's name for the report's session line
-    private static String environmentName(int cell) {
-        switch (cell) {
-            case ENV_CELL_PASSTHROUGH: return "passthrough";
-            case ENV_CELL_VOID: return "void";
-            default: return "cell " + cell;
-        }
-    }
-
-    // Redraws the Room or Picture tab's values when one moves and uploads the strip. The native
-    // side only shows a strip drawn from the current values.
-    private void updateCogReadout() {
-        if (inputState[IN_READOUT] < 0.0f || cogReadout == null) {
-            return;
-        }
-        boolean changed = false;
-        for (int i = 0; i < READOUT_VALUES; i++) {
-            readoutWanted[i] = (int)inputState[IN_READOUT + i];
-            changed |= readoutWanted[i] != readoutDrawn[i];
-        }
-        if (!changed) {
-            return;
-        }
-        nativeUploadCogReadout(nativeCtx, cogReadout.draw(readoutWanted), readoutWanted);
-        System.arraycopy(readoutWanted, 0, readoutDrawn, 0, READOUT_VALUES);
-    }
-
-    // Redraws the display tab's marks when one moves and uploads the strip
-    private void updateCogMarks() {
-        if (inputState[IN_MARKS] < 0.0f || cogMarks == null) {
-            return;
-        }
-        boolean changed = false;
-        for (int i = 0; i < MARK_VALUES; i++) {
-            marksWanted[i] = (int)inputState[IN_MARKS + i];
-            changed |= marksWanted[i] != marksDrawn[i];
-        }
-        if (changed) {
-            nativeUploadCogMarks(nativeCtx, cogMarks.draw(marksWanted));
-            System.arraycopy(marksWanted, 0, marksDrawn, 0, MARK_VALUES);
-        }
-    }
-
-    // Redraws the visible keyboard sheet when the lit modifiers change. A cold draw takes up to
-    // 44 ms, so it runs on its own thread and is uploaded here.
-    private void updateKeyboardSheet() {
-        KbSheet drawn = pendingKbSheet.getAndSet(null);
-        if (drawn != null) {
-            nativeUploadKeyboardSheet(nativeCtx, drawn.state, drawn.pixels);
-            kbSheetMods[drawn.state] = drawn.mods;
-            kbSheetDrawing = false;
-            LimeLog.info("Keyboard sheet " + drawn.state + " drawn with modifiers " + drawn.mods
-                    + " in " + drawn.ms + " ms, off the frame loop");
-        }
-        final int sheet = (int)inputState[IN_KB_SHEET];
-        final XrPanels art = panels;
-        if (!kbArtUp || kbSheetDrawing || art == null || sheet < 0 || sheet >= KB_STATE_COUNT) {
-            return;
-        }
-        final int mods = (int)inputState[IN_KB_MODS];
-        if (mods == kbSheetMods[sheet]) {
-            return;
-        }
-        kbSheetDrawing = true;
-        Thread draw = new Thread() {
-            @Override
-            public void run() {
-                long start = System.nanoTime();
-                ByteBuffer pixels = null;
-                try {
-                    pixels = art.buildKeyboardSheet(sheet, mods);
-                } catch (RuntimeException | OutOfMemoryError e) {
-                    // Keep the old sheet rather than wait for a drawing that never comes
-                    LimeLog.warning("Keyboard sheet " + sheet + " failed to draw: " + e);
-                }
-                pendingKbSheet.set(new KbSheet(sheet, mods, pixels,
-                        msPer(System.nanoTime() - start, 1)));
-            }
-        };
-        draw.setName("Video - XR Keyboard");
-        draw.start();
-    }
-
-    // A keyboard sheet drawn off the frame loop, waiting to go up
-    private static final class KbSheet {
-        final int state;
-        final int mods;
-        final ByteBuffer pixels;
-        final String ms;
-
-        KbSheet(int state, int mods, ByteBuffer pixels, String ms) {
-            this.state = state;
-            this.mods = mods;
-            this.pixels = pixels;
-            this.ms = ms;
-        }
-    }
-
-    // Keeps the clock strip over the settings panel current while the panel is open
-    private void updateCogClock() {
-        XrClock now = clock;
-        if (inputState[IN_COG_OPEN] == 0.0f || now == null || cogClock == null) {
-            return;
-        }
-        String line = now.line(System.currentTimeMillis());
-        if (!line.equals(cogClockDrawn)) {
-            nativeUploadCogClock(nativeCtx, cogClock.draw(line));
-            cogClockDrawn = line;
-        }
-    }
-
-    // Feeds the click track every frame and clicks on a press while the setting is on. Turned
-    // on mid-session, the track is built off the frame loop.
-    private void updateClickSound(PreferenceConfiguration prefs) {
-        XrClickSound click = clickSound;
-        if (click == null) {
-            if (!prefs.vrClickSound) {
-                return;
-            }
-            synchronized (clickLock) {
-                if (clickSoundStarting) {
-                    return;
-                }
-                clickSoundStarting = true;
-            }
-            Thread starter = new Thread() {
-                @Override
-                public void run() {
-                    startClickSound();
-                }
-            };
-            starter.setName("Video - XR Click");
-            starter.start();
-            return;
-        }
-        click.feed();
-        if (inputState[IN_CLICK] != 0.0f && prefs.vrClickSound) {
-            click.click();
-        }
-    }
-
-    // Off the frame loop: building the track talks to the audio system. Released if the session
-    // is already over.
-    private void startClickSound() {
-        // AudioTrack's non-blocking write needs M
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return;
-        }
-        XrClickSound click = XrClickSound.start();
-        if (click == null) {
-            return;
-        }
-        synchronized (clickLock) {
-            if (!clickSessionOver) {
-                clickSound = click;
-                return;
-            }
-        }
-        click.release();
-    }
-
-    // Queues notices raised here, then draws and uploads whichever notice the frame says has
-    // just gone up
-    private void updateToast() {
-        NoticeWords notice;
-        while ((notice = pendingNotices.poll()) != null) {
-            int slot = noticeSlot;
-            noticeSlot = (noticeSlot + 1) % TOAST_TEXT_SLOTS;
-            noticeTexts[slot] = notice;
-            nativePushNotice(nativeCtx, TOAST_TEXT, slot);
-        }
-        int kind = (int)inputState[IN_TOAST];
-        if (kind < 0 || toast == null || prefsContext == null) {
-            return;
-        }
-        int arg = (int)inputState[IN_TOAST_ARG];
-        String text;
-        String more = null;
-        boolean path = false;
-        switch (kind) {
-            case TOAST_RATE:
-                text = prefsContext.getString(R.string.vr_toast_rate, arg);
-                break;
-            case TOAST_HANDS_LOCKED:
-                text = prefsContext.getString(R.string.vr_toast_hands_locked);
-                break;
-            case TOAST_HANDS_UNLOCKED:
-                text = prefsContext.getString(R.string.vr_toast_hands_unlocked);
-                break;
-            case TOAST_3D_OFF:
-                text = prefsContext.getString(R.string.vr_toast_3d_off);
-                break;
-            case TOAST_3D_ON:
-                text = prefsContext.getString(R.string.vr_toast_3d_on);
-                break;
-            case TOAST_HEAD_AIM_OFF:
-                text = prefsContext.getString(R.string.vr_toast_head_aim_off);
-                break;
-            case TOAST_HEAD_AIM_ON:
-                text = prefsContext.getString(R.string.vr_toast_head_aim_on);
-                more = prefsContext.getString(R.string.vr_toast_head_aim_on_more);
-                break;
-            case TOAST_GAMEPAD_MODE:
-                // The second line says how to switch back
-                text = prefsContext.getString(R.string.vr_toast_gamepad_mode);
-                more = prefsContext.getString(XrPanels.gamepadBackText(
-                        prefConfig != null ? prefConfig.vrGamepadToggle : PAD_SHORTCUT_MENU_GRIP));
-                break;
-            case TOAST_POINTER_MODE:
-                text = prefsContext.getString(R.string.vr_toast_pointer_mode);
-                break;
-            case TOAST_TEXT:
-                NoticeWords words = arg >= 0 && arg < TOAST_TEXT_SLOTS ? noticeTexts[arg] : null;
-                if (words == null) {
-                    return;
-                }
-                text = words.text;
-                more = words.more;
-                path = words.path;
-                break;
-            default:
-                return;
-        }
-        nativeUploadToast(nativeCtx, toast.draw(text, more, path), kind, arg);
-    }
-
-    /**
-     * A settings row changed. The native side has already applied it; this persists it. A room's
-     * values are stored under the id of the room in roomCell.
-     */
-    private void applySetting(int setting, int value, int roomCell) {
-        if (prefsContext == null) {
-            return;
-        }
-
-        if (setting == SETTING_ROOM_BRIGHTNESS || setting == SETTING_ROOM_GLOW
-                || setting == SETTING_ROOM_LIGHT_LEVEL || setting == SETTING_ROOM_SCREEN) {
-            applyRoomSetting(setting, value, EnvironmentIds.idForCell(roomCell));
-        }
-        else if (setting == SETTING_SHARPEN) {
-            String choice = value == 2 ? "quality" : (value == 1 ? "normal" : "off");
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putString(PreferenceConfiguration.VR_SHARPENING_PREF_STRING, choice)
-                    .apply();
-        }
-        else if (setting == SETTING_SUPERSAMPLE) {
-            String choice = value == 2 ? "quality" : (value == 1 ? "normal" : "off");
-            if (prefConfig != null) {
-                prefConfig.vrSupersampling = value;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putString(PreferenceConfiguration.VR_SUPERSAMPLING_PREF_STRING, choice)
-                    .apply();
-        }
-        else if (setting == SETTING_STATS) {
-            boolean on = value != 0;
-            if (prefConfig != null) {
-                prefConfig.enablePerfOverlay = on;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putBoolean(PreferenceConfiguration.ENABLE_PERF_OVERLAY_STRING, on)
-                    .apply();
-        }
-        else if (setting == SETTING_AMBILIGHT) {
-            boolean on = value != 0;
-            if (prefConfig != null) {
-                prefConfig.vrAmbilight = on;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putBoolean(PreferenceConfiguration.VR_AMBILIGHT_PREF_STRING, on)
-                    .apply();
-        }
-        else if (setting == SETTING_ROOM_LIGHT) {
-            boolean on = value != 0;
-            if (prefConfig != null) {
-                prefConfig.vrRoomLight = on;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putBoolean(PreferenceConfiguration.VR_ROOM_LIGHT_PREF_STRING, on)
-                    .apply();
-        }
-        else if (setting == SETTING_HEAD_LOCK) {
-            boolean on = value != 0;
-            // Read every frame by the frame loop. Rooms ignore it, but the row stays live.
-            if (prefConfig != null) {
-                prefConfig.vrHeadLocked = on;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putBoolean(PreferenceConfiguration.VR_HEAD_LOCKED_PREF_STRING, on)
-                    .apply();
-        }
-        else if (setting == SETTING_POINTER_SLEEP) {
-            boolean on = value != 0;
-            if (prefConfig != null) {
-                prefConfig.vrPointerSleep = on;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putBoolean(PreferenceConfiguration.VR_POINTER_SLEEP_PREF_STRING, on)
-                    .apply();
-            FileLog.event("pointer sleep " + (on ? "on" : "off") + " saved");
-        }
-        else if (setting == SETTING_CLICK_SOUND) {
-            boolean on = value != 0;
-            // Read by the frame loop from this same object
-            if (prefConfig != null) {
-                prefConfig.vrClickSound = on;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putBoolean(PreferenceConfiguration.VR_CLICK_SOUND_PREF_STRING, on)
-                    .apply();
-            FileLog.event("click sound " + (on ? "on" : "off") + " saved");
-        }
-        else if (setting == SETTING_CONTROLLER_MODEL) {
-            boolean on = value != 0;
-            if (prefConfig != null) {
-                prefConfig.vrControllerModel = on;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putBoolean(PreferenceConfiguration.VR_CONTROLLER_MODEL_PREF_STRING, on)
-                    .apply();
-            FileLog.event("controller model " + (on ? "on" : "off") + " saved");
-        }
-        else if (setting == SETTING_HEAD_AIM_SENSITIVITY) {
-            // Already applied natively; this is for next time
-            if (prefConfig != null) {
-                prefConfig.vrHeadAimSensitivity = value;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putInt(PreferenceConfiguration.VR_HEAD_AIM_SENSITIVITY_PREF_STRING, value)
-                    .apply();
-            FileLog.event("head aim sensitivity " + value + " saved");
-        }
-        else if (setting == SETTING_HEAD_AIM_DEADZONE) {
-            if (prefConfig != null) {
-                prefConfig.vrHeadAimDeadZone = value;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putInt(PreferenceConfiguration.VR_HEAD_AIM_DEADZONE_PREF_STRING, value)
-                    .apply();
-            FileLog.event("head aim dead zone " + value + " saved");
-        }
-        else if (setting == SETTING_AMBI_LEVEL) {
-            if (prefConfig != null) {
-                prefConfig.vrAmbilightLevel = value;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putInt(PreferenceConfiguration.VR_AMBILIGHT_LEVEL_PREF_STRING, value)
-                    .apply();
-        }
-        else if (setting == SETTING_SEPARATION) {
-            // The native panel value overrides the frame loop's copy for this session; this is for
-            // next time
-            if (prefConfig != null) {
-                prefConfig.vrStereoSeparation = value;
-            }
-            SharedPreferences saved = PreferenceManager.getDefaultSharedPreferences(prefsContext);
-            saved.edit().putInt(PreferenceConfiguration.VR_SEPARATION_PREF_STRING, value).apply();
-            FileLog.event("separation " + value + " saved, the preference holds "
-                    + saved.getInt(PreferenceConfiguration.VR_SEPARATION_PREF_STRING, -1)
-                    + ", preset " + PreferenceConfiguration.presetLabel(value,
-                            prefConfig != null ? prefConfig.vrDepthModel : null));
-        }
-        else if (setting == SETTING_CONVERGENCE) {
-            if (prefConfig != null) {
-                prefConfig.vrConvergence = value;
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putInt(PreferenceConfiguration.VR_CONVERGENCE_PREF_STRING, value)
-                    .apply();
-        }
-        else if (setting == SETTING_RESET_3D) {
-            // Both removed, so the pair follows the running model's defaults, also after a model
-            // change
-            String model = prefConfig != null ? prefConfig.vrDepthModel : null;
-            if (prefConfig != null) {
-                prefConfig.vrStereoSeparation = PreferenceConfiguration.defaultSeparation(model);
-                prefConfig.vrConvergence = PreferenceConfiguration.defaultConvergence(model);
-            }
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .remove(PreferenceConfiguration.VR_SEPARATION_PREF_STRING)
-                    .remove(PreferenceConfiguration.VR_CONVERGENCE_PREF_STRING)
-                    .apply();
-            FileLog.event("3d pair back to the model's own "
-                    + PreferenceConfiguration.defaultPairLabel(model));
-        }
-        else if (pictureRow(setting) >= 0) {
-            // Already live natively; only the preference is written
-            int row = pictureRow(setting);
-            int units = PreferenceConfiguration.clampPicture(row, value);
-            if (prefConfig != null) {
-                prefConfig.vrPicture[row] = units;
-            }
-            String key = PreferenceConfiguration.pictureKey(row);
-            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
-                    .putInt(key, units)
-                    .apply();
-            FileLog.event("picture setting " + key + " = " + units + " saved");
-        }
-        else if (setting == SETTING_RESET_PICTURE) {
-            // Removed, which reads as the unadjusted picture
-            SharedPreferences.Editor editor =
-                    PreferenceManager.getDefaultSharedPreferences(prefsContext).edit();
-            for (int row = 0; row < PICTURE_VALUES; row++) {
-                if (prefConfig != null) {
-                    prefConfig.vrPicture[row] = PreferenceConfiguration.pictureDefault(row);
-                }
-                editor.remove(PreferenceConfiguration.pictureKey(row));
-            }
-            editor.apply();
-            FileLog.event("picture back to the picture as streamed");
-        }
-    }
-
-    // Which picture row a setting id writes, or -1 for any other setting
-    private static int pictureRow(int setting) {
-        switch (setting) {
-            case SETTING_PICTURE_BRIGHTNESS: return PICTURE_BRIGHTNESS;
-            case SETTING_PICTURE_CONTRAST: return PICTURE_CONTRAST;
-            case SETTING_PICTURE_GAMMA: return PICTURE_GAMMA;
-            case SETTING_PICTURE_SATURATION: return PICTURE_SATURATION;
-            default: return -1;
-        }
-    }
-
-    // One room's value under that room's key, logged so a report shows each room's levels
-    private void applyRoomSetting(int setting, int value, int roomId) {
-        if (!PreferenceConfiguration.isRoomEnvironment(roomId)) {
-            return;
-        }
-        SharedPreferences.Editor editor =
-                PreferenceManager.getDefaultSharedPreferences(prefsContext).edit();
-        String key;
-        if (setting == SETTING_ROOM_GLOW) {
-            key = PreferenceConfiguration.roomGlowKey(roomId);
-            editor.putBoolean(key, value != 0);
-        }
-        else {
-            if (setting == SETTING_ROOM_BRIGHTNESS) {
-                key = PreferenceConfiguration.roomBrightnessKey(roomId);
-            }
-            else if (setting == SETTING_ROOM_LIGHT_LEVEL) {
-                key = PreferenceConfiguration.roomLightKey(roomId);
-            }
-            else {
-                key = PreferenceConfiguration.roomScreenKey(roomId);
-                value = PreferenceConfiguration.clampRoomScreen(roomId, value);
-            }
-            editor.putInt(key, value);
-        }
-        editor.apply();
-        FileLog.event("room setting " + key + " = "
-                + (setting == SETTING_ROOM_GLOW ? String.valueOf(value != 0) : value) + " saved");
     }
 
     // Written when a grab ends. Cleared by the reset in settings.

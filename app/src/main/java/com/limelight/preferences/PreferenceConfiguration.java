@@ -7,7 +7,6 @@ import android.os.Build;
 import android.preference.PreferenceManager;
 
 import com.limelight.FileLog;
-import com.limelight.binding.video.DepthPresets;
 import com.limelight.binding.video.MidasDepthSource;
 import com.limelight.binding.video.XrShared;
 
@@ -328,42 +327,6 @@ public class PreferenceConfiguration {
         return prefs.getBoolean(VR_HEAD_AIM_PREF_STRING, DEFAULT_VR_HEAD_AIM);
     }
 
-    /** Head aim pixels per degree, clamped to its range. */
-    public static int headAimSensitivity(SharedPreferences prefs) {
-        int units = prefs.getInt(VR_HEAD_AIM_SENSITIVITY_PREF_STRING,
-                XrShared.HEAD_AIM_SENSITIVITY_DEFAULT);
-        return Math.max(XrShared.HEAD_AIM_SENSITIVITY_MIN,
-                Math.min(XrShared.HEAD_AIM_SENSITIVITY_MAX, units));
-    }
-
-    /** Head aim dead zone in degrees per second, clamped to its range. */
-    public static int headAimDeadZone(SharedPreferences prefs) {
-        int units = prefs.getInt(VR_HEAD_AIM_DEADZONE_PREF_STRING,
-                XrShared.HEAD_AIM_DEADZONE_DEFAULT);
-        return Math.max(XrShared.HEAD_AIM_DEADZONE_MIN,
-                Math.min(XrShared.HEAD_AIM_DEADZONE_MAX, units));
-    }
-
-    /** The gamepad mode shortcut as a PAD_SHORTCUT_ value; unknown values are menu + grip. */
-    static int gamepadToggle(SharedPreferences prefs) {
-        String value = prefs.getString(VR_GAMEPAD_TOGGLE_PREF_STRING, DEFAULT_VR_GAMEPAD_TOGGLE);
-        if (VR_GAMEPAD_TOGGLE_STICKS.equals(value)) {
-            return XrShared.PAD_SHORTCUT_STICKS;
-        }
-        if (VR_GAMEPAD_TOGGLE_TRIGGERS_GRIPS.equals(value)) {
-            return XrShared.PAD_SHORTCUT_TRIGGERS_GRIPS;
-        }
-        return XrShared.PAD_SHORTCUT_MENU_GRIP;
-    }
-
-    /** The gamepad shortcut for a log line; join separates key and value. */
-    public static String gamepadToggleLabel(int shortcut, String join) {
-        String value = shortcut == XrShared.PAD_SHORTCUT_STICKS ? VR_GAMEPAD_TOGGLE_STICKS
-                : shortcut == XrShared.PAD_SHORTCUT_TRIGGERS_GRIPS
-                        ? VR_GAMEPAD_TOGGLE_TRIGGERS_GRIPS : VR_GAMEPAD_TOGGLE_MENU_GRIP;
-        return "gamepadShortcut" + join + value;
-    }
-
     /** Pointer and controller drawing switches for a log line; join separates key and value. */
     public static String inputLabel(boolean pointerSleep, boolean showRay, boolean controllerModel,
                                     String join) {
@@ -375,11 +338,6 @@ public class PreferenceConfiguration {
     public static String headAimLabel(boolean on, int sensitivity, int deadZone, String join) {
         return "headAim" + join + on + " headAimSensitivity" + join + sensitivity
                 + " headAimDeadZone" + join + deadZone;
-    }
-
-    /** The 3D tab preset a separation matches under that model, or none, for the log. */
-    public static String presetLabel(int separation, String depthModel) {
-        return DepthPresets.name(DepthPresets.presetFor(separation, defaultSeparation(depthModel)));
     }
 
     /** One room's values for the headset panel's Room tab. */
@@ -731,9 +689,6 @@ public class PreferenceConfiguration {
         config.vrShowRay = rayShown(prefs);
         config.vrControllerModel = controllerModelOn(prefs);
         config.vrHeadAim = headAimOn(prefs);
-        config.vrHeadAimSensitivity = headAimSensitivity(prefs);
-        config.vrHeadAimDeadZone = headAimDeadZone(prefs);
-        config.vrGamepadToggle = gamepadToggle(prefs);
         config.vrStereoSeparation = storedSeparation(prefs, config.vrDepthModel);
         config.vrDepthDebug = prefs.getBoolean(VR_DEPTH_DEBUG_PREF_STRING, DEFAULT_VR_DEPTH_DEBUG);
         config.vrDepthRate = storedDepthRate(prefs, isXr2Gen1Headset());

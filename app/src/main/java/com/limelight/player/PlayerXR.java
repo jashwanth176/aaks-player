@@ -214,10 +214,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
 
             @Override
             public void onError(String title, String detail) {
-                XrRenderer r = renderer;
-                if (r != null) {
-                    r.showNotice(title, detail);
-                }
+                LimeLog.warning("PlayerXR: " + title + (detail != null ? ": " + detail : ""));
             }
 
             @Override
@@ -985,11 +982,6 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         }
     }
 
-    @Override
-    public void onVrExit() {
-        main.post(this::leave);
-    }
-
     // Out of the app for good: the task goes too, and the process once the session is down,
     // so nothing of the app lingers in the headset's shell
     private boolean leaving;
@@ -1010,10 +1002,6 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     }
 
     @Override
-    public void onVrMouseMove(int dx, int dy) {
-    }
-
-    @Override
     public void onVrScroll(int clicks) {
         main.post(() -> {
             PlayerUi current = ui;
@@ -1021,23 +1009,6 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
                 current.onScroll(clicks);
             }
         });
-    }
-
-    @Override
-    public void onVrGamepadPlugged(boolean plugged) {
-    }
-
-    @Override
-    public void onVrGamepadState(int buttons, int leftTrigger, int rightTrigger,
-                                 int leftX, int leftY, int rightX, int rightY) {
-    }
-
-    @Override
-    public void onVrKey(int code, int modifiers) {
-    }
-
-    @Override
-    public void onVrModifiers(int modifiers) {
     }
 
     // ---- session ------------------------------------------------------------

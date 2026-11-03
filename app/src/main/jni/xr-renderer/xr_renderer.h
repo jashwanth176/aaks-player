@@ -72,10 +72,7 @@ typedef XrResult (XRAPI_PTR *PFN_xrRequestBoundaryVisibilityMETA)(
 #include "xr_notice.h"
 #include "xr_glow.h"
 #include "xr_grade.h"
-#include "xr_keys.h"
 #include "xr_controller.h"
-#include "xr_headaim.h"
-#include "xr_gamepad.h"
 
 #define TAG "aaks"
 
@@ -208,20 +205,9 @@ static inline int64_t nowNs(void) {
 
 #define KOFI_WIDTH_FRAC 0.40f
 
-// Fading panels, one Fade each.
-#define FADE_COG 0
-#define FADE_PICKER 1
-#define FADE_KB 2
-#define FADE_EXIT 3
-#define FADE_REPORT 4
-#define FADE_HINT 5
-#define FADE_KOFI 6
-#define FADE_PANELS 7
-// Colour scale slots: the panels above, then splash and toast.
-#define FADE_SLOT_SPLASH FADE_PANELS
-#define FADE_SLOT_TOAST (FADE_PANELS + 1)
-// One per player UI panel.
-#define FADE_SLOT_UI (FADE_PANELS + 2)
+// Colour scale slots: the splash, one per player UI panel, and the pointer.
+#define FADE_SLOT_SPLASH 0
+#define FADE_SLOT_UI 1
 #define FADE_SLOT_POINTER (FADE_SLOT_UI + UI_PANEL_COUNT)
 #define FADE_SLOTS (FADE_SLOT_POINTER + 1)
 
@@ -640,6 +626,8 @@ typedef struct {
 
     // 0 none, else ROOM_STYLE_*; roomOverride is the debug property.
     int roomStyle;
+    // The first environment choice was logged
+    int environmentSaid;
     int roomOverride;
     // Debug property overrides, -1 when unset.
     float roomScaleOverride;
@@ -804,8 +792,6 @@ typedef struct {
     int64_t fadeNs;
     int fadeKnobMs;
     // panelFadingOut keeps the bar hidden until a fading panel has gone.
-    Fade panelFades[FADE_PANELS];
-    int panelFadingOut;
 
     // Launch splash, up from the first frame until panels, room and depth model are
     // ready. splashReadyMs: ms from the first frame each was ready, -1 if not yet.
@@ -818,21 +804,9 @@ typedef struct {
     // -1 before the first frame.
     int splashWedgesShown;
     // Last panel art reached the frame loop, uploaded or not.
-    int panelArtArrived;
     // The splash stops waiting on depth when a map is published or the model gives up.
     atomic_int depthMapsStaged;
     atomic_int depthGaveUp;
-
-    // Toast queue, raised here or by Java, held while the splash is up. Java
-    // draws the text; the sheet shows only while it matches the current notice.
-    NoticeBoard notices;
-    XrSwapchain toastSwapchain;
-    uint32_t toastImageCount;
-    XrSwapchainImageOpenGLESKHR* toastImages;
-    int toastArtReady;
-    int toastDrawnKind;
-    int toastDrawnArg;
-    Fade toastFade;
 
     // Display refresh rate, matched to the video (runtimes keep their
     // start rate unless asked) and stepped down while the 3D warp cannot
@@ -1042,19 +1016,6 @@ typedef struct {
     int handsLocked;
     // Read even while locked, since it is the way back.
     TriplePinch triplePinch[HAND_COUNT];
-    // Hand-lock hint, shown at most once a session the first time a hand points,
-    // unless dismissed for good or hands are off (Java decides at start).
-    int hintWanted;
-    int hintShown;
-    int hintOpen;
-    int64_t hintPointingNs;
-    XrSwapchain hintSwapchain;
-    uint32_t hintImageCount;
-    XrSwapchainImageOpenGLESKHR* hintImages;
-    int hintReady;
-    int hintHoverZone;
-    XrPosef hintPose;
-    float hintW, hintH;
 
     PFN_xrGetOpenGLESGraphicsRequirementsKHR pfnGetGlesReqs;
 
@@ -1179,51 +1140,10 @@ typedef struct {
     int rayFlipped;
     // Beam drawn last frame, -1 before the first; for the log.
     int rayDrawnSaid;
-    // Head aim: start setting and flip (as for the ray), pixels per
-    // degree and dead zone in deg/s (preference units), head state,
-    // and the pointer nudge. Only acts with the screen head-locked.
-    int headAimSetting;
-    int headAimFlipped;
-    int headAimSensitivity;
-    int headAimDeadZone;
-    HeadAim headAim;
-    PointerNudge headAimNudge;
-    // Active this frame; makes the pointer relative.
-    int headAimActive;
-    // After a recentre, frames are dropped until one displays at or after headAimRecentreAt.
-    int headAimRecentring;
-    XrTime headAimRecentreAt;
-    // Last logged state (-1 before the first frame), and pixels sent since the last count line.
-    int headAimSaid;
-    long headAimSentX;
-    long headAimSentY;
-    XrTime headAimCountNs;
     // Counts the input passes, so the pointer can tell when it missed one
     long inputFrames;
-    // Gamepad mode: the controllers act as one gamepad instead of the
-    // pointer for the rest of the session. Stick dead zone, toggle shortcut,
-    // grips as bumpers, last read per controller and last pad sent to Java,
-    // attachment, resting (under a panel or unfocused), buttons held until
-    // released, panels to close, and the last logged buttons.
-    int padMode;
-    float padDeadzone;
-    int padShortcut;
-    PadToggle padToggle;
-    PadChord padChord;
-    int padGrip[HAND_COUNT];
-    PadHand padRead[HAND_COUNT];
-    PadState pad;
-    int padAttached;
-    int padResting;
-    int padHeld;
-    int padPutAway;
-    int padButtonsSaid;
-    // Gamepad rumble; for the log, pulses since enabled and
-    // whether each controller's first result was logged.
-    PadRumble rumble;
-    int rumbleOn;
-    long rumblePulses;
-    int rumbleResultSaid[HAND_COUNT];
+    // The head-locked preference, from the last input pass
+    int headLockedPref;
     // Bundled controller model at each grip, in its own projection layer.
     // modelOn is also set from the Display tab; buffers arrive from Java.
     int modelOn;
@@ -1369,185 +1289,17 @@ typedef struct {
     XrSwapchainImageOpenGLESKHR* cornerImages;
     int handleArtReady;
 
-    XrSwapchain pickerSwapchain;
-    XrSwapchain outlineSwapchain;
-    uint32_t pickerImageCount;
-    uint32_t outlineImageCount;
-    XrSwapchainImageOpenGLESKHR* pickerImages;
-    XrSwapchainImageOpenGLESKHR* outlineImages;
-    int pickerReady;
-    int envButtonReady;
-    int outlineReady;
-    int pickerOpen;
-    int pickerHover;
-    int pickerChoice;
-    int pickerPick;
-    // Cells with content; the rest are blank and inert.
-    int pickerCells;
-    int envButtonHot;
-    // Last choice logged, so reapplying it is not logged again.
-    int loggedChoice;
-
-    // One swapchain shows the current sheet; sheets are cached
-    // here pre-flipped so a tab change is one upload. A swapchain
-    // per sheet would exceed the Pico 4 Ultra's limit of 32.
-    XrSwapchain cogPanelSwapchain;
-    XrSwapchain cogThumbSwapchain;
-    uint32_t cogPanelImageCount;
-    uint32_t cogThumbImageCount;
-    XrSwapchainImageOpenGLESKHR* cogPanelImages;
-    XrSwapchainImageOpenGLESKHR* cogThumbImages;
-    unsigned char* cogPanelPixels[COG_ART_COUNT];
-    int cogPanelReady[COG_ART_COUNT];
-    // -1 for none.
-    int cogArtShown;
-    int cogButtonReady;
-    int cogThumbReady;
-    int cogOpen;
-    int cogTab;
-    int cogButtonHot;
-    // Slider being dragged and its hand, -1 for none. The drag
-    // keeps its hand so the other cannot steal it; the face matters
-    // because the first tab's rows differ while a room is up.
-    int cogDragSlider;
-    int cogDragHand;
-    int cogDragFace;
-    // Gaze-picked slider: the hand moves the thumb from where the press put it.
-    int cogDragByGaze;
-    Vec3 cogDragHandStart;
-    float cogDragScale;
-    float cogDragStartU;
-    DragRamp cogDragRamp;
-    // Percent readout beside the Room tab's tracks, and the values last drawn.
-    XrSwapchain cogReadoutSwapchain;
-    uint32_t cogReadoutImageCount;
-    XrSwapchainImageOpenGLESKHR* cogReadoutImages;
-    int cogReadoutReady;
-    int cogReadoutDrawn[READOUT_VALUES];
-    // Display tab marks, one strip for all rows, redrawn by Java when one changes.
-    XrSwapchain cogMarksSwapchain;
-    uint32_t cogMarksImageCount;
-    XrSwapchainImageOpenGLESKHR* cogMarksImages;
-    int cogMarksReady;
-    // The clock line over the panel
-    XrSwapchain cogClockSwapchain;
-    uint32_t cogClockImageCount;
-    XrSwapchainImageOpenGLESKHR* cogClockImages;
-    int cogClockReady;
-    // Click sound setting (also on the Display tab), and a click for Java to play.
-    int clickSoundOn;
-    int clickPending;
-    // From the last frame, for the Display tab marks.
-    int headLockedPref;
-    // Row under the ray; on the Display tab, the cell; on a track, the step button (-1/1) or 0.
-    int cogHoverSlider;
-    int cogHoverCell;
-    int cogHoverStep;
-    // Frozen at open: the distance slider moves the
-    // screen and would pull the thumb from under the ray.
-    XrPosef cogPose;
-    float cogW, cogH;
-    // Keyboard: one swapchain, sheets cached per state like the settings
-    // panel. A sheet is redrawn only when its lit modifiers change.
-    XrSwapchain kbPanelSwapchain;
-    uint32_t kbPanelImageCount;
-    XrSwapchainImageOpenGLESKHR* kbPanelImages;
-    unsigned char* kbPanelPixels[KB_STATE_COUNT];
-    int kbPanelReady[KB_STATE_COUNT];
-    // -1 for none.
-    int kbStateShown;
-    int kbButtonReady;
-    int kbOpen;
-    int kbButtonHot;
-    int kbState;
-    // Lit modifiers (KB_MOD_ bits), held down by Java while lit.
-    int kbMods;
-    // -1 for none.
-    int kbHoverKey;
-    int kbKeyDown;
-    // Layout from Java: four panel fractions per key (left,
-    // top, right, bottom) and a code per key per state.
-    int kbKeyCount;
-    float kbKeyRects[KB_MAX_KEYS * 4];
-    int kbCodes[KB_STATE_COUNT][KB_MAX_KEYS];
-    // Frozen at open, as the screen can move while it is up.
-    XrPosef kbPose;
-    float kbW, kbH;
-
-    // Every bar button face, a cell each in one texture (BTN_CELL_ in
-    // xr_layout.h), with a CPU copy so a new face uploads with the rest.
-    XrSwapchain buttonSwapchain;
-    uint32_t buttonImageCount;
-    XrSwapchainImageOpenGLESKHR* buttonImages;
-    unsigned char* buttonAtlas;
-
-    // Ready only in a stereo session.
-    int stereoButtonReady;
-    int stereoButtonHot;
-
-    int rayButtonReady;
-    int rayButtonHot;
-
-    // Shown only while head aim can act.
-    int aimButtonReady;
-    int aimButtonHot;
-
-    int padButtonReady;
-    int padButtonHot;
-
-    // Exit button and prompt: a cached sheet per hovered button, shown in one swapchain.
-    XrSwapchain exitPromptSwapchain;
-    uint32_t exitPromptImageCount;
-    XrSwapchainImageOpenGLESKHR* exitPromptImages;
-    unsigned char* exitPromptPixels[EXIT_ART_COUNT];
-    int exitPromptReady[EXIT_ART_COUNT];
-    // -1 for none.
-    int exitArtShown;
-    int exitButtonReady;
-    int exitConfirmOpen;
-    int exitButtonHot;
-    // Also the sheet shown.
-    int exitHoverZone;
-    // Frozen at open so the buttons do not move under the ray.
-    XrPosef exitPose;
-    float exitW, exitH;
-
-    // Report sheet, redrawn by Java on change and hidden until
-    // drawn for this opening. The keyboard below types into it.
-    XrSwapchain reportSwapchain;
-    uint32_t reportImageCount;
-    XrSwapchainImageOpenGLESKHR* reportImages;
-    int reportReady;
-    int reportOpen;
-    int reportHoverZone;
-    int reportSendReady;
-    int cogReportHot;
-    XrPosef reportPose;
-    float reportW, reportH;
-    int cogKofiHot;
-    int kofiOpen;
-    XrSwapchain kofiSwapchain;
-    uint32_t kofiImageCount;
-    XrSwapchainImageOpenGLESKHR* kofiImages;
-    int kofiReady;
-    int kofiHoverZone;
-    XrPosef kofiPose;
-    float kofiW, kofiH;
 
     // Curvature from the panel, -1 while the preference owns it. The
     // preference is kept too, for use outside the JNI entry points.
     float panelCurve;
     float prefCurvature;
-    // Separation from the panel (-1 while the preference owns it), and
-    // the value in force this frame, which the 3D tab's thumb shows.
+    // Separation override (-1 while the preference owns it), and the value in force
     float panelSeparation;
     float separationCurrent;
-    // The model's default separation and convergence (the 3D
-    // tab's reset), and the preset separations in preference
-    // units and cell order. Set by Java before the first frame.
+    // The model's default separation and convergence, set by Java before the first frame
     float defaultSeparation;
     float defaultConvergence;
-    int presetUnits[COG_PRESET_CELLS];
 
     long statFrames;
     int64_t statTotalNs;
@@ -1677,11 +1429,8 @@ XrPosef furniturePose(XrCtx* ctx);
 float furnitureWidth(XrCtx* ctx);
 float furnitureHeight(XrCtx* ctx);
 BarFrame barFrame(XrCtx* ctx);
-int barButtonHit(XrCtx* ctx, int slot, float u, float v, const BarFrame* frame);
 float cornerSide(XrCtx* ctx);
 float effectiveCurvature(XrCtx* ctx);
-int cogFace(XrCtx* ctx);
-int cogArt(XrCtx* ctx);
 float screenPitch(XrCtx* ctx);
 XrQuaternionf screenOrient(float yaw, float pitch, float roll);
 // The local player's panels (xr_uipanels.c)
@@ -1698,39 +1447,8 @@ void relightStep(XrCtx* ctx, int64_t nowNs);
 int relightLayerReady(XrCtx* ctx);
 void relightDestroy(XrCtx* ctx);
 float screenRoll(XrCtx* ctx);
-XrPosef pickerPose(XrCtx* ctx, float* outWidth, float* outHeight);
-XrPosef cogPanelPose(XrCtx* ctx, float* outWidth, float* outHeight);
-XrPosef kbPanelPose(XrCtx* ctx, float* outWidth, float* outHeight);
-int kbKeyAt(XrCtx* ctx, float u, float v);
-int headAimCanAct(XrCtx* ctx);
-void setHeadAimOn(XrCtx* ctx, int on, const char* from);
-void setPadMode(XrCtx* ctx, int on, const char* from);
-const char* padShortcutName(int shortcut);
 void setStereoLive(XrCtx* ctx, int on, const char* from);
 void setRayOn(XrCtx* ctx, int on, const char* from);
-int panelUp(XrCtx* ctx);
-XrPosef exitPromptPose(XrCtx* ctx, float* outWidth, float* outHeight);
-int exitPromptZone(float u, float v);
-XrPosef reportSheetPose(XrCtx* ctx, float* outWidth, float* outHeight);
-XrPosef handHintPose(XrCtx* ctx, float* outWidth, float* outHeight);
-XrPosef kofiSheetPose(XrCtx* ctx, float* outWidth, float* outHeight);
-int cogTabRowCount(int face);
-int cogRowIsTrack(int face, int row);
-int cogRowLive(XrCtx* ctx, int face, int row);
-float cogSliderValue(XrCtx* ctx, int face, int slider);
-void cogApplySlider(XrCtx* ctx, int face, int slider, float pu);
-int cogOptionCells(int option);
-int cogOptionValue(XrCtx* ctx, int option, int headLocked);
-int cogApplyOption(XrCtx* ctx, int option, int cell);
-int cogRowCells(int face, int row);
-int cogRoomCellValue(XrCtx* ctx, int row);
-void cogApplyRoomCell(XrCtx* ctx, int row, int cell, float* out);
-int cogCellInForce(XrCtx* ctx, int face, int row);
-void cogApplyCell(XrCtx* ctx, int face, int row, int cell, float* out);
-void cogDragEnded(XrCtx* ctx, float* out);
-void cogStepTrack(XrCtx* ctx, int face, int row, int dir, float* out);
-int cogCellAt(float pu, int cells);
-void cogReadouts(XrCtx* ctx, int* values);
 void pictureSet(XrCtx* ctx, int row, int units);
 void pictureReset(XrCtx* ctx);
 
@@ -1743,10 +1461,6 @@ void destroyArtSwapchain(XrCtx* ctx, XrSwapchain* chain, XrSwapchainImageOpenGLE
 int uploadFlipped(XrCtx* ctx, XrSwapchain chain, XrSwapchainImageOpenGLESKHR* images,
                   const unsigned char* px, int width, int height);
 int createPointerSwapchain(XrCtx* ctx);
-void freeArtSheets(XrCtx* ctx);
-int showCogArt(XrCtx* ctx, int art);
-int showKbSheet(XrCtx* ctx, int state);
-int showExitSheet(XrCtx* ctx, int zone);
 int uploadPointerArt(XrCtx* ctx);
 int roomStyleForCell(int cell);
 int roomCellForStyle(int style);

@@ -11,7 +11,7 @@ OUT := build
 TESTS := $(OUT)/test_math $(OUT)/test_depthmap $(OUT)/test_atlas $(OUT)/test_roommesh \
          $(OUT)/test_layout $(OUT)/test_rate $(OUT)/test_gate \
          $(OUT)/test_pinch $(OUT)/test_notice $(OUT)/test_glow $(OUT)/test_grade \
-         $(OUT)/test_keys $(OUT)/test_controller $(OUT)/test_headaim $(OUT)/test_gamepad \
+         $(OUT)/test_controller \
          $(OUT)/test_videocolour $(OUT)/test_palm $(OUT)/test_relight
 
 .PHONY: test clean
@@ -80,27 +80,11 @@ $(OUT)/test_videocolour: test_videocolour.c check.h $(SRC)/xr_videocolour.c $(SR
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_videocolour.c $(SRC)/xr_videocolour.c $(SRC)/xr_shaders.c -lm
 
-# Keyboard sheets and held modifiers.
-$(OUT)/test_keys: test_keys.c check.h $(SRC)/xr_keys.c $(SRC)/xr_keys.h $(SRC)/xr_shared.h
-	@mkdir -p $(OUT)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_keys.c $(SRC)/xr_keys.c -lm
-
 # Ray and controller model visibility and placement.
 $(OUT)/test_controller: test_controller.c check.h $(SRC)/xr_controller.c $(SRC)/xr_controller.h \
                         $(SRC)/xr_math.c $(SRC)/xr_math.h $(SRC)/xr_gate.h
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_controller.c $(SRC)/xr_controller.c $(SRC)/xr_math.c -lm
-
-# Head-aim and controller pointer mouse movement.
-$(OUT)/test_headaim: test_headaim.c check.h $(SRC)/xr_headaim.c $(SRC)/xr_headaim.h $(SRC)/xr_shared.h \
-                     $(SRC)/xr_math.c $(SRC)/xr_math.h
-	@mkdir -p $(OUT)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_headaim.c $(SRC)/xr_headaim.c $(SRC)/xr_math.c -lm
-
-# Controllers as a gamepad: mapping, dead zones, and pad/pointer switching.
-$(OUT)/test_gamepad: test_gamepad.c check.h $(SRC)/xr_gamepad.c $(SRC)/xr_gamepad.h $(SRC)/xr_shared.h
-	@mkdir -p $(OUT)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_gamepad.c $(SRC)/xr_gamepad.c -lm
 
 clean:
 	rm -rf $(OUT)

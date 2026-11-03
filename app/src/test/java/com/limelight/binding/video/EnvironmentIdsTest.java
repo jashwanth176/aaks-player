@@ -94,7 +94,7 @@ public class EnvironmentIdsTest {
         assertEquals(-1, EnvironmentIds.cellForId(99));
         assertEquals(-1, EnvironmentIds.idForCell(-1));
         assertEquals(-1, EnvironmentIds.idForCell(ENV_CELL_COUNT));
-        assertEquals(-1, EnvironmentIds.idForCell(PICKER_CELLS));
+        assertEquals(-1, EnvironmentIds.idForCell(ENV_CELL_COUNT));
     }
 
     @Test
@@ -128,13 +128,4 @@ public class EnvironmentIdsTest {
         assertFalse(PreferenceConfiguration.isRoomEnvironment(PreferenceConfiguration.VR_ENV_HOME_THEATER));
     }
 
-    @Test
-    public void theGridFitsItsCells() {
-        // One row of two square cells, no blank tile.
-        assertEquals(1, PICKER_ROWS);
-        assertEquals(2, PICKER_COLS);
-        assertEquals(PICKER_CELL_PX * PICKER_COLS, PICKER_TEX_W);
-        assertEquals(PICKER_HEADER_PX + PICKER_CELL_PX, PICKER_TEX_H);
-        assertEquals(PICKER_CELLS, ENV_CELL_COUNT);
-    }
 }
