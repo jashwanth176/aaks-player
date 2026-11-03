@@ -517,17 +517,18 @@ static int onHandActions(XrCtx* ctx, int h) {
     return h < HAND_COUNT && ctx->profileKind[h] == PROFILE_HANDS;
 }
 
-// Inputs as the pointer sees them, after the gamepad chord filter may hold one
-// back or replay it as a tap. A stick reads centred while its click is held
-// back. Hands give pinch and grasp in place of trigger and grip.
+// Inputs as the pointer sees them. Hands pinch in place of the trigger and never
+// grip: a relaxed hand reads as half a grasp, which would grab what it points at.
 static float seenTrigger(XrCtx* ctx, int h) {
     XrAction action = onHandActions(ctx, h) ? ctx->handPinchAction : ctx->triggerAction;
     return actionFloat(ctx, action, h);
 }
 
 static float seenGrip(XrCtx* ctx, int h) {
-    XrAction action = onHandActions(ctx, h) ? ctx->handGraspAction : ctx->grabAction;
-    return actionFloat(ctx, action, h);
+    if (onHandActions(ctx, h)) {
+        return 0.0f;
+    }
+    return actionFloat(ctx, ctx->grabAction, h);
 }
 
 static XrVector2f seenStick(XrCtx* ctx, int h) {
@@ -967,6 +968,7 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
         int stillThere = valid[ctx->grabHand]
                 || (ctx->grabByGaze && pinchTracked(ctx, ctx->grabHand));
         if (!stillHeld || !stillThere) {
+            LOGI("grab ended: %s", stillHeld ? "the hand was lost" : "let go");
             ctx->grabMode = GRAB_NONE;
             ctx->grabByGaze = 0;
             ctx->poseDirty = 1;
@@ -1039,6 +1041,8 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
         if (hover == HOVER_BAR || gripPicture) {
             ctx->grabMode = GRAB_MOVE;
             ctx->grabReel = 1.0f;
+            LOGI("move grab by %s %d, %s", ctx->grabByTrigger ? "trigger or pinch" : "grip", mover,
+                 hover == HOVER_BAR ? "on the bar" : "on the picture");
             if (ctx->playerMode) {
                 ctx->grabHandDist = distFromHead(ctx, aims[mover].position);
                 ctx->grabScreenDist = distFromHead(ctx, ctx->screenPose.position);
@@ -1071,6 +1075,7 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
         ctx->grabRoomPercent = roomStyle > 0 ? roomScreenPercent(ctx, roomStyle) : 0;
         ctx->grabRoomReach = ctx->grabByGaze ? 1.0f : diagonalReach(ctx, u, v);
         ctx->grabMode = GRAB_RESIZE;
+        LOGI("resize grab by %s %d", ctx->grabByTrigger ? "trigger or pinch" : "grip", mover);
         return;
     }
 
