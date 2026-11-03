@@ -9,18 +9,13 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
-/** The two depth models and the route each headset generation takes. */
+/** The depth model and the route each headset generation takes. */
 public class DepthModelSpecTest {
 
     @Test
-    public void eachValuePicksItsModel() {
+    public void everyValueIsZipDepth() {
         assertSame(MidasDepthSource.ZIPDEPTH, MidasDepthSource.specFor("zipdepth"));
-        assertSame(MidasDepthSource.MIDAS, MidasDepthSource.specFor("model"));
-    }
-
-    // Test patterns use the default model's size.
-    @Test
-    public void anythingElseIsZipDepth() {
+        assertSame(MidasDepthSource.ZIPDEPTH, MidasDepthSource.specFor("model"));
         assertSame(MidasDepthSource.ZIPDEPTH, MidasDepthSource.specFor("off"));
         assertSame(MidasDepthSource.ZIPDEPTH, MidasDepthSource.specFor("blob"));
         assertSame(MidasDepthSource.ZIPDEPTH, MidasDepthSource.specFor(""));
@@ -29,22 +24,9 @@ public class DepthModelSpecTest {
 
     // Separation in tenths of a percent, convergence in percent.
     @Test
-    public void eachModelCarriesItsOwnPair() {
+    public void theModelCarriesItsPair() {
         assertEquals(6, MidasDepthSource.ZIPDEPTH.defaultSeparation);
         assertEquals(50, MidasDepthSource.ZIPDEPTH.defaultConvergence);
-        assertEquals(5, MidasDepthSource.MIDAS.defaultSeparation);
-        assertEquals(50, MidasDepthSource.MIDAS.defaultConvergence);
-    }
-
-    // Defaults must lie on the panel tracks so reset and ticks can show them.
-    @Test
-    public void bothPairsSitOnTheTracks() {
-        for (MidasDepthSource.Spec spec : new MidasDepthSource.Spec[] {
-                MidasDepthSource.ZIPDEPTH, MidasDepthSource.MIDAS }) {
-            assertTrue(spec.defaultSeparation >= 0
-                    && spec.defaultSeparation <= XrShared.COG_SEP_STEPS);
-            assertTrue(spec.defaultConvergence >= 0 && spec.defaultConvergence <= 100);
-        }
     }
 
     @Test
@@ -73,8 +55,6 @@ public class DepthModelSpecTest {
     public void onlyTheGen1CpuRouteTakesItsOwnDelegate() {
         assertTrue(MidasDepthSource.usesCpuDelegate(MidasDepthSource.ZIPDEPTH.route(true)));
         assertFalse(MidasDepthSource.usesCpuDelegate(MidasDepthSource.ZIPDEPTH.route(false)));
-        assertFalse(MidasDepthSource.usesCpuDelegate(MidasDepthSource.MIDAS.route(false)));
-        assertFalse(MidasDepthSource.usesCpuDelegate(MidasDepthSource.MIDAS.route(true)));
     }
 
     @Test
@@ -89,21 +69,12 @@ public class DepthModelSpecTest {
     public void eachRouteFallsBackToItsOwnThreadCount() {
         assertEquals(1, MidasDepthSource.fallbackThreads(MidasDepthSource.ZIPDEPTH.route(true)));
         assertEquals(2, MidasDepthSource.fallbackThreads(MidasDepthSource.ZIPDEPTH.route(false)));
-        assertEquals(2, MidasDepthSource.fallbackThreads(MidasDepthSource.MIDAS.route(false)));
     }
 
     @Test
     public void theThreadCountReadsRight() {
         assertEquals("1 thread", MidasDepthSource.threadCount(1));
         assertEquals("2 threads", MidasDepthSource.threadCount(2));
-    }
-
-    @Test
-    public void midasIs256OnTheGpu() {
-        MidasDepthSource.Route route = MidasDepthSource.MIDAS.route(false);
-        assertEquals("midas_v21_small_256_fp16.tflite", route.asset);
-        assertEquals(DepthSize.square(256), route.size);
-        assertTrue(route.gpu);
     }
 
     // 16:9, both sides multiples of 32, same pixel count as 384x384.
@@ -120,16 +91,13 @@ public class DepthModelSpecTest {
     public void theSessionSizeFollowsModelAndHeadset() {
         assertEquals(new DepthSize(512, 288), MidasDepthSource.sessionSize("zipdepth", false));
         assertEquals(DepthSize.square(256), MidasDepthSource.sessionSize("zipdepth", true));
-        assertEquals(DepthSize.square(256), MidasDepthSource.sessionSize("model", false));
         assertEquals(new DepthSize(512, 288), MidasDepthSource.sessionSize("flat", false));
     }
 
     @Test
-    public void aGen1HeadsetOnlyOffersZipDepth() {
-        assertEquals(Arrays.asList(MidasDepthSource.ZIPDEPTH),
-                MidasDepthSource.offeredSpecs(true));
-        assertEquals(Arrays.asList(MidasDepthSource.ZIPDEPTH, MidasDepthSource.MIDAS),
-                MidasDepthSource.offeredSpecs(false));
+    public void everyHeadsetOffersZipDepth() {
+        assertEquals(Arrays.asList(MidasDepthSource.ZIPDEPTH), MidasDepthSource.offeredSpecs(true));
+        assertEquals(Arrays.asList(MidasDepthSource.ZIPDEPTH), MidasDepthSource.offeredSpecs(false));
     }
 
     // Keys the kernel cache, so a changed asset never loads stale kernels.

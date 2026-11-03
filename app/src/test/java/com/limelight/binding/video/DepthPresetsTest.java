@@ -9,7 +9,8 @@ import static org.junit.Assert.assertEquals;
 public class DepthPresetsTest {
 
     private static final int ZIPDEPTH = MidasDepthSource.ZIPDEPTH.defaultSeparation;
-    private static final int MIDAS = MidasDepthSource.MIDAS.defaultSeparation;
+    // A model whose default separation is 5
+    private static final int MIDAS = 5;
 
     @Test
     public void balancedIsTheModelsOwn() {

@@ -102,13 +102,6 @@ public class MidasDepthSource implements DepthSource {
             // XR2 Gen 1 GPUs reject this graph, so Gen 1 runs an int8 dynamic range copy on the CPU
             new Route("zipdepth_256_int8dr.tflite", DepthSize.square(256), false, CPU_THREADS));
 
-    // Same route on both generations, though Gen 1 is never offered it
-    public static final Spec MIDAS = new Spec(PreferenceConfiguration.VR_DEPTH_SOURCE_MIDAS,
-            "MiDaS", PreferenceConfiguration.DEFAULT_VR_SEPARATION,
-            PreferenceConfiguration.DEFAULT_VR_CONVERGENCE,
-            new Route("midas_v21_small_256_fp16.tflite", DepthSize.square(256), true, CPU_THREADS),
-            new Route("midas_v21_small_256_fp16.tflite", DepthSize.square(256), true, CPU_THREADS));
-
     // GPU kernel cache under the app's cache dir: the first compile takes seconds,
     // reading back a fraction of that
     private static final String KERNEL_CACHE_DIR = "depth-kernels";
@@ -142,18 +135,14 @@ public class MidasDepthSource implements DepthSource {
         this.route = route;
     }
 
-    /** The model a list_vr_depth_source value names: MiDaS, else ZipDepth. */
+    /** The depth model; ZipDepth is the only one. */
     public static Spec specFor(String value) {
-        return MIDAS.key.equals(value) ? MIDAS : ZIPDEPTH;
+        return ZIPDEPTH;
     }
 
     public static List<Spec> offeredSpecs(boolean gen1) {
         List<Spec> offered = new ArrayList<>();
-        for (Spec spec : new Spec[] { ZIPDEPTH, MIDAS }) {
-            if (PreferenceConfiguration.isDepthSourceOffered(spec.key, gen1)) {
-                offered.add(spec);
-            }
-        }
+        offered.add(ZIPDEPTH);
         return offered;
     }
 
