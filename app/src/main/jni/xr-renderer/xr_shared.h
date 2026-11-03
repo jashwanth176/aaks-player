@@ -112,6 +112,9 @@
 #define UI_ANCHOR_LEFT 1
 #define UI_ANCHOR_BELOW 2
 #define UI_ANCHOR_FRONT 3
+// Inside the picture, its bottom edge lifted from the picture's by gap (a share of the
+// screen width); sized by angle like a fixed panel but never wider than the picture
+#define UI_ANCHOR_BOTTOM 4
 // Largest panel texture side
 #define UI_PANEL_TEX_MAX 2048
 // Library window with no video: height/width before the page arrives, and first-run

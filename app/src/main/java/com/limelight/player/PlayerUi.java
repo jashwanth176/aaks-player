@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static com.limelight.binding.video.XrShared.UI_ANCHOR_ABOVE;
 import static com.limelight.binding.video.XrShared.UI_ANCHOR_BELOW;
+import static com.limelight.binding.video.XrShared.UI_ANCHOR_BOTTOM;
 import static com.limelight.binding.video.XrShared.UI_ANCHOR_FRONT;
 import static com.limelight.binding.video.XrShared.UI_ANCHOR_LEFT;
 import static com.limelight.binding.video.XrShared.UI_PANEL_CONTROLS;
@@ -178,12 +179,13 @@ final class PlayerUi implements XrRenderer.UiListener {
     private static final float BACK_X = -(0.07f + 0.012f + BACK_FRAC / 2.0f);
     // How far panels float toward the viewer, as a share of the distance to the screen
     private static final float CHROME_DEPTH = 0.06f, SHEET_DEPTH = 0.1f, DIALOG_DEPTH = 0.16f;
-    // Subtitles belong to the picture, so they scale with it: width and gaps as fractions of
-    // the screen width. They sit above the bottom edge, raised further while the controls show.
-    private static final float SUBS_FRAC = 0.8f;
-    private static final float SUBS_HEIGHT_FRAC = SUBS_FRAC * SUBS_H / SUBS_W;
-    private static final float SUBS_GAP_LOW = -(SUBS_HEIGHT_FRAC + 0.025f);
-    private static final float SUBS_GAP_RAISED = SUBS_GAP_LOW - 0.095f;
+    // Subtitles keep one angular size whatever the screen's, like the menus, so Small is
+    // small on a big screen too. They sit above the picture's bottom edge, lifted as a share
+    // of the screen width, further while the controls show.
+    private static final float SUBS_LIFT = 0.025f;
+    private static final float SUBS_LIFT_RAISED = SUBS_LIFT + 0.095f;
+    // A disc's bitmap subtitles keep their authored share of a nominal 2250 px wide picture
+    private static final float SUBS_NOMINAL_W = 2250.0f;
 
     private final Context context;
     private final XrRenderer renderer;
@@ -325,9 +327,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         panels[UI_PANEL_CONTROLS] = new Panel(UI_PANEL_CONTROLS, buildControls(), CTRL_W, CTRL_H,
                 UI_ANCHOR_BELOW, CTRL_GAP);
         panels[UI_PANEL_SUBS] = new Panel(UI_PANEL_SUBS, buildSubtitles(), SUBS_W, SUBS_H,
-                UI_ANCHOR_BELOW, SUBS_GAP_LOW);
-        panels[UI_PANEL_SUBS].fixed = false;
-        panels[UI_PANEL_SUBS].widthFrac = SUBS_FRAC;
+                UI_ANCHOR_BOTTOM, SUBS_LIFT);
         panels[UI_PANEL_LOADING] = new Panel(UI_PANEL_LOADING, buildLoading(), LOADING_SIZE,
                 LOADING_SIZE, UI_ANCHOR_FRONT, 4);
         panels[UI_PANEL_BACK] = new Panel(UI_PANEL_BACK, buildBack(), BACK_PX, BACK_PX,
@@ -608,9 +608,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         subsImage.setImageBitmap(hasText ? null : image);
         subsImage.setVisibility(!hasText && image != null ? View.VISIBLE : View.GONE);
         if (!hasText && image != null) {
-            // Keep the bitmap's authored width relative to the video (the strip is SUBS_FRAC
-            // of the screen), scaled by the size setting
-            float share = lastSubShare > 0.0f ? lastSubShare * SUBS_W / SUBS_FRAC : SUBS_W;
+            float share = lastSubShare > 0.0f ? lastSubShare * SUBS_NOMINAL_W : SUBS_W;
             int width = Math.min(SUBS_W, Math.round(share * subStyle.scale()));
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) subsImage.getLayoutParams();
             lp.width = width;
@@ -933,7 +931,7 @@ final class PlayerUi implements XrRenderer.UiListener {
                     break;
                 case UI_PANEL_SUBS:
                     visible = subsVisible;
-                    p.gap = (show ? SUBS_GAP_RAISED : SUBS_GAP_LOW) - subStyle.lift();
+                    p.gap = (show ? SUBS_LIFT_RAISED : SUBS_LIFT) + subStyle.lift();
                     break;
                 case UI_PANEL_DIALOG:
                     visible = exitAsking || (sheet == SHEET_LIBRARY && library.confirming());
@@ -1493,7 +1491,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         LinearLayout box = sheetFrame("Settings");
         Pages pages = new Pages(box);
 
-        TextView stereoLabel = label("3D");
+        View stereoLabel = label(com.limelight.R.drawable.player_ic_stereo, "3D");
         pages.first.addView(stereoLabel);
         LinearLayout stereo = segmentRow();
         addOption(stereo, "auto", "Auto");
@@ -1502,7 +1500,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         addOption(stereo, "ou", "Over under");
         pages.first.addView(stereo);
 
-        pages.first.addView(label("2D films in 3D"));
+        pages.first.addView(label(com.limelight.R.drawable.player_ic_convert, "2D films in 3D"));
         LinearLayout convert = segmentRow();
         convertOff = UiKit.segment(context, "Off", v -> actions.onConvert2d(false));
         convertOn = UiKit.segment(context, "On", v -> actions.onConvert2d(true));
@@ -1510,7 +1508,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         convert.addView(convertOn, segmentParams());
         pages.first.addView(convert);
 
-        TextView depthLabel = label("Depth");
+        View depthLabel = label(com.limelight.R.drawable.player_ic_layers, "Depth");
         pages.first.addView(depthLabel);
         LinearLayout depthRow = segmentRow();
         addDepth(depthRow, PlayerXR.DEPTH_POP, "Pop out");
@@ -1520,7 +1518,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         filmRows = new View[] { stereoLabel, stereo, depthLabel, depthRow };
 
         // Natural: as graded. Vivid: expanded toward the display's full gamut.
-        pages.second.addView(label("Colours"));
+        pages.second.addView(label(com.limelight.R.drawable.player_ic_palette, "Colours"));
         LinearLayout colours = segmentRow();
         colourNatural = UiKit.segment(context, "Natural", v -> {
             actions.onColourMode(XrShared.COLOUR_MODE_NATURAL);
@@ -1536,7 +1534,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         colours.addView(colourVivid, segmentParams());
         pages.second.addView(colours);
 
-        pages.second.addView(label("Environment"));
+        pages.second.addView(label(com.limelight.R.drawable.player_ic_passthrough, "Environment"));
         LinearLayout env = segmentRow();
         passthroughOn = UiKit.segment(context, "Passthrough", v -> {
             if (!actions.isPassthroughOn()) {
@@ -1553,7 +1551,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         pages.second.addView(env);
 
         // Hand tracking: hide the pointer when the hand is idle, show it again on an open palm
-        pages.second.addView(label("Hand pointer"));
+        pages.second.addView(label(com.limelight.R.drawable.player_ic_hand, "Hand pointer"));
         LinearLayout hand = segmentRow();
         handHide = UiKit.segment(context, "Hide when idle", v -> {
             actions.onHandAutoHide(true);
@@ -1588,10 +1586,28 @@ final class PlayerUi implements XrRenderer.UiListener {
         row.addView(option, segmentParams());
     }
 
-    private TextView label(String name) {
+    // Group heading: a small icon and the name
+    private View label(int icon, String name) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, 22, 0, 12);
+        row.addView(icon(icon), new LinearLayout.LayoutParams(ICON_SMALL, ICON_SMALL));
         TextView label = UiKit.text(context, name, 32, false, TEXT_SOFT);
-        label.setPadding(4, 26, 0, 12);
-        return label;
+        label.setPadding(16, 0, 0, 0);
+        row.addView(label);
+        return row;
+    }
+
+    private static final int ICON_SMALL = 56;
+
+    private ImageView icon(int res) {
+        ImageView image = new ImageView(context);
+        image.setImageResource(res);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        image.setPadding(10, 10, 10, 10);
+        image.setBackground(UiKit.circle(UiKit.BUTTON));
+        return image;
     }
 
     private LinearLayout segmentRow() {
@@ -1647,14 +1663,14 @@ final class PlayerUi implements XrRenderer.UiListener {
 
         subStyleRows.clear();
         Pages pages = new Pages(box);
-        pages.first.addView(styleRow("Size", SubtitleStyle.SIZE_NAMES, i -> subStyle.size = i));
-        pages.first.addView(styleRow("Colour", SubtitleStyle.COLOUR_NAMES, i -> subStyle.colour = i));
-        pages.first.addView(styleRow("Background", SubtitleStyle.BACKGROUND_NAMES, i -> subStyle.background = i));
-        pages.first.addView(styleRow("Edge", SubtitleStyle.EDGE_NAMES, i -> subStyle.edge = i));
+        pages.first.addView(styleRow(com.limelight.R.drawable.player_ic_text_size, "Size", SubtitleStyle.SIZE_NAMES, i -> subStyle.size = i));
+        pages.first.addView(styleRow(com.limelight.R.drawable.player_ic_text_colour, "Colour", SubtitleStyle.COLOUR_NAMES, i -> subStyle.colour = i));
+        pages.first.addView(styleRow(com.limelight.R.drawable.player_ic_fill, "Background", SubtitleStyle.BACKGROUND_NAMES, i -> subStyle.background = i));
+        pages.first.addView(styleRow(com.limelight.R.drawable.player_ic_edge, "Edge", SubtitleStyle.EDGE_NAMES, i -> subStyle.edge = i));
         // Row order must match refreshSubStyleSelection
-        pages.second.addView(styleRow("Height", SubtitleStyle.HEIGHT_NAMES, i -> subStyle.height = i));
-        pages.second.addView(styleRow("Depth", SubtitleStyle.DEPTH_NAMES, i -> subStyle.depth = i));
-        pages.second.addView(styleRow("File styling", new String[] { "On", "Off" }, i -> subStyle.fileStyling = i == 0));
+        pages.second.addView(styleRow(com.limelight.R.drawable.player_ic_height, "Height", SubtitleStyle.HEIGHT_NAMES, i -> subStyle.height = i));
+        pages.second.addView(styleRow(com.limelight.R.drawable.player_ic_layers, "Depth", SubtitleStyle.DEPTH_NAMES, i -> subStyle.depth = i));
+        pages.second.addView(styleRow(com.limelight.R.drawable.player_ic_file, "File styling", new String[] { "On", "Off" }, i -> subStyle.fileStyling = i == 0));
         pages.second.addView(syncRow());
         pages.finish();
         return UiKit.wrap(context, box);
@@ -1664,13 +1680,15 @@ final class PlayerUi implements XrRenderer.UiListener {
         void set(int index);
     }
 
-    // Label plus a row of mutually exclusive options
-    private LinearLayout styleRow(String name, String[] options, Pick pick) {
+    // Icon and label plus a row of mutually exclusive options
+    private LinearLayout styleRow(int icon, String name, String[] options, Pick pick) {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(icon(icon), new LinearLayout.LayoutParams(ICON_SMALL, ICON_SMALL));
         TextView label = UiKit.text(context, name, 30, false, TEXT_SOFT);
-        row.addView(label, new LinearLayout.LayoutParams(230, ViewGroup.LayoutParams.WRAP_CONTENT));
+        label.setPadding(16, 0, 0, 0);
+        row.addView(label, new LinearLayout.LayoutParams(STYLE_LABEL_W - ICON_SMALL, ViewGroup.LayoutParams.WRAP_CONTENT));
         TextView[] views = new TextView[options.length];
         for (int i = 0; i < options.length; i++) {
             final int index = i;
@@ -1689,13 +1707,17 @@ final class PlayerUi implements XrRenderer.UiListener {
         return row;
     }
 
+    private static final int STYLE_LABEL_W = 230;
+
     // Per-file subtitle delay: step buttons and reset, clamped to +/-60 s
     private LinearLayout syncRow() {
         LinearLayout row = new LinearLayout(context);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(icon(com.limelight.R.drawable.player_ic_clock), new LinearLayout.LayoutParams(ICON_SMALL, ICON_SMALL));
         syncLabel = UiKit.text(context, "", 30, false, TEXT_SOFT);
-        row.addView(syncLabel, new LinearLayout.LayoutParams(230, ViewGroup.LayoutParams.WRAP_CONTENT));
+        syncLabel.setPadding(16, 0, 0, 0);
+        row.addView(syncLabel, new LinearLayout.LayoutParams(STYLE_LABEL_W - ICON_SMALL, ViewGroup.LayoutParams.WRAP_CONTENT));
         String[] names = { "\u2212 1 s", "\u2212 0.1 s", "Reset", "+ 0.1 s", "+ 1 s" };
         long[] steps = { -1000, -100, 0, 100, 1000 };
         for (int i = 0; i < names.length; i++) {

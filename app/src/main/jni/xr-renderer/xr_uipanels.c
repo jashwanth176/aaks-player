@@ -25,7 +25,12 @@ XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
     float screenW = ctx->screenWidth;
     float screenH = screenW * screenAspect(ctx);
     float w, gap, xOff;
-    if (ctx->ui[id].fixed) {
+    if (ctx->ui[id].anchor == UI_ANCHOR_BOTTOM) {
+        w = fminf((float)ctx->ui[id].texW * uiMetresPerPx(ctx), screenW);
+        gap = ctx->ui[id].gapFrac * screenW;
+        xOff = 0.0f;
+    }
+    else if (ctx->ui[id].fixed) {
         float perPx = uiMetresPerPx(ctx);
         w = (float)ctx->ui[id].texW * perPx;
         gap = ctx->ui[id].gapFrac * perPx;
@@ -51,6 +56,9 @@ XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
             break;
         case UI_ANCHOR_BELOW:
             local.y = -(screenH * 0.5f + gap + h * 0.5f);
+            break;
+        case UI_ANCHOR_BOTTOM:
+            local.y = -(screenH * 0.5f) + gap + h * 0.5f;
             break;
         case UI_ANCHOR_FRONT:
         default:
