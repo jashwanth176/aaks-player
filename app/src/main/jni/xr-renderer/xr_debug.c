@@ -166,20 +166,9 @@ void pollCaptureRequest(XrCtx* ctx) {
     // 0 off, 1 normal, 2 quality
     propInt(PROP_SHARPEN, &ctx->sharpenMode, 2);
     propInt(PROP_SUPERSAMPLE, &ctx->supersampleMode, 2);
-    // 0 forces the glow off, 1..100 forces that intensity, unset uses the setting
-    propInt(PROP_AMBILIGHT, &ctx->ambiOverride, 100);
     propPercent(PROP_AMBI_SMOOTH, &ctx->ambiSmooth);
-    // 0 samples the whole frame including black bars; 1 or unset crops to the picture
-    propFlag(PROP_LETTERBOX, &ctx->ambiBarDetect);
     // 1 (default) normalises glow luma and rolls off dark edges; 0 uses the raw sample
     propIntEvent(PROP_GLOW_NORM, &ctx->glowNorm, 1, "glow normalisation");
-    // 0 forces no room, 1..ROOM_STYLE_LAST forces a style (1 home theater,
-    // 2 grand cinema, 3 synthwave). Only the resident room can load.
-    propInt(PROP_ROOM, &ctx->roomOverride, ROOM_STYLE_LAST);
-    // Percent, 0 for the room's own value. Scale applies to baked rooms only
-    // and rebuilds the geometry.
-    propScaled(PROP_ROOM_SCALE, &ctx->roomScaleOverride, 0.01f, 400);
-    propScaled(PROP_ROOM_DIM, &ctx->roomDimOverride, 0.01f, 200);
 
     if (ctx->captureDir[0] == '\0') {
         return;

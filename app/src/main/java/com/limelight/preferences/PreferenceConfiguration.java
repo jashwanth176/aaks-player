@@ -23,7 +23,6 @@ public class PreferenceConfiguration {
     // MiDaS is stored as "model" for compatibility.
     public static final String VR_DEPTH_SOURCE_ZIPDEPTH = "zipdepth";
     public static final String VR_DEPTH_SOURCE_MIDAS = "model";
-    public static final String VR_ENV_RES_PREF_STRING = "list_vr_env_res";
     public static final String VR_SHARPENING_PREF_STRING = "list_vr_sharpening";
     public static final String VR_SUPERSAMPLING_PREF_STRING = "list_vr_supersampling";
     private static final String VR_EYE_SWAP_PREF_STRING = "checkbox_vr_eye_swap";
@@ -50,19 +49,11 @@ public class PreferenceConfiguration {
     public static final String VR_GAMEPAD_TOGGLE_TRIGGERS_GRIPS = "triggers_grips";
     // Saved pose of a screen moved with the controllers; not a setting.
     public static final String VR_SCREEN_POSE_PREF_STRING = "vr_screen_pose";
-    // Legacy grid cell of the last environment, read only to migrate to the id below.
-    public static final String VR_ENVIRONMENT_PREF_STRING = "vr_environment";
-    // Stable environment id, independent of grid position.
+    // Passthrough or the dark void around the screen. Other saved ids were 3D rooms and read
+    // as the void.
     public static final String VR_ENVIRONMENT_ID_PREF_STRING = "vr_environment_id";
-    // List preference that reads and writes VR_ENVIRONMENT_ID_PREF_STRING; no key of its own.
-    public static final String VR_ENVIRONMENT_LIST_PREF_STRING = "list_vr_environment";
-    // Ids 2-6 and 100+ are retired (see EnvironmentIds). 4-6 were the 3D rooms and
-    // stay named so an old saved value is recognised.
     public static final int VR_ENV_PASSTHROUGH = 0;
     public static final int VR_ENV_VOID = 1;
-    public static final int VR_ENV_HOME_THEATER = 4;
-    public static final int VR_ENV_GRAND_CINEMA = 5;
-    public static final int VR_ENV_SYNTHWAVE = 6;
     // Migration markers, not settings.
     public static final String GEN1_PROFILE_PREF_STRING = "perf_profile_gen1";
     public static final String ZIPDEPTH_MOVE_PREF_STRING = "depth_source_zipdepth";
@@ -74,15 +65,6 @@ public class PreferenceConfiguration {
     static final String VR_DEPTH_RATE_PREF_STRING = "seekbar_vr_inference_cadence";
     public static final String VR_CONVERGENCE_PREF_STRING = "seekbar_vr_convergence";
     private static final String VR_DEPTH_SCALE_PREF_STRING = "seekbar_vr_depth_scale";
-    public static final String VR_AMBILIGHT_PREF_STRING = "checkbox_vr_ambilight";
-    public static final String VR_AMBILIGHT_LEVEL_PREF_STRING = "seekbar_vr_ambilight_level";
-    public static final String VR_ROOM_LIGHT_PREF_STRING = "checkbox_vr_room_light";
-    // Per-room Room tab values, keyed by environment id (room_brightness_4 is the Home
-    // Theater). Brightness and light in hundredths, screen size in percent.
-    public static final String ROOM_BRIGHTNESS_PREFIX = "room_brightness_";
-    public static final String ROOM_GLOW_PREFIX = "room_glow_";
-    public static final String ROOM_LIGHT_PREFIX = "room_light_";
-    public static final String ROOM_SCREEN_PREFIX = "room_screen_";
     // Picture grade, global, in XrShared PICTURE_ units.
     public static final String VR_PICTURE_BRIGHTNESS_PREF_STRING = "seekbar_vr_picture_brightness";
     public static final String VR_PICTURE_CONTRAST_PREF_STRING = "seekbar_vr_picture_contrast";
@@ -93,8 +75,6 @@ public class PreferenceConfiguration {
 
     // XR2 Gen 1 starting values: the depth model dominates frame cost, so its rate is lowered.
     static final int GEN1_DEPTH_RATE = XrShared.DEPTH_RATE_GEN1;
-    // Gen 1 lacks the memory and fill rate for a full-size room.
-    private static final String GEN1_ENV_RES = "low";
 
     private static final int DEFAULT_DEADZONE = 7;
 
@@ -106,8 +86,6 @@ public class PreferenceConfiguration {
     private static final int DEFAULT_VR_CURVATURE = 0;
     // ZipDepth: the only model a Gen 1 headset can run.
     static final String DEFAULT_VR_DEPTH_SOURCE = VR_DEPTH_SOURCE_ZIPDEPTH;
-    // Gen 1 headsets are seeded "low" instead, see seedGen1PerfProfile.
-    private static final String DEFAULT_VR_ENV_RES = "standard";
     private static final String DEFAULT_VR_SHARPENING = "quality";
     // Off: costs compositor GPU time.
     static final String DEFAULT_VR_SUPERSAMPLING = "off";
@@ -134,18 +112,9 @@ public class PreferenceConfiguration {
     static final int DEFAULT_VR_DEPTH_RATE = XrShared.DEPTH_RATE_DEFAULT;
     public static final int DEFAULT_VR_CONVERGENCE = 50;
     private static final int DEFAULT_VR_DEPTH_SCALE = 100;
-    public static final boolean DEFAULT_VR_AMBILIGHT = true;
-    public static final int DEFAULT_VR_AMBILIGHT_LEVEL = 50;
-    public static final boolean DEFAULT_VR_ROOM_LIGHT = true;
     // Warnings and errors.
     public static final String DEFAULT_FILE_LOG = "basic";
     static final boolean DEFAULT_VR_VIRTUAL_SURROUND = false;
-
-    // EnvResTier, as the renderer numbers them
-    public static final int VR_ENV_RES_LOW = XrShared.ENV_RES_LOW;
-    public static final int VR_ENV_RES_STANDARD = XrShared.ENV_RES_STANDARD;
-    public static final int VR_ENV_RES_HIGH = XrShared.ENV_RES_HIGH;
-    public static final int VR_ENV_RES_ULTRA = XrShared.ENV_RES_ULTRA;
 
     // Not stored: set by the player from the probed file.
     public int fps;
@@ -162,8 +131,6 @@ public class PreferenceConfiguration {
     // zipdepth or model (MiDaS). Set to the default in other modes, since test
     // patterns use its map size.
     public String vrDepthModel;
-    // One of the VR_ENV_RES_ tiers.
-    public int vrEnvResTier;
     // 0 off, 1 normal, 2 quality
     public int vrSharpening;
     // Same scale, for compositor supersampling.
@@ -193,17 +160,8 @@ public class PreferenceConfiguration {
     public int vrDepthRate;
     public int vrConvergence;
     public int vrDepthScale;
-    // Frame colours around the screen; level in percent.
-    public boolean vrAmbilight;
-    public int vrAmbilightLevel;
-    // Frame colours on the walls of a 3D environment.
-    public boolean vrRoomLight;
     // Brightness, contrast, gamma, saturation in XrShared PICTURE_ order and units.
     public int[] vrPicture;
-    // A VR_ENV_ id, or -1 if none picked. Logging only; the renderer reads the pref itself.
-    public int vrEnvironmentId;
-    // That environment's Room tab values, or null if it is not a room. Logging only.
-    public RoomLevels vrRoomLevels;
     // off, basic or verbose
     public String fileLogLevel;
     // Render 5.1/7.1 audio to binaural stereo.
@@ -338,114 +296,6 @@ public class PreferenceConfiguration {
     public static String headAimLabel(boolean on, int sensitivity, int deadZone, String join) {
         return "headAim" + join + on + " headAimSensitivity" + join + sensitivity
                 + " headAimDeadZone" + join + deadZone;
-    }
-
-    /** One room's values for the headset panel's Room tab. */
-    public static final class RoomLevels {
-        // Hundredths of the baked brightness
-        public final int brightness;
-        public final boolean glow;
-        // Hundredths
-        public final int light;
-        // Percent of the room's screen
-        public final int screen;
-
-        public RoomLevels(int brightness, boolean glow, int light, int screen) {
-            this.brightness = brightness;
-            this.glow = glow;
-            this.light = light;
-            this.screen = screen;
-        }
-
-        // For a log line; join separates key and value.
-        public String describe(String join) {
-            return "roomBrightness" + join + brightness + " roomGlow" + join + glow
-                    + " roomLight" + join + light + " roomScreen" + join + screen;
-        }
-    }
-
-    /** Whether an environment id is a baked room. No rooms ship, so always false. */
-    public static boolean isRoomEnvironment(int envId) {
-        return false;
-    }
-
-    public static String roomBrightnessKey(int envId) {
-        return ROOM_BRIGHTNESS_PREFIX + envId;
-    }
-
-    public static String roomGlowKey(int envId) {
-        return ROOM_GLOW_PREFIX + envId;
-    }
-
-    public static String roomLightKey(int envId) {
-        return ROOM_LIGHT_PREFIX + envId;
-    }
-
-    public static String roomScreenKey(int envId) {
-        return ROOM_SCREEN_PREFIX + envId;
-    }
-
-    // Defaults match the renderer's room table via the shared XrShared constants.
-    public static int defaultRoomBrightness(int envId) {
-        switch (envId) {
-            case VR_ENV_HOME_THEATER: return XrShared.ROOM_THEATER_BRIGHTNESS;
-            case VR_ENV_GRAND_CINEMA: return XrShared.ROOM_GRAND_CINEMA_BRIGHTNESS;
-            case VR_ENV_SYNTHWAVE: return XrShared.ROOM_SYNTHWAVE_BRIGHTNESS;
-            default: return 100;
-        }
-    }
-
-    public static boolean defaultRoomGlow(int envId) {
-        switch (envId) {
-            case VR_ENV_HOME_THEATER: return XrShared.ROOM_THEATER_GLOW != 0;
-            case VR_ENV_GRAND_CINEMA: return XrShared.ROOM_GRAND_CINEMA_GLOW != 0;
-            case VR_ENV_SYNTHWAVE: return XrShared.ROOM_SYNTHWAVE_GLOW != 0;
-            default: return DEFAULT_VR_AMBILIGHT;
-        }
-    }
-
-    // Same in every room
-    public static int defaultRoomLight() {
-        return XrShared.ROOM_LIGHT_DEFAULT;
-    }
-
-    public static int defaultRoomScreen(int envId) {
-        switch (envId) {
-            case VR_ENV_HOME_THEATER: return XrShared.ROOM_THEATER_SCREEN;
-            case VR_ENV_GRAND_CINEMA: return XrShared.ROOM_GRAND_CINEMA_SCREEN;
-            case VR_ENV_SYNTHWAVE: return XrShared.ROOM_SYNTHWAVE_SCREEN;
-            default: return XrShared.ROOM_SCREEN_MAX;
-        }
-    }
-
-    public static boolean roomResizable(int envId) {
-        switch (envId) {
-            case VR_ENV_HOME_THEATER: return XrShared.ROOM_THEATER_RESIZABLE != 0;
-            case VR_ENV_GRAND_CINEMA: return XrShared.ROOM_GRAND_CINEMA_RESIZABLE != 0;
-            case VR_ENV_SYNTHWAVE: return XrShared.ROOM_SYNTHWAVE_RESIZABLE != 0;
-            default: return false;
-        }
-    }
-
-    /** Screen size percent, clamped to its range; always the maximum in a non-resizable room. */
-    public static int clampRoomScreen(int envId, int percent) {
-        if (!roomResizable(envId)) {
-            return XrShared.ROOM_SCREEN_MAX;
-        }
-        return Math.max(XrShared.ROOM_SCREEN_MIN, Math.min(XrShared.ROOM_SCREEN_MAX, percent));
-    }
-
-    /** One room's stored values, clamped, with the room's defaults where unset. */
-    public static RoomLevels readRoomLevels(SharedPreferences prefs, int envId) {
-        int brightness = prefs.getInt(roomBrightnessKey(envId), defaultRoomBrightness(envId));
-        int light = prefs.getInt(roomLightKey(envId), defaultRoomLight());
-        return new RoomLevels(
-                Math.max(XrShared.ROOM_BRIGHTNESS_MIN,
-                        Math.min(XrShared.ROOM_BRIGHTNESS_MAX, brightness)),
-                prefs.getBoolean(roomGlowKey(envId), defaultRoomGlow(envId)),
-                Math.max(XrShared.ROOM_LIGHT_MIN, Math.min(XrShared.ROOM_LIGHT_MAX, light)),
-                clampRoomScreen(envId, prefs.getInt(roomScreenKey(envId),
-                        defaultRoomScreen(envId))));
     }
 
     /** The key a picture value is kept under, by its PICTURE_ row. */
@@ -588,13 +438,6 @@ public class PreferenceConfiguration {
 
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
 
-        // Seeded independently of the marker, which predates this key; an existing
-        // choice is left alone.
-        if (!prefs.contains(VR_ENV_RES_PREF_STRING)) {
-            prefs.edit().putString(VR_ENV_RES_PREF_STRING, GEN1_ENV_RES).apply();
-            FileLog.event("perf profile: XR2 Gen 1 headset, environment res " + GEN1_ENV_RES);
-        }
-
         if (prefs.contains(GEN1_PROFILE_PREF_STRING)) {
             return;
         }
@@ -652,19 +495,6 @@ public class PreferenceConfiguration {
         else {
             config.vrDepthMode = XrShared.DEPTH_MODE_OFF;
         }
-        String envRes = prefs.getString(VR_ENV_RES_PREF_STRING, DEFAULT_VR_ENV_RES);
-        if (envRes.equals("low")) {
-            config.vrEnvResTier = VR_ENV_RES_LOW;
-        }
-        else if (envRes.equals("high")) {
-            config.vrEnvResTier = VR_ENV_RES_HIGH;
-        }
-        else if (envRes.equals("ultra")) {
-            config.vrEnvResTier = VR_ENV_RES_ULTRA;
-        }
-        else {
-            config.vrEnvResTier = VR_ENV_RES_STANDARD;
-        }
         String sharpening = prefs.getString(VR_SHARPENING_PREF_STRING, DEFAULT_VR_SHARPENING);
         if (sharpening.equals("off")) {
             config.vrSharpening = 0;
@@ -694,14 +524,7 @@ public class PreferenceConfiguration {
         config.vrDepthRate = storedDepthRate(prefs, isXr2Gen1Headset());
         config.vrConvergence = storedConvergence(prefs, config.vrDepthModel);
         config.vrDepthScale = prefs.getInt(VR_DEPTH_SCALE_PREF_STRING, DEFAULT_VR_DEPTH_SCALE);
-        config.vrAmbilight = prefs.getBoolean(VR_AMBILIGHT_PREF_STRING, DEFAULT_VR_AMBILIGHT);
-        config.vrAmbilightLevel = prefs.getInt(VR_AMBILIGHT_LEVEL_PREF_STRING,
-                DEFAULT_VR_AMBILIGHT_LEVEL);
-        config.vrRoomLight = prefs.getBoolean(VR_ROOM_LIGHT_PREF_STRING, DEFAULT_VR_ROOM_LIGHT);
         config.vrPicture = readPicture(prefs);
-        config.vrEnvironmentId = prefs.getInt(VR_ENVIRONMENT_ID_PREF_STRING, -1);
-        config.vrRoomLevels = isRoomEnvironment(config.vrEnvironmentId)
-                ? readRoomLevels(prefs, config.vrEnvironmentId) : null;
         config.fileLogLevel = prefs.getString(FILE_LOG_PREF_STRING, DEFAULT_FILE_LOG);
         config.vrVirtualSurround = prefs.getBoolean(VR_VIRTUAL_SURROUND_PREF_STRING,
                 DEFAULT_VR_VIRTUAL_SURROUND);

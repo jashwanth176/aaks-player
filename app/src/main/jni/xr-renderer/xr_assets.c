@@ -310,35 +310,3 @@ Java_com_limelight_binding_video_XrRenderer_nativeUploadSplash(JNIEnv* env, jobj
                 SPLASH_TEX_H, &ctx->splashArtReady);
     LOGI("splash art %s", ctx->splashArtReady ? "ready" : "missing");
 }
-
-// Room style for a picker cell; no cell maps to a room, so always 0.
-int roomStyleForCell(int cell) {
-    (void)cell;
-    return 0;
-}
-
-// Picker cell for a room style, or -1
-int roomCellForStyle(int style) {
-    for (int cell = 0; cell < ENV_CELL_COUNT; cell++) {
-        if (style > 0 && roomStyleForCell(cell) == style) {
-            return cell;
-        }
-    }
-    return -1;
-}
-
-// Persisted picker selection
-JNIEXPORT void JNICALL
-Java_com_limelight_binding_video_XrRenderer_nativeSetEnvironment(JNIEnv* env, jobject thiz,
-                                                                 jlong handle, jint choice) {
-    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
-    if (ctx == NULL) {
-        return;
-    }
-    int was = ctx->roomStyle;
-    ctx->roomStyle = roomStyleForCell(choice);
-    if (ctx->roomStyle != was || !ctx->environmentSaid) {
-        ctx->environmentSaid = 1;
-        LOGEV("environment %d, room %d", choice, roomEffective(ctx));
-    }
-}

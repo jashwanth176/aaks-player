@@ -36,16 +36,11 @@
 // The bar is small, so its hover zone is proportionally wider
 #define BAR_HOVER 2.0f
 
-// Stand-in screen for sizing panels in a room, so they keep a constant size
-#define STAND_IN_WIDTH_M 3.0f
-#define STAND_IN_DISTANCE_M 3.0f
-
 // Bar row centre below the frame's bottom edge
 #define BAR_DROP_FRAC (BAR_GAP_FRAC + BAR_HEIGHT_FRAC * 0.5f)
 
 
-// Frame the bar row is laid out in, bottom-aligned with the picture. In a room
-// it is flat and sized to match the stand-in.
+// Frame the bar row is laid out in, bottom-aligned with the picture
 typedef struct {
     XrPosef pose;
     float width;
@@ -54,32 +49,14 @@ typedef struct {
     int curved;
 } BarFrame;
 
-// Bar frame for a room picture; aspect is height / width
-BarFrame roomBarFrame(XrPosef picture, float pictureHeight, float aspect);
-
-// Frame width giving the bar the stand-in's angular size
-float barFrameWidth(Vec3 bottomMid, Vec3 down, float aspect);
-
 
 // Hover target at uv. cornerSide is the bracket size in metres (0 for none);
 // corners are numbered TL, TR, BL, BR.
 int hoverTest(float u, float v, float width, float height, float cornerSide, int* corner);
 
-// Stand-in screen pose, facing the seat
-XrPosef standInPose(void);
-
 
 
 // Stereo separation from stored units (0.1% of frame width)
 float separationOf(int units);
-
-// Room picture size percent, clamped; always the maximum if not resizable
-int roomScreenClamp(int percent, int resizable);
-
-// Room picture size during a corner drag, relative to the grab so it does not jump
-int roomResizePercent(int startPercent, float startReach, float reach);
-
-// Corner bracket size at a distance, matching the stand-in's angular size
-float roomCornerSide(float distance);
 
 #endif

@@ -175,7 +175,6 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         prefs.vrDepthMode = film.depthMode;
 
         renderer = new XrRenderer();
-        renderer.setPlayerMode(true);
         // Must precede start() so the library window placement is restored
         renderer.setPlayerScreenHidden(browse);
         renderer.setPlayerLighting(immersion, brightness);

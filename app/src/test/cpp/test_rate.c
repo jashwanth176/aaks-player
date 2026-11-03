@@ -233,18 +233,6 @@ static void testBudgetIgnoresAFewWarps(void) {
     CHECK_NEAR(b.frameMs, 1.0f, 0.01);
 }
 
-static void testBudgetAddsTheRoom(void) {
-    RateBudget b;
-    int64_t now = 0;
-    rateBudgetStart(&b, now, 0);
-    for (int i = 0; i < 60; i++) {
-        rateBudgetRoom(&b, 3000000L);
-    }
-    // 6 ms warp + 3 ms room = 9 ms, over 120 Hz's 8.3 ms.
-    CHECK(feedWindow(&b, &now, 120, 1.0f, 6.0f, 60) == RATE_WINDOW_SLIPPING);
-    CHECK_NEAR(b.gpuMs, 9.0f, 0.01);
-}
-
 static void testBudgetCountsMissedRefreshes(void) {
     RateBudget b;
     int64_t now = 0;
@@ -873,7 +861,6 @@ int main(void) {
     testBudgetNeedsWindowsInARow();
     testBudgetTakesTheSlowerSide();
     testBudgetIgnoresAFewWarps();
-    testBudgetAddsTheRoom();
     testBudgetCountsMissedRefreshes();
     testBudgetCountsABusyGpuByItsPace();
     testBudgetWithNothingMeasured();

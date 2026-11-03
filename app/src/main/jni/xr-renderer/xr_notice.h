@@ -1,4 +1,4 @@
-// Timing for panel fades and the startup splash (shown while the room and depth
+// Timing for panel fades and the startup splash (shown while the depth
 // model load). No GL or OpenXR.
 
 #ifndef XR_NOTICE_H
@@ -38,8 +38,8 @@ int fadeStep(Fade* fade, int shown, int64_t now, int64_t durationNs, int smooth)
 
 // Splash wait bits
 #define SPLASH_WAIT_PANELS 1
-#define SPLASH_WAIT_ROOM 2
-#define SPLASH_WAIT_DEPTH 4
+#define SPLASH_WAIT_DEPTH 2
+#define SPLASH_PARTS 2
 
 #define SPLASH_UP 0
 #define SPLASH_FADING 1

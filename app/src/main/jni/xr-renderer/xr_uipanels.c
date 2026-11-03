@@ -87,9 +87,6 @@ XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
 
 // Front-most panel under the ray, or -1. Only panels at least half faded in.
 int uiPanelAt(XrCtx* ctx, XrPosef aim, float* outU, float* outV) {
-    if (!ctx->playerMode) {
-        return -1;
-    }
     // Subtitles are not hit tested
     static const int order[6] = {
         UI_PANEL_DIALOG, UI_PANEL_SHEET, UI_PANEL_CONTROLS, UI_PANEL_TOP, UI_PANEL_RAIL,
@@ -118,10 +115,10 @@ void stepUiPanels(XrCtx* ctx, int64_t nowNs) {
     if (step < 0.0f) {
         step = 0.0f;
     }
-    ctx->ui[UI_PANEL_LOADING].visible = ctx->playerMode && !ctx->playerScreenHidden
+    ctx->ui[UI_PANEL_LOADING].visible = !ctx->playerScreenHidden
             && !ctx->videoReady && nowNs - ctx->videoWaitNs > UI_LOADING_DELAY_NS;
     // With the bar, and as abruptly as the bar
-    ctx->ui[UI_PANEL_BACK].visible = ctx->playerMode && ctx->backWanted
+    ctx->ui[UI_PANEL_BACK].visible = ctx->backWanted
             && (ctx->hoverKind == HOVER_BAR || ctx->backHover);
     ctx->ui[UI_PANEL_BACK].level = ctx->ui[UI_PANEL_BACK].visible ? 1.0f : 0.0f;
     for (int id = 0; id < UI_PANEL_COUNT; id++) {

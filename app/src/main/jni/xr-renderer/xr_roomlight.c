@@ -14,7 +14,7 @@ static int sampleTopLevel(void) {
 }
 
 int relightWanted(XrCtx* ctx) {
-    return ctx->playerMode && ctx->passthrough && ctx->fbPassthroughSupported
+    return ctx->passthrough && ctx->fbPassthroughSupported
             && ctx->fbPassthroughState >= 0;
 }
 
@@ -270,7 +270,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetPlayerContent(JNIEnv* env, 
 float screenAspect(const XrCtx* ctx) {
     // With no video the screen is the library window; a fixed-size sheet in its
     // place (settings) gives the frame its own height, so the handles hug it
-    if (ctx->playerMode && ctx->playerScreenHidden) {
+    if (ctx->playerScreenHidden) {
         const int sheet = UI_PANEL_SHEET;
         if (ctx->ui[sheet].fixed && ctx->ui[sheet].visible && ctx->ui[sheet].texH > 0
                 && ctx->screenWidth > 0.0f) {

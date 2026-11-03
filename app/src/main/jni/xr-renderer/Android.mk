@@ -6,7 +6,6 @@ LOCAL_MODULE := xr-renderer
 LOCAL_SRC_FILES := xr_log.c \
                    xr_math.c \
                    xr_depthmap.c \
-                   xr_atlas.c \
                    xr_roommesh.c \
                    xr_layout.c \
                    xr_handles.c \
@@ -28,7 +27,6 @@ LOCAL_SRC_FILES := xr_log.c \
                    xr_gl.c \
                    xr_depth.c \
                    xr_ambilight.c \
-                   xr_room.c \
                    xr_model.c \
                    xr_input.c \
                    xr_ui.c \

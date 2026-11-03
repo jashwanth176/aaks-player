@@ -98,8 +98,6 @@ static void clearWindow(RateBudget* b, int64_t nowNs) {
     b->cpuFrames = 0;
     b->gpuTotalNs = 0;
     b->gpuFrames = 0;
-    b->roomTotalNs = 0;
-    b->roomFrames = 0;
     b->missed = 0;
 }
 
@@ -123,13 +121,6 @@ void rateBudgetGpu(RateBudget* b, int64_t gpuNs) {
     }
 }
 
-void rateBudgetRoom(RateBudget* b, int64_t gpuNs) {
-    if (gpuNs > 0) {
-        b->roomTotalNs += gpuNs;
-        b->roomFrames++;
-    }
-}
-
 void rateBudgetMissed(RateBudget* b, long refreshes) {
     if (refreshes > 0) {
         b->missed += refreshes;
@@ -141,14 +132,11 @@ int rateBudgetTick(RateBudget* b, int64_t nowNs, float hz) {
         return RATE_WINDOW_FILLING;
     }
 
-    // Frame time is the slower of CPU (frame loop) and GPU (warp + room)
+    // Frame time is the slower of CPU (frame loop) and GPU (warp)
     b->cpuMs = b->cpuFrames > 0 ? (float)(b->cpuTotalNs / (double)b->cpuFrames / 1e6) : 0.0f;
     b->gpuMs = 0.0f;
     if (b->gpuFrames >= RATE_MIN_GPU_SAMPLES) {
         b->gpuMs = (float)(b->gpuTotalNs / (double)b->gpuFrames / 1e6);
-        if (b->roomFrames > 0) {
-            b->gpuMs += (float)(b->roomTotalNs / (double)b->roomFrames / 1e6);
-        }
     }
     b->frameMs = b->cpuMs > b->gpuMs ? b->cpuMs : b->gpuMs;
     // Use the submit pace when refreshes are missed often (GPU saturated)

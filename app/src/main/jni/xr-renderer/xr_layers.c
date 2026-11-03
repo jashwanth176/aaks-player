@@ -10,11 +10,9 @@
 
 // Every layer a frame can carry; lives on nativeEndFrame's stack until xrEndFrame.
 typedef struct {
-    // Real room under everything in the player, scaled by the picture.
+    // Real room under everything, scaled by the picture.
     XrCompositionLayerPassthroughFB passthrough;
     XrCompositionLayerColorScaleBiasKHR passthroughTint;
-    XrCompositionLayerProjection room;
-    XrCompositionLayerProjectionView roomViews[ROOM_EYES];
     XrCompositionLayerQuad glow;
     // Used in place of the quad around a curved picture.
     XrCompositionLayerCylinderKHR glowCylinder;
@@ -26,7 +24,7 @@ typedef struct {
     XrCompositionLayerQuad dot;
     // Over the picture and panels, under the beam and dot.
     XrCompositionLayerProjection models;
-    XrCompositionLayerProjectionView modelViews[ROOM_EYES];
+    XrCompositionLayerProjectionView modelViews[MODEL_EYES];
     XrCompositionLayerQuad splashGround;
     XrCompositionLayerQuad splashSheet;
     XrCompositionLayerSettingsFB settings;
@@ -66,7 +64,6 @@ typedef struct {
     float curve;
     int screenCurved;
     int stereo;
-    int roomOn;
     int headLocked;
     int eyeSwap;
     // The bar and the buttons beside it share a hover area. Cleared
@@ -142,23 +139,11 @@ static XrPosef poseOffset(XrPosef base, Vec3 local) {
 // Logs warp timings every STATS_LOG_INTERVAL_FRAMES frames, then resets.
 static void logWarpStats(XrCtx* ctx) {
     if (ctx->statFrames == STATS_LOG_INTERVAL_FRAMES) {
-        // The room has its own timers; report samples kept of
-        // harvested, since many of its queries come back unusable.
-        char roomLine[128];
-        roomLine[0] = '\0';
-        if (ctx->roomGpuSamples > 0) {
-            snprintf(roomLine, sizeof(roomLine), ", room avg %.2f ms (%ld of %ld)",
-                     ctx->roomGpuTotalNs / (double)ctx->roomGpuSamples / 1e6,
-                     ctx->roomGpuSamples, ctx->roomGpuSamples + ctx->roomGpuDropped);
-        }
-        else if (ctx->roomGpuDropped > 0) {
-            snprintf(roomLine, sizeof(roomLine), ", room timer starved (%ld dropped)",
-                     ctx->roomGpuDropped);
-        }
+        // The models have their own timers; report samples kept of harvested
+        char modelLine[128];
+        modelLine[0] = '\0';
         if (ctx->modelGpuSamples > 0) {
-            size_t used = strlen(roomLine);
-            snprintf(roomLine + used, sizeof(roomLine) - used,
-                     ", models avg %.2f ms (%ld of %ld)",
+            snprintf(modelLine, sizeof(modelLine), ", models avg %.2f ms (%ld of %ld)",
                      ctx->modelGpuTotalNs / (double)ctx->modelGpuSamples / 1e6,
                      ctx->modelGpuSamples, ctx->modelGpuSamples + ctx->modelGpuDropped);
         }
@@ -168,14 +153,14 @@ static void logWarpStats(XrCtx* ctx) {
                  ctx->statFrames, ctx->gpuTotalNs / (double)ctx->gpuSamples / 1e6,
                  ctx->gpuMaxNs / 1e6,
                  ctx->statTotalNs / (double)ctx->statFrames / 1e6,
-                 ctx->gpuDropped, roomLine);
+                 ctx->gpuDropped, modelLine);
         }
         else {
             // The raw value distinguishes zeros from wrapped negatives.
             LOGI("XR warp: %ld frames, submit avg %.2f ms, max %.2f ms (no GPU timer, dropped %ld, last raw %llu)%s",
                  ctx->statFrames, ctx->statTotalNs / (double)ctx->statFrames / 1e6,
                  ctx->statMaxNs / 1e6, ctx->gpuDropped,
-                 (unsigned long long)ctx->gpuLastDroppedNs, roomLine);
+                 (unsigned long long)ctx->gpuLastDroppedNs, modelLine);
         }
         ctx->statFrames = 0;
         ctx->statTotalNs = 0;
@@ -184,9 +169,6 @@ static void logWarpStats(XrCtx* ctx) {
         ctx->gpuMaxNs = 0;
         ctx->gpuSamples = 0;
         ctx->gpuDropped = 0;
-        ctx->roomGpuTotalNs = 0;
-        ctx->roomGpuSamples = 0;
-        ctx->roomGpuDropped = 0;
         ctx->modelGpuTotalNs = 0;
         ctx->modelGpuSamples = 0;
         ctx->modelGpuDropped = 0;
@@ -229,36 +211,6 @@ static void setLayerSettings(XrCtx* ctx, FrameLayers* layers) {
     }
 }
 
-// The 3D room, drawn per eye into the projection layer.
-static void addRoomLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    // Never together with passthrough.
-    if (view->roomOn && ctx->roomRendered && ctx->roomViewsValid && !ctx->passthrough) {
-        XrCompositionLayerProjection* room = &layers->room;
-        memset(room, 0, sizeof(*room));
-        memset(layers->roomViews, 0, sizeof(layers->roomViews));
-        room->type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
-        room->layerFlags = 0;
-        // World locked even when the screen is head locked.
-        room->space = ctx->localSpace;
-        room->viewCount = ROOM_EYES;
-        room->views = layers->roomViews;
-        for (int eye = 0; eye < ROOM_EYES; eye++) {
-            XrCompositionLayerProjectionView* projView = &layers->roomViews[eye];
-            projView->type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-            // The poses the image was drawn from, so the compositor reprojects correctly.
-            projView->pose = ctx->roomViews[eye].pose;
-            projView->fov = ctx->roomViews[eye].fov;
-            projView->subImage.swapchain = ctx->roomSwapchain;
-            projView->subImage.imageRect.offset.x = eye * ctx->roomEyeWidth;
-            projView->subImage.imageRect.offset.y = 0;
-            projView->subImage.imageRect.extent.width = ctx->roomEyeWidth;
-            projView->subImage.imageRect.extent.height = ctx->roomEyeHeight;
-            projView->subImage.imageArrayIndex = 0;
-        }
-        pushLayer(ctx, layers, room);
-    }
-}
-
 // The real room through the passthrough layer. Level is the layer's opacity; hue is a
 // colour scale normalised to the brightest channel so the level is not applied twice.
 static void addPassthroughLayer(XrCtx* ctx, FrameLayers* layers) {
@@ -285,10 +237,7 @@ static void addPassthroughLayer(XrCtx* ctx, FrameLayers* layers) {
 // The ambilight glow behind the picture.
 static void addGlowLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
     // Not sharpened: softness is the effect.
-    int glowOn;
-    float glowLevel;
-    ambiEffective(ctx, &glowOn, &glowLevel);
-    if (glowOn && ctx->glowRendered && ctx->everRendered && ctx->shouldRender) {
+    if (ctx->glowRendered && ctx->everRendered && ctx->shouldRender) {
         // A curved picture's sides would cover a flat glow, so the
         // glow curves with it: same axis, slightly smaller radius.
         GlowCylinder shape;
@@ -318,7 +267,7 @@ static void addGlowLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layers)
         }
         // Local +z faces the viewer, so this sits just proud of the picture; layer
         // order, not depth, keeps it underneath. The player's glow lies on the picture.
-        Vec3 proudLocal = { 0.0f, 0.0f, ctx->playerMode ? 0.002f : GLOW_PROUD_M };
+        Vec3 proudLocal = { 0.0f, 0.0f, 0.002f };
         quadLayer(&layers->glow, NULL, XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
                   ctx->glowSwapchain, GLOW_TEX, GLOW_TEX, view->space,
                   poseOffset(view->screenPose, proudLocal),
@@ -361,7 +310,7 @@ static void addVideoLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layer
             cyl->type = XR_TYPE_COMPOSITION_LAYER_CYLINDER_KHR;
             // The player's picture has a premultiplied soft edge in
             // alpha; without blending it shows as a dark border.
-            cyl->layerFlags = ctx->playerMode ? XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT : 0;
+            cyl->layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
             cyl->next = layers->settingsChain;
             // Radius runs from 4x distance (slight curve)
             // down to the distance itself (wrapped).
@@ -389,8 +338,7 @@ static void addVideoLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layer
         else {
             XrCompositionLayerQuad* quad = &layers->video[eye];
             // Soft edge in alpha, as above.
-            quadLayer(quad, layers->settingsChain,
-                      ctx->playerMode ? XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT : 0,
+            quadLayer(quad, layers->settingsChain, XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT,
                       ctx->swapchain, ctx->videoWidth,
                       ctx->videoHeight, view->space, view->screenPose, view->screenWidth,
                       view->screenHeight);
@@ -403,9 +351,8 @@ static void addVideoLayers(XrCtx* ctx, const FrameView* view, FrameLayers* layer
 
 // The move bar or resize corner under the ray.
 static void addHandleLayer(XrCtx* ctx, const FrameView* view, FrameLayers* layers) {
-    // In the screen's frame. The bar never shows in a room (the buttons
-    // still do); corners show in a room only if it allows resizing.
-    int isBar = view->barArea && !view->roomOn;
+    // In the screen's frame
+    int isBar = view->barArea;
     int isCorner = !view->barArea && ctx->hoverKind == HOVER_CORNER && cornerSide(ctx) > 0.0f;
     if (ctx->handleArtReady && (isBar || isCorner)) {
         Vec3 local;
@@ -472,9 +419,7 @@ static void logBarPlacement(XrCtx* ctx, const BarFrame* frame) {
     LOGI("bar: picture's bottom edge at %.2f %.2f %.2f, %.2f m off; bar at %.2f %.2f %.2f, "
          "%.2f m off, %.2f m wide, %s",
          e.x, e.y, e.z, sqrtf(vecDot(e, e)), b.x, b.y, b.z, sqrtf(vecDot(b, b)),
-         frame->width * BAR_WIDTH_FRAC,
-         roomEffective(ctx) > 0 ? "a room's picture at the stand in's size"
-                                : frame->curved ? "on the curved picture" : "on the picture");
+         frame->width * BAR_WIDTH_FRAC, frame->curved ? "on the curved picture" : "on the picture");
 }
 
 // Player panels, back to front.
@@ -510,9 +455,9 @@ static void addModelLayer(XrCtx* ctx, FrameLayers* layers) {
     models->type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
     models->layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
     models->space = ctx->localSpace;
-    models->viewCount = ROOM_EYES;
+    models->viewCount = MODEL_EYES;
     models->views = layers->modelViews;
-    for (int eye = 0; eye < ROOM_EYES; eye++) {
+    for (int eye = 0; eye < MODEL_EYES; eye++) {
         XrCompositionLayerProjectionView* projView = &layers->modelViews[eye];
         projView->type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
         projView->pose = ctx->modelViews[eye].pose;
@@ -637,16 +582,10 @@ static void addPointerLayers(XrCtx* ctx, const FrameView* view, FrameLayers* lay
     }
 }
 
-// What the splash still waits on: panel art, the room built
-// and drawn, and the first depth map, each only if wanted.
-// A failed room or a model that gave up is not waited on.
+// What the splash still waits on: the first depth map, if wanted. A model that gave
+// up is not waited on.
 static int splashWaiting(XrCtx* ctx) {
     int waiting = 0;
-    int style = roomEffective(ctx);
-    if (style > 0 && !ctx->roomFailed
-            && !(ctx->roomRendered && ctx->roomBuiltStyle == style)) {
-        waiting |= SPLASH_WAIT_ROOM;
-    }
     if (ctx->stereoMode == DEPTH_MODE_MODEL
             && atomic_load_explicit(&ctx->depthMapsStaged, memory_order_relaxed) == 0
             && !atomic_load_explicit(&ctx->depthGaveUp, memory_order_relaxed)) {
@@ -657,13 +596,12 @@ static int splashWaiting(XrCtx* ctx) {
 
 // Logs when the splash lifted and why: the floor, all ready, or the ceiling.
 static void logSplashLift(XrCtx* ctx) {
-    static const char* const NAMES[3] = { "panels", "room", "depth model" };
+    static const char* const NAMES[SPLASH_PARTS] = { "panels", "depth model" };
     long upMs = (long)((ctx->splash.liftNs - ctx->splash.firstNs) / 1000000L);
     char parts[160];
     parts[0] = '\0';
-    for (int i = 0; i < 3; i++) {
-        int wanted = i == 0 || (i == 1 && roomEffective(ctx) > 0)
-                || (i == 2 && ctx->stereoMode == DEPTH_MODE_MODEL);
+    for (int i = 0; i < SPLASH_PARTS; i++) {
+        int wanted = i == 0 || ctx->stereoMode == DEPTH_MODE_MODEL;
         if (!wanted) {
             continue;
         }
@@ -690,8 +628,8 @@ static void stepSplash(XrCtx* ctx, int64_t now) {
     }
     int waiting = splashWaiting(ctx);
     if (ctx->splash.firstNs != 0) {
-        int bits[3] = { SPLASH_WAIT_PANELS, SPLASH_WAIT_ROOM, SPLASH_WAIT_DEPTH };
-        for (int i = 0; i < 3; i++) {
+        int bits[SPLASH_PARTS] = { SPLASH_WAIT_PANELS, SPLASH_WAIT_DEPTH };
+        for (int i = 0; i < SPLASH_PARTS; i++) {
             if (ctx->splashReadyMs[i] < 0 && !(waiting & bits[i])) {
                 ctx->splashReadyMs[i] = (int)((now - ctx->splash.firstNs) / 1000000L);
             }
@@ -819,7 +757,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
         float texMatrix[16];
         (*env)->GetFloatArrayRegion(env, texMatrixArr, 0, 16, texMatrix);
         redrawGlow(ctx, texMatrix);
-        LOGI("glow redrawn on a still picture at %.2f", ctx->glowDrawnLevel);
+        LOGI("glow redrawn on a still picture");
     }
     // Every frame, since controllers move independently of the
     // video. After the warp, so the picture never waits on them.
@@ -830,12 +768,9 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     FrameView view;
     view.aspect = screenAspect(ctx);
     view.stereo = ctx->stereoMode != DEPTH_MODE_OFF;
-    int roomStyle = roomEffective(ctx);
-    view.roomOn = roomStyle > 0;
     view.headLocked = headLocked;
     view.eyeSwap = eyeSwap;
-    // A room's wall does not follow the head, whatever the preference.
-    view.space = (headLocked && !view.roomOn) ? ctx->viewSpace : ctx->localSpace;
+    view.space = headLocked ? ctx->viewSpace : ctx->localSpace;
 
     if (!ctx->pointerArtReady && ctx->pointerSwapchain != XR_NULL_HANDLE && ctx->shouldRender) {
         uploadPointerArt(ctx);
@@ -843,12 +778,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
 
     // The panel's curve, so a reseed keeps it rather than reverting to the preference.
     view.curve = effectiveCurvature(ctx);
-    int reseeded = updatePlacement(ctx, distance, quadWidth, view.curve);
-    // The room's wall overrides placement, and a picture on a wall is flat.
-    applyRoomPlacement(ctx, roomStyle, view.aspect, reseeded);
-    if (view.roomOn) {
-        view.curve = 0.0f;
-    }
+    updatePlacement(ctx, distance, quadWidth, view.curve);
     view.screenPose = ctx->screenPose;
     view.screenWidth = ctx->screenWidth;
     view.screenHeight = view.screenWidth * view.aspect;
@@ -870,9 +800,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     int blendNow = wantPassthrough && ctx->focusedFrames > 0 && !splashUp;
     // The player shows the room through its own dimmable,
     // tintable passthrough layer, with an opaque frame.
-    if (ctx->playerMode) {
-        relightStep(ctx, frameNs);
-    }
+    relightStep(ctx, frameNs);
     int roomLayer = blendNow && relightLayerReady(ctx);
     if (roomLayer) {
         blendNow = 0;
@@ -896,26 +824,20 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     }
 
     // Nothing else is visible while the splash is fully up.
-    if (!splashUp) {
-        addRoomLayer(ctx, &view, &layers);
-        if (!ctx->playerMode) {
-            addGlowLayer(ctx, &view, &layers);
-        }
-    }
     if (!splashUp && ctx->everRendered && ctx->shouldRender) {
         // No film: panels without the screen. Handles
         // stay so the panels can be moved and sized.
         if (!ctx->playerScreenHidden && ctx->videoReady) {
             // On a cylinder the glow's clear middle does not line up with the picture,
             // so the glow goes under it and shows through the picture's soft edge.
-            int glowUnder = ctx->playerMode && view.screenCurved;
+            int glowUnder = view.screenCurved;
             if (glowUnder) {
                 addGlowLayer(ctx, &view, &layers);
             }
             addVideoLayers(ctx, &view, &layers);
             // Otherwise the player's glow goes over the picture, whose edge
             // fades out under it, matching the frame shader's light split.
-            if (ctx->playerMode && !glowUnder) {
+            if (!glowUnder) {
                 addGlowLayer(ctx, &view, &layers);
             }
         }

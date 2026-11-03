@@ -752,7 +752,7 @@ int updatePlacement(XrCtx* ctx, float distance, float quadWidth, float curvature
         ctx->screenPose.orientation.w = 1.0f;
         ctx->screenPose.position.z = -distance;
         // The library window starts narrower than a video screen.
-        ctx->screenWidth = ctx->playerMode && ctx->playerScreenHidden
+        ctx->screenWidth = ctx->playerScreenHidden
                 ? quadWidth * PLAYER_BROWSE_START_WIDTH : quadWidth;
         // Radius goes from 4x distance at curvature 0 to 1x distance at 1.
         ctx->screenRadius = distance * (1.0f + 3.0f * (1.0f - curvature));
@@ -768,35 +768,24 @@ int updatePlacement(XrCtx* ctx, float distance, float quadWidth, float curvature
 }
 
 // Turns the screen to face the new forward, keeping distance, size and curve.
-// While a room holds the screen, the saved placement is turned instead.
 void recentreScreen(XrCtx* ctx) {
     ctx->grabMode = GRAB_NONE;
     if (!ctx->placementValid) {
         LOGI("recentred before the screen was placed");
         return;
     }
-    int inRoom = ctx->roomHoldingScreen;
-    XrPosef* pose = inRoom ? &ctx->savedScreenPose : &ctx->screenPose;
-    XrPosef was = *pose;
-    *pose = poseRecentred(was);
-    if (inRoom) {
-        // Written back when the room releases the screen.
-        ctx->recentredInRoom = 1;
-    }
-    else {
-        ctx->poseDirty = 1;
-    }
+    XrPosef was = ctx->screenPose;
+    ctx->screenPose = poseRecentred(was);
+    ctx->poseDirty = 1;
     Vec3 back = { 0.0f, 0.0f, 1.0f };
     Vec3 fwd = quatRotate(was.orientation, back);
-    XrVector3f p = pose->position;
-    LOGEV("recentred%s: screen from %.2f %.2f %.2f, turned %.1f deg, to %.2f %.2f %.2f;"
+    XrVector3f p = ctx->screenPose.position;
+    LOGEV("recentred: screen from %.2f %.2f %.2f, turned %.1f deg, to %.2f %.2f %.2f;"
           " kept distance %.2f m, width %.2f m, radius %.2f m, curve %.2f, head lock %d",
-          inRoom ? " behind the room" : "", was.position.x, was.position.y, was.position.z,
+          was.position.x, was.position.y, was.position.z,
           atan2f(fwd.x, fwd.z) * 180.0f / (float)M_PI, p.x, p.y, p.z,
-          sqrtf(p.x * p.x + p.y * p.y + p.z * p.z),
-          inRoom ? ctx->savedScreenWidth : ctx->screenWidth,
-          inRoom ? ctx->savedScreenRadius : ctx->screenRadius, effectiveCurvature(ctx),
-          ctx->headLockedPref);
+          sqrtf(p.x * p.x + p.y * p.y + p.z * p.z), ctx->screenWidth, ctx->screenRadius,
+          effectiveCurvature(ctx), ctx->headLockedPref);
 }
 
 // The pose every frame, for a save at a film switch; the dirty flag once per
@@ -972,26 +961,18 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
             ctx->grabMode = GRAB_NONE;
             ctx->grabByGaze = 0;
             ctx->poseDirty = 1;
-            if (ctx->playerMode) {
-                startSpringIfOut(ctx);
-            }
+            startSpringIfOut(ctx);
             return;
         }
     }
 
-    if (ctx->grabMode == GRAB_NONE && ctx->playerMode) {
+    if (ctx->grabMode == GRAB_NONE) {
         stepSpring(ctx);
     }
 
     if (ctx->grabMode == GRAB_NONE) {
-        // A room forces the screen pose each frame, so no move there; only a
-        // resizable room's corners can be grabbed.
-        int roomStyle = roomEffective(ctx);
-        if (roomStyle > 0 && (hover != HOVER_CORNER || !roomResizable(roomStyle))) {
-            return;
-        }
         // The picture or any panel on it, so the library window moves the same way
-        int gripPicture = ctx->playerMode && hand >= 0 && hand != SRC_GAZE && ctx->gripEdge[hand]
+        int gripPicture = hand >= 0 && hand != SRC_GAZE && ctx->gripEdge[hand]
                 && (hover == HOVER_SCREEN || hover == HOVER_HALO || hover == HOVER_UIPANEL);
         if (hand < 0 || (hover != HOVER_BAR && hover != HOVER_CORNER && !gripPicture)) {
             return;
@@ -1043,19 +1024,14 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
             ctx->grabReel = 1.0f;
             LOGI("move grab by %s %d, %s", ctx->grabByTrigger ? "trigger or pinch" : "grip", mover,
                  hover == HOVER_BAR ? "on the bar" : "on the picture");
-            if (ctx->playerMode) {
-                ctx->grabHandDist = distFromHead(ctx, aims[mover].position);
-                ctx->grabScreenDist = distFromHead(ctx, ctx->screenPose.position);
-                ctx->grabSizeRatio = handleSizeRatio(ctx->grabScreenDist, ctx->screenWidth);
-                Vec3 back = { 0.0f, 0.0f, 1.0f };
-                Vec3 fwd = quatRotate(ctx->screenPose.orientation, back);
-                ctx->playerYaw = atan2f(fwd.x, fwd.z);
-                ctx->playerPitch = screenPitch(ctx);
-                ctx->playerTurnNs = ctx->lastInputNs;
-            }
-            // Captured once: re-extracting each frame lets rounding drift the tilt.
-            ctx->grabPitch = screenPitch(ctx);
-            ctx->grabRoll = screenRoll(ctx);
+            ctx->grabHandDist = distFromHead(ctx, aims[mover].position);
+            ctx->grabScreenDist = distFromHead(ctx, ctx->screenPose.position);
+            ctx->grabSizeRatio = handleSizeRatio(ctx->grabScreenDist, ctx->screenWidth);
+            Vec3 back = { 0.0f, 0.0f, 1.0f };
+            Vec3 fwd = quatRotate(ctx->screenPose.orientation, back);
+            ctx->playerYaw = atan2f(fwd.x, fwd.z);
+            ctx->playerPitch = screenPitch(ctx);
+            ctx->playerTurnNs = ctx->lastInputNs;
             return;
         }
 
@@ -1071,9 +1047,6 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
         int bottom = (corner >= 2);
         ctx->grabOppX = (right ? -0.5f : 0.5f) * ctx->grabWidth;
         ctx->grabOppY = (bottom ? 0.5f : -0.5f) * ctx->grabHeight;
-        // A gaze drag starts from the corner itself (reach 1).
-        ctx->grabRoomPercent = roomStyle > 0 ? roomScreenPercent(ctx, roomStyle) : 0;
-        ctx->grabRoomReach = ctx->grabByGaze ? 1.0f : diagonalReach(ctx, u, v);
         ctx->grabMode = GRAB_RESIZE;
         LOGI("resize grab by %s %d", ctx->grabByTrigger ? "trigger or pinch" : "grip", mover);
         return;
@@ -1102,52 +1075,42 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
             ctx->screenPose.position.y = aims[h].position.y + moved.y;
             ctx->screenPose.position.z = aims[h].position.z + moved.z;
 
-            if (ctx->playerMode) {
-                // Direction from the rigid attach; distance reeled by the hand and
-                // the stick within elastic limits; width keeps its place in the range.
-                float push = h >= 0 && h < HAND_COUNT ? sticks[h].y : 0.0f;
-                if (fabsf(push) > SCROLL_DEADZONE) {
-                    float past = (fabsf(push) - SCROLL_DEADZONE) / (1.0f - SCROLL_DEADZONE);
-                    ctx->grabReel *= expf(copysignf(past * STICK_REEL_RATE * dt, push));
-                }
-                float reel = handleReelDistance(ctx->grabScreenDist, ctx->grabHandDist,
-                                                distFromHead(ctx, aims[h].position));
-                float want = ctx->grabReel * reel;
-                // The stick stops at the limits rather than winding past them
-                if (want > HANDLE_DIST_MAX) {
-                    ctx->grabReel = HANDLE_DIST_MAX / reel;
-                }
-                else if (want < HANDLE_DIST_MIN) {
-                    ctx->grabReel = HANDLE_DIST_MIN / reel;
-                }
-                float dist = handleElasticDistance(want);
-                placeAlongView(ctx, dist, handleWidthFor(dist, ctx->grabSizeRatio));
+            // Direction from the rigid attach; distance reeled by the hand and
+            // the stick within elastic limits; width keeps its place in the range.
+            float push = h >= 0 && h < HAND_COUNT ? sticks[h].y : 0.0f;
+            if (fabsf(push) > SCROLL_DEADZONE) {
+                float past = (fabsf(push) - SCROLL_DEADZONE) / (1.0f - SCROLL_DEADZONE);
+                ctx->grabReel *= expf(copysignf(past * STICK_REEL_RATE * dt, push));
             }
+            float reel = handleReelDistance(ctx->grabScreenDist, ctx->grabHandDist,
+                                            distFromHead(ctx, aims[h].position));
+            float want = ctx->grabReel * reel;
+            // The stick stops at the limits rather than winding past them
+            if (want > HANDLE_DIST_MAX) {
+                ctx->grabReel = HANDLE_DIST_MAX / reel;
+            }
+            else if (want < HANDLE_DIST_MIN) {
+                ctx->grabReel = HANDLE_DIST_MIN / reel;
+            }
+            float dist = handleElasticDistance(want);
+            placeAlongView(ctx, dist, handleWidthFor(dist, ctx->grabSizeRatio));
         }
 
         // Orientation does not follow the wrist: the screen keeps its tilt and
         // roll and yaws to face the viewer.
         float hx = ctx->headPos.x - ctx->screenPose.position.x;
         float hz = ctx->headPos.z - ctx->screenPose.position.z;
-        if (ctx->playerMode) {
-            // Player mode eases yaw and pitch toward the eyes, never rolls.
-            float hy = ctx->headPos.y - ctx->screenPose.position.y;
-            float flat = sqrtf(hx * hx + hz * hz);
-            float dt = (float)(ctx->lastInputNs - ctx->playerTurnNs) / 1e9f;
-            ctx->playerTurnNs = ctx->lastInputNs;
-            if (flat > 0.05f) {
-                ctx->playerYaw = handleTurnToward(ctx->playerYaw, atan2f(hx, hz), dt);
-            }
-            ctx->playerPitch = handleTurnToward(ctx->playerPitch,
-                                                handleFacePitch(atan2f(hy, flat)), dt);
-            ctx->screenPose.orientation = screenOrient(ctx->playerYaw, ctx->playerPitch, 0.0f);
-            return;
+        // Eases yaw and pitch toward the eyes, never rolls.
+        float hy = ctx->headPos.y - ctx->screenPose.position.y;
+        float flat = sqrtf(hx * hx + hz * hz);
+        float dt = (float)(ctx->lastInputNs - ctx->playerTurnNs) / 1e9f;
+        ctx->playerTurnNs = ctx->lastInputNs;
+        if (flat > 0.05f) {
+            ctx->playerYaw = handleTurnToward(ctx->playerYaw, atan2f(hx, hz), dt);
         }
-        // Directly above or below the head yaw is undefined; keep last frame's.
-        if (hx * hx + hz * hz > 0.0025f) {
-            ctx->screenPose.orientation = screenOrient(atan2f(hx, hz), ctx->grabPitch,
-                                                       ctx->grabRoll);
-        }
+        ctx->playerPitch = handleTurnToward(ctx->playerPitch,
+                                            handleFacePitch(atan2f(hy, flat)), dt);
+        ctx->screenPose.orientation = screenOrient(ctx->playerYaw, ctx->playerPitch, 0.0f);
         return;
     }
 
@@ -1174,29 +1137,9 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
     }
     float scale = reach < 0.05f ? 0.05f : reach;
 
-    int roomStyle = roomEffective(ctx);
-    if (roomStyle > 0) {
-        // In a room the drag sets the picture's share of the room screen
-        // (25-100%, whole percent); saved on release.
-        int percent = roomResizePercent(ctx->grabRoomPercent, ctx->grabRoomReach, reach);
-        if (percent != ctx->roomScreen[roomStyle]) {
-            ctx->roomScreen[roomStyle] = percent;
-            ctx->roomScreenUnsaved = roomStyle;
-        }
-        // Applied now so the ray and bracket move with the picture this frame.
-        applyRoomPlacement(ctx, roomStyle, screenAspect(ctx), 0);
-        return;
-    }
-
     float width = ctx->grabWidth * scale;
-    if (ctx->playerMode) {
-        // Elastic past the distance's width range; springs back on release.
-        width = handleElasticWidth(distFromHead(ctx, ctx->grabScreen.position), width);
-    }
-    else {
-        if (width < SCREEN_MIN_WIDTH) width = SCREEN_MIN_WIDTH;
-        if (width > SCREEN_MAX_WIDTH) width = SCREEN_MAX_WIDTH;
-    }
+    // Elastic past the distance's width range; springs back on release.
+    width = handleElasticWidth(distFromHead(ctx, ctx->grabScreen.position), width);
 
     // Radius scales with width so the arc keeps its shape.
     ctx->screenRadius = ctx->grabRadius * (width / ctx->grabWidth);
@@ -1260,7 +1203,6 @@ typedef struct {
     float dt;
     // Into the screen's frame (head when head locked, else local).
     FrameXform xform;
-    int roomOn;
     int curved;
     float height;
     float radius;
@@ -1391,61 +1333,10 @@ static void releaseInput(XrCtx* ctx) {
     }
 }
 
-// Room hover priority: picture, bar buttons, corner brackets, bar zone, then
-// margin. Buttons beat brackets because on a small picture they sit under the
-// bottom corners. The hit is left in the claiming surface's coordinates.
-static void roomHover(XrCtx* ctx, InputFrame* f, int h) {
-    float pu = 0.0f, pv = 0.0f;
-    int picture = HOVER_NONE;
-    if (screenProject(f->aimPoses[h], f->screenPose, ctx->screenWidth, f->height,
-                      f->radius, f->curved, &pu, &pv)) {
-        picture = hoverTest(pu, pv, ctx->screenWidth, f->height, f->cornerSide,
-                            &f->corners[h]);
-    }
-    if (picture == HOVER_SCREEN) {
-        f->hovers[h] = picture;
-        f->hitU[h] = pu;
-        f->hitV[h] = pv;
-        return;
-    }
-
-    float su, sv;
-    const BarFrame* bar = &f->bar;
-    int row = HOVER_NONE;
-    if (screenProject(f->aimPoses[h], bar->pose, bar->width, bar->height, bar->radius,
-                      bar->curved, &su, &sv)) {
-        int unused;
-        row = hoverTest(su, sv, bar->width, bar->height, 0.0f, &unused);
-    }
-    if (onFurniture(row) && row != HOVER_BAR) {
-        f->hovers[h] = row;
-        f->hitU[h] = su;
-        f->hitV[h] = sv;
-        return;
-    }
-    if (picture == HOVER_CORNER) {
-        f->hovers[h] = picture;
-        f->hitU[h] = pu;
-        f->hitV[h] = pv;
-        return;
-    }
-    if (row == HOVER_BAR) {
-        f->hovers[h] = row;
-        f->hitU[h] = su;
-        f->hitV[h] = sv;
-        return;
-    }
-
-    // In a room the picture's own bar zone is unused.
-    f->hovers[h] = picture == HOVER_BAR ? HOVER_HALO : picture;
-    f->hitU[h] = pu;
-    f->hitV[h] = pv;
-}
-
 // Finds what a source's ray is over.
 static void hoverSource(XrCtx* ctx, InputFrame* f, int h) {
     // Corner brackets first: the library page fills its window to the edges.
-    if (ctx->playerMode && !f->roomOn && f->cornerSide > 0.0f) {
+    if (f->cornerSide > 0.0f) {
         float cu, cv;
         int corner;
         if (screenProject(f->aimPoses[h], f->screenPose, ctx->screenWidth, f->height,
@@ -1472,16 +1363,10 @@ static void hoverSource(XrCtx* ctx, InputFrame* f, int h) {
         return;
     }
 
-    if (!f->roomOn) {
-        if (screenProject(f->aimPoses[h], f->screenPose, ctx->screenWidth, f->height,
-                          f->radius, f->curved, &f->hitU[h], &f->hitV[h])) {
-            int hover = hoverTest(f->hitU[h], f->hitV[h], ctx->screenWidth, f->height,
-                                  f->cornerSide, &f->corners[h]);
-            f->hovers[h] = hover;
-        }
-    }
-    else {
-        roomHover(ctx, f, h);
+    if (screenProject(f->aimPoses[h], f->screenPose, ctx->screenWidth, f->height,
+                      f->radius, f->curved, &f->hitU[h], &f->hitV[h])) {
+        f->hovers[h] = hoverTest(f->hitU[h], f->hitV[h], ctx->screenWidth, f->height,
+                                 f->cornerSide, &f->corners[h]);
     }
 }
 
@@ -2109,7 +1994,7 @@ static void updateScroll(XrCtx* ctx, InputFrame* f, int hit) {
     XrVector2f stick = actionVec2(ctx, ctx->scrollAction, -1);
     int offPicture = !ctx->pointerSleepOn
             && (f->hover == HOVER_NONE || f->hover == HOVER_HALO);
-    int onPanel = ctx->playerMode && f->hover == HOVER_UIPANEL;
+    int onPanel = f->hover == HOVER_UIPANEL;
     // A held bar or grip takes the stick to reel the screen
     if (ctx->grabMode == GRAB_NONE && (hit || offPicture || onPanel)
             && fabsf(stick.y) > SCROLL_DEADZONE) {
@@ -2250,11 +2135,10 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     memset(&f, 0, sizeof(f));
     f.out = out;
     out[IN_UI_PANEL] = -1.0f;
-    // Must match what endFrame submits. A room forces world-locked and flat.
-    f.roomOn = roomEffective(ctx) > 0;
-    f.xform.toHead = headLocked && !f.roomOn;
+    // Must match what endFrame submits
+    f.xform.toHead = headLocked;
     f.height = ctx->screenWidth * screenAspect(ctx);
-    f.curved = !f.roomOn && effectiveCurvature(ctx) > 0.01f && ctx->cylinderSupported;
+    f.curved = effectiveCurvature(ctx) > 0.01f && ctx->cylinderSupported;
     f.radius = ctx->screenRadius;
     f.cornerSide = cornerSide(ctx);
     f.screenPose = ctx->screenPose;
@@ -2451,21 +2335,4 @@ static void placeAtHead(XrCtx* ctx) {
     ctx->grabMode = GRAB_NONE;
     LOGI("screen placed in front of the head: %.2f m ahead, turned %.0f degrees",
          sqrtf(out.x * out.x + out.z * out.z), yaw * 180.0f / (float)M_PI);
-}
-
-// Player mode: disables the hand hint and bar detection, and switches the
-// handles to player behaviour. Set once, before the first frame.
-JNIEXPORT void JNICALL
-Java_com_limelight_binding_video_XrRenderer_nativeSetPlayerMode(JNIEnv* env, jobject thiz,
-                                                               jlong handle, jboolean on) {
-    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
-    if (ctx == NULL) {
-        return;
-    }
-    ctx->playerMode = on ? 1 : 0;
-    if (ctx->playerMode) {
-        // The player detects letterbox bars itself.
-        ctx->ambiBarDetect = 0;
-    }
-    LOGI("player mode %s", ctx->playerMode ? "on" : "off");
 }

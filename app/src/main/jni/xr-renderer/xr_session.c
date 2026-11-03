@@ -450,7 +450,7 @@ static int initXrInstance(XrCtx* ctx) {
         LOGEV("system %s (vendor 0x%x)", layerProps.systemName, layerProps.vendorId);
     }
 
-    // The runtime's recommended view size. Only the 3D room renders at it.
+    // The runtime's recommended view size; the controller model renders at it.
     uint32_t configViewCount = 0;
     xrEnumerateViewConfigurationViews(ctx->instance, ctx->systemId,
                                       XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO,
@@ -783,7 +783,6 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
         }
     }
     glDeleteBuffers(DEPTH_PAIRS, ctx->depthPbos);
-    glDeleteBuffers(1, &ctx->ambiDetectPbo);
     relightDestroy(ctx);
     for (int i = 0; i < DEPTH_PAIRS; i++) {
         free(ctx->modelInput[i]);
@@ -799,11 +798,9 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
     // Context destruction would free these anyway;
     // released explicitly alongside the glow's swapchain.
     glDeleteFramebuffers(1, &ctx->ambiFbo);
-    glDeleteFramebuffers(1, &ctx->ambiDetectFbo);
     glDeleteFramebuffers(1, &ctx->glowFbo);
     glDeleteFramebuffers(1, &ctx->glowEdgeFbo);
     glDeleteTextures(1, &ctx->ambiTexture);
-    glDeleteTextures(1, &ctx->ambiDetectTexture);
     glDeleteTextures(1, &ctx->glowEdgeTexture);
     if (ctx->ambiProgram != 0) {
         glDeleteProgram(ctx->ambiProgram);
@@ -815,16 +812,6 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
         glDeleteProgram(ctx->glowEdgeProgram);
     }
 
-    // Room resources exist only if a frame ran with a room.
-    glDeleteFramebuffers(1, &ctx->roomFbo);
-    glDeleteRenderbuffers(1, &ctx->roomDepthBuffer);
-    glDeleteBuffers(1, &ctx->roomVertexBuffer);
-    glDeleteBuffers(1, &ctx->roomIndexBuffer);
-    glDeleteTextures(ROOM_MESH_ATLASES_MAX, ctx->roomTextures);
-    glDeleteTextures(1, &ctx->roomWhiteTexture);
-    if (ctx->roomProgram != 0) {
-        glDeleteProgram(ctx->roomProgram);
-    }
     // Controller model resources exist once a model has shown.
     glDeleteBuffers(1, &ctx->modelVertexBuffer);
     glDeleteBuffers(1, &ctx->modelIndexBuffer);
@@ -833,8 +820,6 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
     if (ctx->modelProgram != 0) {
         glDeleteProgram(ctx->modelProgram);
     }
-    free(ctx->roomModelVerts);
-    free(ctx->roomModelIndices);
 
     destroyArtSwapchain(ctx, &ctx->swapchain, &ctx->swapchainImages);
     destroyArtSwapchain(ctx, &ctx->pointerSwapchain, &ctx->pointerImages);
@@ -842,7 +827,6 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
     destroyArtSwapchain(ctx, &ctx->cornerSwapchain, &ctx->cornerImages);
     destroyUiPanels(ctx);
     destroyArtSwapchain(ctx, &ctx->glowSwapchain, &ctx->glowImages);
-    destroyArtSwapchain(ctx, &ctx->roomSwapchain, &ctx->roomImages);
     destroyArtSwapchain(ctx, &ctx->modelSwapchain, &ctx->modelImages);
     destroyArtSwapchain(ctx, &ctx->splashSwapchain, &ctx->splashImages);
     if (ctx->localSpace != XR_NULL_HANDLE) {
@@ -860,7 +844,6 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
 
     if (ctx->timerSupported) {
         pfnDeleteQueries(2, ctx->timerQueries);
-        pfnDeleteQueries(2, ctx->roomTimerQueries);
         if (ctx->modelPassReady) {
             pfnDeleteQueries(2, ctx->modelTimerQueries);
         }
@@ -900,13 +883,9 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
                                                        jint convergence, jint depthScale,
                                                        jboolean handTracking, jint sharpenMode,
                                                        jint supersampleMode,
-                                                       jboolean perfOverlay, jboolean ambilight,
-                                                       jint ambiLevel, jboolean roomLight,
-                                                       jint envResTier) {
+                                                       jboolean perfOverlay) {
     XrCtx* ctx = calloc(1, sizeof(XrCtx));
     ctx->handsEnabled = handTracking;
-    // 0 low, 1 standard, 2 high, 3 ultra.
-    ctx->envResTier = envResTier;
     ctx->videoWidth = width;
     ctx->videoHeight = height;
     // The display rate is matched to it.
@@ -961,7 +940,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
     ctx->defaultSeparation = 0.006f;
     ctx->defaultConvergence = 0.5f;
     ctx->fadeNs = FADE_NS;
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < SPLASH_PARTS; i++) {
         ctx->splashReadyMs[i] = -1;
     }
     ctx->splashWedgesShown = -1;
@@ -988,9 +967,6 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
     ctx->depthLocal = depthScale / 100.0f;
     ctx->sharpenMode = sharpenMode >= 0 && sharpenMode <= 2 ? sharpenMode : 0;
     ctx->supersampleMode = supersampleMode >= 0 && supersampleMode <= 2 ? supersampleMode : 0;
-    ctx->ambilightOn = ambilight;
-    ctx->ambiIntensity = (ambiLevel < 0 ? 0 : (ambiLevel > 100 ? 100 : ambiLevel)) / 100.0f;
-    ctx->ambiOverride = -1;
     // Room light defaults until Java sets them.
     ctx->relightBrightness = RELIGHT_DEFAULT_BRIGHTNESS;
     ctx->relightAmbientTarget = 1.0f;
@@ -1003,20 +979,9 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
     }
     ctx->grade = pictureGradeFor(ctx->pictureUnits);
     ctx->gradeOn = 0;
-    ctx->roomLightOn = roomLight;
-    // Per-room values from the room table until Java sets the preferences.
-    roomLevelsFromTable(ctx);
-    // -1: no debug property overrides.
-    ctx->roomOverride = -1;
-    ctx->roomScaleOverride = -1.0f;
-    ctx->roomDimOverride = -1.0f;
     // About ten frames across a scene cut, so the glow follows rather than flashes.
     ctx->ambiSmooth = 0.08f;
     ctx->glowNorm = 1;
-    // Letterbox detection on, starting from the whole frame.
-    ctx->ambiBarDetect = 1;
-    ctx->ambiCrop[0] = 0.0f;
-    ctx->ambiCrop[1] = 0.0f;
     ctx->ambiCrop[2] = 1.0f;
     ctx->ambiCrop[3] = 1.0f;
     (*env)->GetJavaVM(env, &ctx->vm);

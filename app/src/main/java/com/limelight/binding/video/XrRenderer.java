@@ -7,7 +7,6 @@ import android.graphics.SurfaceTexture;
 import android.os.Build;
 import android.os.Process;
 import android.preference.PreferenceManager;
-import android.text.TextUtils;
 import android.view.Surface;
 
 import com.limelight.FileLog;
@@ -122,40 +121,14 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private Context prefsContext;
     private PreferenceConfiguration prefConfig;
 
-    // Baked rooms, a mesh and its atlases each, by picker cell (roomMeshFile, roomAtlasFiles)
-    private static final String ROOM_DIR = "rooms";
     // Drawn at each hand when the setting is on, painted from its vertex colours
     private static final String CONTROLLER_MODEL = "models/controller.room";
 
     // The splash, drawn before the frame loop starts and uploaded by it, since it owns the
     // GL context
     private final AtomicReference<ByteBuffer> pendingSplash = new AtomicReference<>();
-    // A baked room on its way to the GPU. Mesh, atlases and cell travel together, so a room picked
-    // mid-read never leaves the native side with half of each. The void shows until it lands.
-    private static final class RoomAssets {
-        final int cell;
-        final ByteBuffer mesh;
-        final int meshBytes;
-        // Whole .atlas files, in the slot order the mesh's parts use
-        final ByteBuffer[] atlases;
-
-        RoomAssets(int cell, ByteBuffer mesh, ByteBuffer[] atlases) {
-            this.cell = cell;
-            this.mesh = mesh;
-            this.meshBytes = mesh.remaining();
-            this.atlases = atlases;
-        }
-    }
-
-    private final AtomicReference<RoomAssets> pendingRoom = new AtomicReference<>();
     // Read every session, shown or not, so the Display tab can switch it on at once
     private final AtomicReference<ByteBuffer> pendingControllerModel = new AtomicReference<>();
-    // Only the room on screen is resident. Each pick takes a new ticket, so a stale read is never
-    // parked over a newer pick. Guarded by roomLock.
-    private final Object roomLock = new Object();
-    private int roomTicket;
-    private int parkedRoomCell = -1;
-    private volatile int environmentChoice = ENV_CELL_VOID;
     private volatile boolean passthroughOn;
 
     /**
@@ -176,13 +149,8 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
         this.inputListener = listener;
     }
 
-    // Player session: the player's own panels and saved screen placement. Set before start.
-    private boolean playerMode;
+    // The film screen's saved placement
     private static final String PLAYER_SCREEN_POSE_PREF = "player_screen_pose";
-
-    public void setPlayerMode(boolean on) {
-        playerMode = on;
-    }
 
     private volatile float playerAmbient = 1.0f;
     private volatile float playerBrightness = 0.4f;
@@ -292,9 +260,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private static final String PLAYER_BROWSE_POSE_PREF = "player_browse_pose";
 
     private String screenPoseKey() {
-        if (!playerMode) {
-            return PreferenceConfiguration.VR_SCREEN_POSE_PREF_STRING;
-        }
         return playerScreenHidden ? PLAYER_BROWSE_POSE_PREF : PLAYER_SCREEN_POSE_PREF;
     }
 
@@ -397,13 +362,13 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
         uiBatch.decrementAndGet();
     }
 
-    // Requested environment, an ENV_CELL_ or -1, applied on the frame loop
-    private final java.util.concurrent.atomic.AtomicInteger pendingEnvironmentCell =
+    // Requested passthrough: 1 on, 0 off, -1 nothing asked; applied on the frame loop
+    private final java.util.concurrent.atomic.AtomicInteger pendingPassthrough =
             new java.util.concurrent.atomic.AtomicInteger(-1);
 
     /** Passthrough, or the dark void instead of it. Any thread. */
     public void setPassthrough(boolean on) {
-        pendingEnvironmentCell.set(on ? ENV_CELL_PASSTHROUGH : ENV_CELL_VOID);
+        pendingPassthrough.set(on ? 1 : 0);
     }
 
     /** Whether the session is showing passthrough now. */
@@ -412,9 +377,16 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     private void uploadPendingUiSheets() {
-        int cell = pendingEnvironmentCell.getAndSet(-1);
-        if (cell >= 0) {
-            chooseEnvironment(cell);
+        int pass = pendingPassthrough.getAndSet(-1);
+        if (pass >= 0) {
+            passthroughOn = pass == 1;
+            // Saved, so the next session opens the same way
+            PreferenceManager.getDefaultSharedPreferences(prefsContext).edit()
+                    .putInt(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING,
+                            passthroughOn ? PreferenceConfiguration.VR_ENV_PASSTHROUGH
+                                          : PreferenceConfiguration.VR_ENV_VOID)
+                    .putBoolean(PreferenceConfiguration.VR_PASSTHROUGH_PREF_STRING, passthroughOn)
+                    .apply();
         }
         if (uiBatch.get() > 0) {
             return;
@@ -473,17 +445,14 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private static native void nativeSetFileLog(String path, int level);
     // Where the last failed start stopped, for XrStartFailure, or null. Taken once.
     private static native String[] nativeTakeStartFailure();
-    // envResTier: 0 low, 1 standard, 2 high, 3 ultra. fps is the video's; the display rate is
-    // matched to it.
+    // fps is the video's; the display rate is matched to it.
     private native boolean nativeReconfigure(long ctx, int width, int height, int fps, int stereoMode,
                                              boolean sameFilm, boolean stereoOn);
     private native long nativeInit(Activity activity, int width, int height, int fps,
                                    int stereoMode, int depthWidth, int depthHeight,
                                    boolean depthDebug, int convergence, int depthScale,
                                    boolean handTracking, int sharpenMode, int supersampleMode,
-                                   boolean perfOverlay,
-                                   boolean ambilight, int ambiLevel, boolean roomLight,
-                                   int envResTier);
+                                   boolean perfOverlay);
     private native void nativeSetCaptureDir(long ctx, String dir);
     private native int nativeGetTexId(long ctx);
     private native ByteBuffer nativeGetModelInput(long ctx, int pair);
@@ -507,16 +476,10 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                                           boolean pointerSleep, float[] out);
     private native void nativeSetScreenPose(long ctx, float[] pose);
     private native void nativeRecentreScreen(long ctx);
-    // The cell the room belongs to, which the native side maps to its room style
-    private native void nativeUploadRoomModel(long ctx, ByteBuffer mesh, int length, int cell);
-    private native void nativeUploadRoomAtlas(long ctx, ByteBuffer atlas, int cell, int slot);
     // The controller model's .room file, whole
     private native void nativeUploadControllerModel(long ctx, ByteBuffer mesh, int length);
     // Whether the controller model is drawn; the Display tab's row changes it
     private native void nativeSetControllerModel(long ctx, boolean on);
-    // One room's own Room tab values, by the picker cell that shows it
-    private native void nativeSetRoomLevels(long ctx, int cell, int brightness, boolean glow,
-                                            int light, int screen);
     // The running model's default separation and convergence (preference units) for the 3D
     // tab's reset, and the preset separations in cell order
     private native void nativeSetDepthDefaults(long ctx, int separation, int convergence);
@@ -530,7 +493,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     // Why the runtime ended the frame loop, or null
     private native String nativeGetExitReason(long ctx);
     private native String nativeGetRuntime(long ctx);
-    private native void nativeSetPlayerMode(long ctx, boolean on);
     private native void nativeSetPlayerLighting(long ctx, float ambient, float brightness);
     private native void nativeSetPlayerContent(long ctx, float top, float bottom);
     private native void nativeSetPlayerScreenHidden(long ctx, boolean hidden);
@@ -548,7 +510,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private native void nativeSetShowRay(long ctx, boolean on);
     // The depth model will make no maps this session, so the splash stops waiting. Any thread.
     private native void nativeDepthGaveUp(long ctx);
-    private native void nativeSetEnvironment(long ctx, int choice);
     // The rate the display is on
     private native float nativeGetDisplayRate(long ctx);
     // Maximum depth maps per second; the governor starts here and cuts when frames are missed
@@ -599,9 +560,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                         prefs.vrDepthMode, mapSize.width, mapSize.height,
                         prefs.vrDepthDebug, prefs.vrConvergence, prefs.vrDepthScale,
                         prefs.vrHandTracking, prefs.vrSharpening, prefs.vrSupersampling,
-                        prefs.enablePerfOverlay,
-                        prefs.vrAmbilight, prefs.vrAmbilightLevel, prefs.vrRoomLight,
-                        prefs.vrEnvResTier);
+                        prefs.enablePerfOverlay);
                 if (nativeCtx == 0) {
                     initLatch.countDown();
                     return;
@@ -618,18 +577,13 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                         depthSpec.defaultConvergence);
                 nativeSetPicture(nativeCtx, prefs.vrPicture);
                 nativeSetDepthRate(nativeCtx, prefs.vrDepthRate);
-                nativeSetPlayerMode(nativeCtx, playerMode);
-                if (playerMode) {
-                    nativeSetPlayerLighting(nativeCtx, playerAmbient, playerBrightness);
-                    nativeSetPlayerCrop(nativeCtx, playerCrop);
-                    nativeSetPlayerContent(nativeCtx, playerBarTop, playerBarBottom);
-                    nativeSetPlayerScreenHidden(nativeCtx, playerScreenHidden);
-                }
+                nativeSetPlayerLighting(nativeCtx, playerAmbient, playerBrightness);
+                nativeSetPlayerCrop(nativeCtx, playerCrop);
+                nativeSetPlayerContent(nativeCtx, playerBarTop, playerBarBottom);
+                nativeSetPlayerScreenHidden(nativeCtx, playerScreenHidden);
                 restoreScreenPoseFresh();
-                if (playerMode) {
-                    // After the saved placement, whose own curve the player overrides
-                    nativeSetPlayerCurve(nativeCtx, playerCurve);
-                }
+                // After the saved placement, whose own curve the player overrides
+                nativeSetPlayerCurve(nativeCtx, playerCurve);
                 nativeSetColourMode(nativeCtx, colourMode);
                 nativeSetHandAutoHide(nativeCtx, handAutoHide);
                 if (videoTransfer != XrShared.VIDEO_TRANSFER_CODE_SDR) {
@@ -1100,21 +1054,11 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             if (splash != null) {
                 nativeUploadSplash(nativeCtx, splash);
             }
-            if (playerMode) {
-                uploadPendingUiSheets();
-            }
+            uploadPendingUiSheets();
 
             ByteBuffer controller = pendingControllerModel.getAndSet(null);
             if (controller != null) {
                 nativeUploadControllerModel(nativeCtx, controller, controller.remaining());
-            }
-
-            RoomAssets room = pendingRoom.getAndSet(null);
-            if (room != null) {
-                nativeUploadRoomModel(nativeCtx, room.mesh, room.meshBytes, room.cell);
-                for (int slot = 0; slot < room.atlases.length; slot++) {
-                    nativeUploadRoomAtlas(nativeCtx, room.atlases[slot], room.cell, slot);
-                }
             }
 
             nativeEndFrame(nativeCtx, drawFrame, texMatrix, distance, quadWidth, curvature,
@@ -1123,162 +1067,31 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
         return false;
     }
 
-    /**
-     * Picks the starting environment, then reads rooms and draws the panels on another thread,
-     * which would otherwise hold up the first frame.
-     */
+    // Passthrough or the dark void, as saved. The controller model is read on another thread,
+    // which would otherwise hold up the first frame.
     private void startEnvironment(PreferenceConfiguration prefs) {
-
         SharedPreferences saved = PreferenceManager.getDefaultSharedPreferences(prefsContext);
-        int id = saved.getInt(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING, -1);
-        if (id < 0) {
-            // Older installs saved a cell index instead of an id. The old key is left in place.
-            int legacy = saved.getInt(PreferenceConfiguration.VR_ENVIRONMENT_PREF_STRING, -1);
-            if (EnvironmentIds.idForLegacyCell(legacy) >= 0) {
-                id = EnvironmentIds.idForLegacyCell(legacy);
-                saved.edit()
-                        .putInt(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING, id)
-                        .apply();
-            }
-        }
-
-        int cell = EnvironmentIds.startCell(id, prefs.vrPassthrough);
-        if (id >= 0 && EnvironmentIds.cellForId(id) < 0) {
-            // The saved id is no longer offered: log once and save the void instead
-            FileLog.event("environment id " + id + " is no longer offered, starting in the void");
-            saved.edit()
-                    .putInt(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING,
-                            EnvironmentIds.idForCell(cell))
-                    .apply();
-        }
+        int id = saved.getInt(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING,
+                prefs.vrPassthrough ? PreferenceConfiguration.VR_ENV_PASSTHROUGH
+                                    : PreferenceConfiguration.VR_ENV_VOID);
+        boolean passthrough = id == PreferenceConfiguration.VR_ENV_PASSTHROUGH;
         // If the headset starts apps in passthrough, the player does too; the saved choice is kept
-        if (playerMode && cell != ENV_CELL_PASSTHROUGH && nativeSystemPrefersPassthrough(nativeCtx)) {
+        if (!passthrough && nativeSystemPrefersPassthrough(nativeCtx)) {
             FileLog.event("the headset starts apps in passthrough, so the player does");
-            cell = ENV_CELL_PASSTHROUGH;
+            passthrough = true;
         }
-        environmentChoice = cell;
-        passthroughOn = cell == ENV_CELL_PASSTHROUGH;
-        nativeSetEnvironment(nativeCtx, cell);
-
-        // Every room's Room tab values up front, so the picker can switch rooms without asking
-        // again
-        for (int roomCell = 0; roomCell < ENV_CELL_COUNT; roomCell++) {
-            if (!EnvironmentIds.isRoomCell(roomCell)) {
-                continue;
-            }
-            PreferenceConfiguration.RoomLevels levels = PreferenceConfiguration.readRoomLevels(
-                    saved, EnvironmentIds.idForCell(roomCell));
-            nativeSetRoomLevels(nativeCtx, roomCell, levels.brightness, levels.glow,
-                    levels.light, levels.screen);
-        }
+        passthroughOn = passthrough;
         nativeSetShowRay(nativeCtx, prefs.vrShowRay);
         nativeSetControllerModel(nativeCtx, prefs.vrControllerModel);
 
-        final int startRoom = cell;
-        final int roomTicketAtStart;
-        synchronized (roomLock) {
-            roomTicketAtStart = ++roomTicket;
-        }
         Thread loader = new Thread() {
             @Override
             public void run() {
                 pendingControllerModel.set(readAsset(CONTROLLER_MODEL));
-                loadRoomAssets(startRoom, roomTicketAtStart);
             }
         };
         loader.setName("Video - XR Environment");
         loader.start();
-    }
-
-    // Cells past the real ones are blank tiles
-    private static boolean cellExists(int cell) {
-        return cell >= 0 && cell < ENV_CELL_COUNT;
-    }
-
-    /** A cell picked in the grid. A room shows once loaded, with the void until then. */
-    private void chooseEnvironment(int cell) {
-        if (!cellExists(cell)) {
-            return;
-        }
-        environmentChoice = cell;
-        passthroughOn = cell == ENV_CELL_PASSTHROUGH;
-
-        requestRoom(cell);
-        nativeSetEnvironment(nativeCtx, cell);
-
-        // Saved, so the setting matches what is on screen
-        EnvironmentIds.store(PreferenceManager.getDefaultSharedPreferences(prefsContext),
-                EnvironmentIds.idForCell(cell));
-    }
-
-    // The mesh for a baked room by cell, or null for a cell with no model
-    private static String roomMeshFile(int cell) {
-        // No rooms ship, so no cell has one
-        return null;
-    }
-
-    // The room's atlases in the slot order its parts use: ASTC with mip chains, uploaded as read
-    private static String[] roomAtlasFiles(int cell) {
-        return null;
-    }
-
-    /**
-     * Each pick takes a ticket, so a room still being read for an earlier pick is dropped. The
-     * resident room is not read again.
-     */
-    private void requestRoom(final int cell) {
-        final int ticket;
-        synchronized (roomLock) {
-            ticket = ++roomTicket;
-            if (roomMeshFile(cell) == null || cell == parkedRoomCell) {
-                return;
-            }
-        }
-        Thread loader = new Thread() {
-            @Override
-            public void run() {
-                loadRoomAssets(cell, ticket);
-            }
-        };
-        loader.setName("Video - XR Environment");
-        loader.start();
-    }
-
-    /**
-     * Reads a room's mesh and atlases and parks them for the frame loop, which owns the GL
-     * context. Any failure parks nothing, and the cell shows the void.
-     */
-    private void loadRoomAssets(int cell, int ticket) {
-        String meshFile = roomMeshFile(cell);
-        String[] atlasFiles = roomAtlasFiles(cell);
-        if (meshFile == null || atlasFiles == null) {
-            return;
-        }
-        long started = System.nanoTime();
-        ByteBuffer mesh = readAsset(ROOM_DIR + "/" + meshFile);
-        if (mesh == null) {
-            return;
-        }
-
-        ByteBuffer[] atlases = new ByteBuffer[atlasFiles.length];
-        for (int slot = 0; slot < atlasFiles.length; slot++) {
-            atlases[slot] = readAsset(ROOM_DIR + "/" + atlasFiles[slot]);
-            if (atlases[slot] == null) {
-                return;
-            }
-        }
-        RoomAssets room = new RoomAssets(cell, mesh, atlases);
-
-        synchronized (roomLock) {
-            // Something else was picked while this was read
-            if (ticket != roomTicket) {
-                return;
-            }
-            pendingRoom.set(room);
-            parkedRoomCell = cell;
-        }
-        FileLog.event("room " + meshFile + " and " + TextUtils.join(", ", atlasFiles) + " read in "
-                + (System.nanoTime() - started) / 1000000 + " ms");
     }
 
     // Direct buffer, so the native side can read it without a copy
@@ -1308,7 +1121,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     // Pointer moves go before presses, so a click lands where the pointer is now
     private void dispatchInput() {
         UiListener ui = uiListener;
-        if (playerMode && ui != null) {
+        if (ui != null) {
             ui.onUiPointer((int)inputState[IN_UI_PANEL], inputState[IN_UI_U], inputState[IN_UI_V],
                            inputState[IN_UI_PRESS] != 0.0f);
         }
@@ -1333,14 +1146,11 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             if (clicks != 0) {
                 inputListener.onVrScroll(clicks);
             }
-            if (playerMode) {
-                inputListener.onVrPlayerInput((int)inputState[IN_PLAYER_BUTTONS],
-                        inputState[IN_PLAYER_STICK_X]);
-            }
+            inputListener.onVrPlayerInput((int)inputState[IN_PLAYER_BUTTONS],
+                    inputState[IN_PLAYER_STICK_X]);
         }
 
-        // A 3D room puts the screen on its wall, so that placement is not saved
-        if (inputState[IN_POSE_DIRTY] != 0.0f && !EnvironmentIds.isRoomCell(environmentChoice)) {
+        if (inputState[IN_POSE_DIRTY] != 0.0f) {
             saveScreenPose();
         }
     }
@@ -1408,7 +1218,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
 
     private void restoreScreenPoseFresh() {
         restoreScreenPose();
-        if (playerMode && placedKeys.add(screenPoseKey())) {
+        if (placedKeys.add(screenPoseKey())) {
             nativeRecentreScreen(nativeCtx);
         }
     }
@@ -1419,7 +1229,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
         // First time in the library: start where the film screen is, at the library's share of its
         // width, so nothing jumps
         boolean browseFromFilm = false;
-        if (saved == null && playerMode && playerScreenHidden) {
+        if (saved == null && playerScreenHidden) {
             saved = prefs.getString(PLAYER_SCREEN_POSE_PREF, null);
             browseFromFilm = saved != null;
         }

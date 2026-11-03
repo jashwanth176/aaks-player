@@ -333,21 +333,6 @@ int initGl(XrCtx* ctx) {
 
     ctx->srgbWriteControl = glExts != NULL && strstr(glExts, "GL_EXT_sRGB_write_control") != NULL;
 
-    // Room atlas capabilities, queried once
-    ctx->astcSupported = glExts != NULL
-            && strstr(glExts, "GL_KHR_texture_compression_astc_ldr") != NULL;
-    ctx->roomAnisotropy = 1.0f;
-    GLfloat anisoMost = 1.0f;
-    if (glExts != NULL && strstr(glExts, "GL_EXT_texture_filter_anisotropic") != NULL) {
-        glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisoMost);
-        if (anisoMost > 1.0f) {
-            ctx->roomAnisotropy = anisoMost < ROOM_ANISOTROPY_MAX ? anisoMost
-                                                                  : ROOM_ANISOTROPY_MAX;
-        }
-    }
-    LOGEV("room atlas support: ASTC LDR %s, anisotropy %.0f of %.0f",
-          ctx->astcSupported ? "yes" : "no", ctx->roomAnisotropy, anisoMost);
-
     if (glExts != NULL && strstr(glExts, "GL_EXT_disjoint_timer_query") != NULL) {
         pfnGenQueries = (PFNGENQUERIESEXT)eglGetProcAddress("glGenQueriesEXT");
         pfnBeginQuery = (PFNBEGINQUERYEXT)eglGetProcAddress("glBeginQueryEXT");
@@ -360,7 +345,6 @@ int initGl(XrCtx* ctx) {
                 pfnGetQueryObjectuiv != NULL && pfnGetQueryObjectui64v != NULL &&
                 pfnDeleteQueries != NULL) {
             pfnGenQueries(2, ctx->timerQueries);
-            pfnGenQueries(2, ctx->roomTimerQueries);
             ctx->timerSupported = 1;
         }
     }
@@ -485,13 +469,6 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
     // it never available, so they are not timed.
     int timing = ctx->timerSupported && !ctx->captureRequested;
 
-    // Before the query opens: creating the room's swapchain/buffers inside it breaks later
-    // samples. Drawing happens at the end.
-    int roomOn = roomEffective(ctx) > 0;
-    if (roomOn) {
-        prepareRoom(ctx);
-    }
-
     if (timing && !ctx->timerPending[ctx->timerSlot]) {
         pfnBeginQuery(GL_TIME_ELAPSED_EXT, ctx->timerQueries[ctx->timerSlot]);
     }
@@ -503,30 +480,13 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
         runOffsetSearch(ctx, separation);
     }
 
-    // Inside the query window so the glow is included in the GPU time
-    int glowOn;
-    float glowLevel;
-    ambiEffective(ctx, &glowOn, &glowLevel);
-    // The glow, room lighting and room light all read the same colour sample; taken here so
-    // the room is lit from this frame.
-    int relight = relightWanted(ctx);
-    int sampled = glowOn || roomOn || relight;
-    if (!sampled) {
-        // Reset so the next sample starts fresh instead of easing in
-        ctx->ambiSeeded = 0;
-    }
-    if (sampled) {
-        runFrameColorSample(ctx, texMatrix);
-    }
-    if (relight) {
+    // Inside the query window so the glow is included in the GPU time. The glow and the
+    // room light read the same colour sample.
+    runFrameColorSample(ctx, texMatrix);
+    if (relightWanted(ctx)) {
         relightSample(ctx);
     }
-    if (glowOn) {
-        runGlowRender(ctx);
-    }
-    else {
-        ctx->glowDrawnOn = 0;
-    }
+    runGlowRender(ctx);
 
     uint32_t imageIndex = 0;
     XrSwapchainImageAcquireInfo acquireInfo = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
@@ -751,54 +711,6 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
                 ctx->timerPending[other] = 0;
                 ctx->timerPendingFrames[other] = 0;
                 LOGW("XR warp: gave up on a GPU timer query that never landed");
-            }
-        }
-    }
-
-    // Letterbox detection, every AMBI_BAR_PERIOD sampled frames. Outside both query windows
-    // because a readback inside one can leave the query never available on this driver.
-    if (sampled && ctx->ambiBarDetect) {
-        // Previous readback first, then a new request if due
-        finishAmbiBarDetect(ctx);
-        ctx->ambiBarCounter++;
-        if (ctx->ambiBarCounter >= AMBI_BAR_PERIOD) {
-            ctx->ambiBarCounter = 0;
-            runAmbiBarDetect(ctx, texMatrix);
-        }
-    }
-
-    // Room last: the compositor often preempts this full resolution pass under head motion,
-    // so anything queued behind it would stall. renderRoom opens its own timer query.
-    if (roomOn) {
-        renderRoom(ctx);
-    }
-
-    // Collected every frame, so a query from the last rendered room frame still lands
-    if (timing) {
-        int roomOther = ctx->roomTimerSlot;
-        if (ctx->roomTimerPending[roomOther]) {
-            GLuint ready = 0;
-            pfnGetQueryObjectuiv(ctx->roomTimerQueries[roomOther], GL_QUERY_RESULT_AVAILABLE_EXT,
-                                 &ready);
-            if (ready) {
-                GLuint64 elapsed = 0;
-                pfnGetQueryObjectui64v(ctx->roomTimerQueries[roomOther], GL_QUERY_RESULT_EXT,
-                                       &elapsed);
-                ctx->roomTimerPending[roomOther] = 0;
-                ctx->roomTimerPendingFrames[roomOther] = 0;
-                if (elapsed > 0 && elapsed < 50000000ull) {
-                    ctx->roomGpuTotalNs += (int64_t)elapsed;
-                    ctx->roomGpuSamples++;
-                    rateBudgetRoom(&ctx->rateBudget, (int64_t)elapsed);
-                }
-                else {
-                    ctx->roomGpuDropped++;
-                }
-            }
-            else if (++ctx->roomTimerPendingFrames[roomOther] > 90) {
-                ctx->roomTimerPending[roomOther] = 0;
-                ctx->roomTimerPendingFrames[roomOther] = 0;
-                LOGW("room: gave up on a GPU timer query that never landed");
             }
         }
     }

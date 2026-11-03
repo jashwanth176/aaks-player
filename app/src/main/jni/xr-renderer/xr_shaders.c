@@ -524,50 +524,6 @@ const char* const GLOW_FRAGMENT_SRC =
     "    fragColor = vec4(color * a, cover);\n"
     "}\n";
 
-// 3D room. Screen light is per vertex to keep the fragment shader cheap.
-const char* const ROOM_VERTEX_SRC =
-    "#version 300 es\n"
-    "precision highp float;\n"
-    "in vec3 a_position;\n"
-    "in vec3 a_color;\n"
-    "in float a_spill;\n"
-    "in vec2 a_uv;\n"
-    "uniform mat4 u_viewproj;\n"
-    "uniform sampler2D u_ambi;\n"
-    "uniform float u_spillGain;\n"
-    "out vec3 v_color;\n"
-    "out vec3 v_wash;\n"
-    "out vec2 v_uv;\n"
-    "void main() {\n"
-    // Five taps: centre and each edge midpoint
-    "    vec3 lit = texture(u_ambi, vec2(0.5, 0.5)).rgb;\n"
-    "    lit += texture(u_ambi, vec2(0.15, 0.5)).rgb;\n"
-    "    lit += texture(u_ambi, vec2(0.85, 0.5)).rgb;\n"
-    "    lit += texture(u_ambi, vec2(0.5, 0.15)).rgb;\n"
-    "    lit += texture(u_ambi, vec2(0.5, 0.85)).rgb;\n"
-    "    vec3 wash = lit * 0.2;\n"
-    "    v_color = a_color;\n"
-    "    v_wash = wash * (a_spill * u_spillGain);\n"
-    "    v_uv = a_uv;\n"
-    "    gl_Position = u_viewproj * vec4(a_position, 1.0);\n"
-    "}\n";
-
-const char* const ROOM_FRAGMENT_SRC =
-    "#version 300 es\n"
-    "precision mediump float;\n"
-    "in vec3 v_color;\n"
-    "in vec3 v_wash;\n"
-    "in vec2 v_uv;\n"
-    "uniform sampler2D u_room;\n"
-    "uniform float u_texMix;\n"
-    "uniform float u_dim;\n"
-    "out vec4 fragColor;\n"
-    "void main() {\n"
-    // mix 0 vertex colour, 1 atlas (untextured parts bind a white 1x1)
-    "    vec3 base = mix(v_color, texture(u_room, v_uv).rgb, u_texMix) * u_dim;\n"
-    "    fragColor = vec4(base + v_wash, 1.0);\n"
-    "}\n";
-
 // Controller model: vertex colours, per-vertex lighting from one fixed light
 // above and behind the seat, plus ambient
 const char* const MODEL_VERTEX_SRC =

@@ -1,7 +1,7 @@
 
 // OpenXR renderer for the video player. The decoder's OES texture is drawn
 // into a swapchain shown on a quad or cylinder layer, so the compositor does
-// the reprojection. The 3D room is drawn per eye into a projection layer.
+// the reprojection.
 
 #ifndef XR_RENDERER_H
 #define XR_RENDERER_H
@@ -228,57 +228,13 @@ static inline int64_t nowNs(void) {
 // Ambilight: the frame is reduced to a tiny colour texture that fills
 // a glow quad behind the screen (sizes and colour maths in xr_glow.h).
 
-// Letterbox detection: a copy of the sample pass is read back periodically,
-// black bars are counted per edge, and the glow's sample is cropped to the
-// picture. Sample-pass frames between readbacks (4 KB each).
-#define AMBI_BAR_PERIOD 30
-// Mean max(r,g,b) below which a row or column is bar;
-// covers unexpanded limited-range black (16/255).
-#define AMBI_BAR_LUMA 0.09f
-// Max texels (of 32) one edge may crop.
-#define AMBI_BAR_MAX 10
-// Ticks a larger bar must hold before the crop grows (slowly, so a dark
-// scene is not taken for a bar), and a smaller one before it shrinks.
-#define AMBI_BAR_APPLY 4
-#define AMBI_BAR_RELEASE 2
-// Edge order of the bar arrays, in the quad's uv space.
-#define AMBI_EDGE_LEFT 0
-#define AMBI_EDGE_RIGHT 1
-#define AMBI_EDGE_BOTTOM 2
-#define AMBI_EDGE_TOP 3
-#define AMBI_EDGES 4
 
-// 3D room styles: baked models from the assets, drawn per eye into
-// the projection layer. 0 is none; each has a row in xr_room.c.
-#define ROOM_STYLE_THEATER 1
-#define ROOM_STYLE_GRAND_CINEMA 2
-#define ROOM_STYLE_SYNTHWAVE 3
-#define ROOM_STYLE_FIRST ROOM_STYLE_THEATER
-#define ROOM_STYLE_LAST ROOM_STYLE_SYNTHWAVE
-#define ROOM_EYES 2
-// Per-eye room size by Environment Res tier. Low takes half the
-// runtime's recommendation, standard and high cap the recommendation,
-// and ultra (experimental) uses a fixed size regardless of it.
-#define ROOM_MAX_EYE_FULL 2560     // high
-#define ROOM_MAX_EYE_STANDARD 1760 // standard
-#define ROOM_MAX_EYE 1280          // low, on half the recommendation
-#define ROOM_ULTRA_EYE 2800        // ultra, taken rather than capped
-// Floats per vertex: position, colour, spill weight, uv, one spare.
-#define ROOM_VERTEX_FLOATS 10
-// Floats per vertex in the baked model file: position, normal, uv, colour.
-#define ROOM_MODEL_FLOATS ROOM_MESH_VERTEX_FLOATS
-// Clip planes. Far is the room's extent times the margin, never below ROOM_FAR_MIN_M.
-#define ROOM_NEAR_M 0.05f
-#define ROOM_FAR_MIN_M 60.0f
-#define ROOM_FAR_MARGIN 1.5f
-// Range of the scale property; rooms default to their built size.
-#define ROOM_SCALE_MIN 0.25f
-#define ROOM_SCALE_MAX 4.0f
-// Range of the brightness property; 1 is as baked.
-#define ROOM_DIM_MIN 0.10f
-#define ROOM_DIM_MAX 2.0f
-// Anisotropic filtering on compressed atlases, where supported.
-#define ROOM_ANISOTROPY_MAX 4.0f
+// Controller model pass: one side-by-side image, half per eye, at the runtime's
+// recommended eye size capped here, with these clip planes
+#define MODEL_EYES 2
+#define MODEL_MAX_EYE 1760
+#define MODEL_NEAR_M 0.05f
+#define MODEL_FAR_M 60.0f
 
 // Max time the warp stays flat waiting for a fresh depth map after
 // 3D is switched back on (a map normally arrives within ~55 ms).
@@ -346,14 +302,9 @@ typedef struct XrCompositionLayerSettingsFB {
 #define PROP_POINTER_SLEEP "debug.moonlight.pointersleep"
 #define PROP_SHARPEN "debug.moonlight.sharpen"
 #define PROP_SUPERSAMPLE "debug.moonlight.supersample"
-#define PROP_AMBILIGHT "debug.moonlight.ambilight"
 #define PROP_AMBI_SMOOTH "debug.moonlight.ambismooth"
-#define PROP_LETTERBOX "debug.moonlight.letterbox"
 // 1 normalises the glow to a steady luma with a dark edge roll-off, 0 uses the raw sample.
 #define PROP_GLOW_NORM "debug.moonlight.glownorm"
-#define PROP_ROOM "debug.moonlight.room"
-#define PROP_ROOM_SCALE "debug.moonlight.roomscale"
-#define PROP_ROOM_DIM "debug.moonlight.roomdim"
 // Milliseconds: time constants of the per-texel depth
 // average and of the normalisation range. 0 disables.
 #define PROP_DEPTH_TAU "debug.moonlight.depth_tau"
@@ -571,31 +522,14 @@ typedef struct {
     // First frame has nothing to smooth against.
     int ambiSeeded;
     float ambiSmooth;
-
-    // Letterbox detection: unsmoothed, uncropped copy of the sample, read back on the CPU.
-    GLuint ambiDetectTexture;
-    GLuint ambiDetectFbo;
-    // Collected a frame later.
-    GLuint ambiDetectPbo;
-    int ambiDetectPending;
-    // 1 detects and crops, 0 uses the whole frame.
-    int ambiBarDetect;
-    // Sample-pass frames since the last readback.
-    int ambiBarCounter;
-    // AMBI_EDGE_* order. Applied is the current crop; the tick
-    // counters track how long a larger or smaller count has held.
-    int ambiBarApplied[AMBI_EDGES];
-    int ambiBarGrowTicks[AMBI_EDGES];
-    int ambiBarGrowMin[AMBI_EDGES];
-    int ambiBarShrinkTicks[AMBI_EDGES];
-    int ambiBarShrinkMax[AMBI_EDGES];
-    // x0, y0, w, h in quad uv; 0 0 1 1 is the whole frame.
+    // Part of the frame sampled: x0, y0, w, h in quad uv
     float ambiCrop[4];
+
     GLuint glowProgram;
     GLint glowIntensityUniform;
     GLint glowBlurUniform;
     GLint glowScaleUniform;
-    // Room cover and light reach, from the immersion
+    // How much of the room the glow covers, and its light's reach, from the immersion
     GLint glowRoomUniform;
     GLint glowFrameUniform;
     GLint glowFrameLookUniform;
@@ -612,11 +546,6 @@ typedef struct {
     int glowRendered;
     // Last drawn with, so changes redraw a paused picture.
     int glowDrawnOn;
-    float glowDrawnLevel;
-    int ambilightOn;
-    float ambiIntensity;
-    // Debug property override, -1 when unset.
-    int ambiOverride;
 
     // Picture grade in preference units (PICTURE_ order).
     // gradeOn is 0 at the defaults so the shaders skip it.
@@ -624,96 +553,11 @@ typedef struct {
     int gradeOn;
     PictureGrade grade;
 
-    // 0 none, else ROOM_STYLE_*; roomOverride is the debug property.
-    int roomStyle;
-    // The first environment choice was logged
-    int environmentSaid;
-    int roomOverride;
-    // Debug property overrides, -1 when unset.
-    float roomScaleOverride;
-    float roomDimOverride;
-    // Picture light washed over the room, independent of the glow; global.
-    int roomLightOn;
-    // Per-style Room tab values in preference units: brightness and light level in
-    // hundredths, glow 0/1, screen size in percent. Seeded from the room table.
-    int roomBrightness[ROOM_STYLE_LAST + 1];
-    int roomGlow[ROOM_STYLE_LAST + 1];
-    int roomLightLevel[ROOM_STYLE_LAST + 1];
-    int roomScreen[ROOM_STYLE_LAST + 1];
-    // Built on first use. One side-by-side image, half per eye.
-    XrSwapchain roomSwapchain;
-    uint32_t roomImageCount;
-    XrSwapchainImageOpenGLESKHR* roomImages;
-    GLuint roomFbo;
-    GLuint roomDepthBuffer;
-    GLuint roomProgram;
-    GLint roomViewProjUniform;
-    GLint roomSpillGainUniform;
-    GLint roomTexMixUniform;
-    GLint roomDimUniform;
-    GLuint roomVertexBuffer;
-    GLuint roomIndexBuffer;
-    int roomVertexCount;
-    int roomIndexCount;
-    // Copied at build so a model loading for another room cannot change the parts in use.
-    RoomMeshPart roomParts[ROOM_MESH_PARTS_MAX];
-    int roomPartCount;
-    // The baked model as read; anchor and scale are applied at build,
-    // so a scale change rebuilds without rereading the assets.
-    float* roomModelVerts;
-    uint32_t* roomModelIndices;
-    int roomModelVertexCount;
-    int roomModelIndexCount;
-    RoomMeshPart roomModelParts[ROOM_MESH_PARTS_MAX];
-    int roomModelPartCount;
-    int roomAtlasCount;
-    int roomModelReady;
-    // Plus a 1x1 white texture so the sampler always has a complete texture bound.
-    GLuint roomTextures[ROOM_MESH_ATLASES_MAX];
-    int roomTextureReady[ROOM_MESH_ATLASES_MAX];
-    // Owning style. Only one room is resident; a model
-    // for another room drops the atlases it replaces.
-    int roomModelStyle;
-    int roomTextureStyle[ROOM_MESH_ATLASES_MAX];
-    GLuint roomWhiteTexture;
-    float roomTexMix;
-    float roomDim;
-    // 0 before the first build.
-    int roomBuiltStyle;
-    // Last request, so a pending or failed build is not retried every frame.
-    int roomWantedStyle;
-    int roomAssetsSeen;
-    float roomWantedScale;
-    int roomEyeWidth;
-    int roomEyeHeight;
-    int roomReady;
-    // Not retried after a failure.
-    int roomFailed;
-    int roomRendered;
-    float roomSpillGain;
-    // Far plane of the built room.
-    float roomFarZ;
-    float roomClear[3];
-    // Views the room was drawn with, submitted with the projection layer.
-    XrView roomViews[ROOM_EYES];
-    int roomViewsValid;
-    // A room hangs the screen on its wall; the user's placement is saved and restored on exit.
-    int roomHoldingScreen;
-    // Last room placement, for the log.
-    int roomPlacedStyle;
-    float roomPlacedWidth;
-    XrPosef savedScreenPose;
-    float savedScreenWidth;
-    float savedScreenRadius;
-    // A recentre in a room changed the saved placement; persist it once restored.
-    int recentredInRoom;
-    // Per-eye sizes from the runtime, read at startup; used by the room.
+    // Per-eye sizes from the runtime, read at startup; used by the controller model.
     int recommendedEyeWidth;
     int recommendedEyeHeight;
     int maxEyeWidth;
     int maxEyeHeight;
-    // Set from Java.
-    int envResTier;
 
     GLuint oesTexture;
     GLuint program;
@@ -793,10 +637,10 @@ typedef struct {
     int fadeKnobMs;
     // panelFadingOut keeps the bar hidden until a fading panel has gone.
 
-    // Launch splash, up from the first frame until panels, room and depth model are
+    // Launch splash, up from the first frame until panels and depth model are
     // ready. splashReadyMs: ms from the first frame each was ready, -1 if not yet.
     Splash splash;
-    int splashReadyMs[3];
+    int splashReadyMs[SPLASH_PARTS];
     XrSwapchain splashSwapchain;
     uint32_t splashImageCount;
     XrSwapchainImageOpenGLESKHR* splashImages;
@@ -905,10 +749,6 @@ typedef struct {
     int64_t boundaryAskedNs;
     XrResult boundaryLogged;
     int boundaryLoggedAsk;
-    // ASTC atlas support, and anisotropy: 1 without
-    // the extension, else up to ROOM_ANISOTROPY_MAX.
-    int astcSupported;
-    float roomAnisotropy;
     // Passthrough via the alpha-blend environment mode. Meta
     // enables the cameras only if the manifest requests it.
     int alphaBlendSupported;
@@ -1168,9 +1008,9 @@ typedef struct {
     int modelEyeHeight;
     int modelPassReady;
     int modelPassFailed;
-    XrView modelViews[ROOM_EYES];
+    XrView modelViews[MODEL_EYES];
     int modelRendered;
-    // Own timer query pair, like the room.
+    // Own timer query pair
     GLuint modelTimerQueries[2];
     int modelTimerSlot;
     int modelTimerPending[2];
@@ -1220,21 +1060,11 @@ typedef struct {
     float grabWidth;
     float grabHeight;
     float grabRadius;
-    // Tilt and roll at pickup; a move keeps them and recomputes only the yaw.
-    float grabPitch;
-    float grabRoll;
     // Resize scales about the centre; this is the opposite
     // corner, and its signs identify the held one.
     float grabOppX, grabOppY;
-    // In a room a resize changes the share of the room's screen instead of
-    // the width: share and reach along the half diagonal at pickup. The
-    // share is saved to the preference once a frame has a free setting slot.
-    int grabRoomPercent;
-    float grabRoomReach;
-    // Local player mode: handles per xr_handles.h. A move bar pull
-    // scales the distance by the hand's distance to the eyes relative
-    // to the grab; the width follows the distance proportionally.
-    int playerMode;
+    // Handles per xr_handles.h. A move bar pull scales the distance by the hand's
+    // distance to the eyes relative to the grab; the width follows the distance.
     float grabHandDist;
     float grabScreenDist;
     // Distance factor from the stick while a move grab is held
@@ -1277,7 +1107,6 @@ typedef struct {
     Vec3 grabHandStart;
     float grabScale;
     DragRamp grabRamp;
-    int roomScreenUnsaved;
     int poseDirty;
 
     // Hover state; picks which handle to draw.
@@ -1322,15 +1151,6 @@ typedef struct {
     long gpuDropped;
     GLuint64 gpuLastDroppedNs;
 
-    // The room pass has its own query pair, run before the main
-    // one; nested inside it, this driver returns wrapped values.
-    GLuint roomTimerQueries[2];
-    int roomTimerSlot;
-    int roomTimerPending[2];
-    int roomTimerPendingFrames[2];
-    int64_t roomGpuTotalNs;
-    long roomGpuSamples;
-    long roomGpuDropped;
 
     // Separate accumulator so the overlay does not disturb the logcat cadence.
     int64_t overlayGpuTotalNs;
@@ -1388,8 +1208,6 @@ void waitForDepthSlot(XrCtx* ctx);
 int initAmbilight(XrCtx* ctx);
 int linkAmbiProgram(XrCtx* ctx);
 void ambiEffective(XrCtx* ctx, int* on, float* level);
-void runAmbiBarDetect(XrCtx* ctx, const float* texMatrix);
-void finishAmbiBarDetect(XrCtx* ctx);
 void runFrameColorSample(XrCtx* ctx, const float* texMatrix);
 void runGlowRender(XrCtx* ctx);
 // The glow's inputs changed since it was last drawn.
@@ -1403,16 +1221,6 @@ void contentRect(const XrCtx* ctx, int eye, float out[4]);
 void setFrameUniforms(XrCtx* ctx, GLint frame, GLint look, float crop, float shift);
 void redrawGlow(XrCtx* ctx, const float* texMatrix);
 
-// xr_room.c: the 3d rooms
-int roomEffective(XrCtx* ctx);
-int roomResizable(int style);
-void roomLevelsFromTable(XrCtx* ctx);
-int roomScreenPercent(XrCtx* ctx, int style);
-int roomGlowOn(XrCtx* ctx, int style);
-void applyRoomPlacement(XrCtx* ctx, int style, float aspect, int reseeded);
-void prepareRoom(XrCtx* ctx);
-void renderRoom(XrCtx* ctx);
-void worldEyeSize(XrCtx* ctx, int* outW, int* outH);
 
 // xr_model.c: the bundled controller model
 void updateControllerModels(XrCtx* ctx);
@@ -1426,10 +1234,6 @@ int updatePlacement(XrCtx* ctx, float distance, float quadWidth, float curvature
 void recentreScreen(XrCtx* ctx);
 
 // xr_ui.c: where the furniture and the panels sit, and what the ray is over
-int furnitureOnStandIn(XrCtx* ctx);
-XrPosef furniturePose(XrCtx* ctx);
-float furnitureWidth(XrCtx* ctx);
-float furnitureHeight(XrCtx* ctx);
 BarFrame barFrame(XrCtx* ctx);
 float cornerSide(XrCtx* ctx);
 float effectiveCurvature(XrCtx* ctx);
@@ -1448,7 +1252,6 @@ void relightSample(XrCtx* ctx);
 void relightStep(XrCtx* ctx, int64_t nowNs);
 int relightLayerReady(XrCtx* ctx);
 void relightDestroy(XrCtx* ctx);
-float screenRoll(XrCtx* ctx);
 void setStereoLive(XrCtx* ctx, int on, const char* from);
 void setRayOn(XrCtx* ctx, int on, const char* from);
 void pictureSet(XrCtx* ctx, int row, int units);
@@ -1464,8 +1267,6 @@ int uploadFlipped(XrCtx* ctx, XrSwapchain chain, XrSwapchainImageOpenGLESKHR* im
                   const unsigned char* px, int width, int height);
 int createPointerSwapchain(XrCtx* ctx);
 int uploadPointerArt(XrCtx* ctx);
-int roomStyleForCell(int cell);
-int roomCellForStyle(int style);
 
 // xr_display.c: the display refresh rate and the performance levels
 void probeDisplayExtensions(XrCtx* ctx);

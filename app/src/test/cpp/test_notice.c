@@ -155,7 +155,7 @@ static void testSplashWedgesTick(void) {
     Splash splash = { 0 };
     CHECK(splashWedges(&splash, 500 * MS) == 0);
     long long start = 1000 * MS;
-    splashStep(&splash, start, SPLASH_WAIT_ROOM, SPLASH_FADE_NS);
+    splashStep(&splash, start, SPLASH_WAIT_DEPTH, SPLASH_FADE_NS);
     // One wedge per 250 ms tick after the first: 1, 3, 5 at 0.3, 0.8, 1.3 s; all six at the floor.
     CHECK(splashWedges(&splash, start) == 0);
     CHECK(splashWedges(&splash, start + 249 * MS) == 0);
@@ -191,7 +191,7 @@ static void testSplashWedgesTick(void) {
     CHECK(seen[SPLASH_WEDGES] == 4 * 500);
 
     // On lift all wedges show through the fade, wherever the round was.
-    CHECK(splashStep(&splash, start + 2100 * MS, SPLASH_WAIT_ROOM, SPLASH_FADE_NS) == 0);
+    CHECK(splashStep(&splash, start + 2100 * MS, SPLASH_WAIT_DEPTH, SPLASH_FADE_NS) == 0);
     CHECK(splashWedges(&splash, start + 2100 * MS) == 0);
     CHECK(splashStep(&splash, start + 2110 * MS, 0, SPLASH_FADE_NS) == 1);
     CHECK(splashWedges(&splash, start + 2110 * MS) == SPLASH_WEDGES);

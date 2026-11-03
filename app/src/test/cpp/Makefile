@@ -8,7 +8,7 @@ SRC := ../../main/jni/xr-renderer
 INCLUDES := -Istubs -I$(SRC)
 OUT := build
 
-TESTS := $(OUT)/test_math $(OUT)/test_depthmap $(OUT)/test_atlas $(OUT)/test_roommesh \
+TESTS := $(OUT)/test_math $(OUT)/test_depthmap $(OUT)/test_roommesh \
          $(OUT)/test_layout $(OUT)/test_rate $(OUT)/test_gate \
          $(OUT)/test_pinch $(OUT)/test_notice $(OUT)/test_glow $(OUT)/test_grade \
          $(OUT)/test_controller \
@@ -26,11 +26,6 @@ $(OUT)/test_math: test_math.c check.h $(SRC)/xr_math.c $(SRC)/xr_math.h
 $(OUT)/test_depthmap: test_depthmap.c check.h $(SRC)/xr_depthmap.c $(SRC)/xr_depthmap.h $(SRC)/xr_shared.h
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_depthmap.c $(SRC)/xr_depthmap.c -lm
-
-# Also reads the shipped atlases, relative to this directory.
-$(OUT)/test_atlas: test_atlas.c check.h $(SRC)/xr_atlas.c $(SRC)/xr_atlas.h
-	@mkdir -p $(OUT)
-	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_atlas.c $(SRC)/xr_atlas.c -lm
 
 # Also reads the shipped room meshes, relative to this directory.
 $(OUT)/test_roommesh: test_roommesh.c check.h $(SRC)/xr_roommesh.c $(SRC)/xr_roommesh.h

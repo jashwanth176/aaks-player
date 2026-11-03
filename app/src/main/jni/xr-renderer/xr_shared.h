@@ -119,31 +119,6 @@
 #define PLAYER_BROWSE_ASPECT 0.75f
 #define PLAYER_BROWSE_START_WIDTH 0.78f
 
-// Room tab ranges, in stored units. Brightness: hundredths of the baked room.
-// Light: hundredths of the room's gain. Screen: percent of the room's screen anchor.
-#define ROOM_BRIGHTNESS_MIN 5
-#define ROOM_BRIGHTNESS_MAX 165
-#define ROOM_LIGHT_MIN 0
-#define ROOM_LIGHT_MAX 200
-#define ROOM_LIGHT_DEFAULT 150
-#define ROOM_SCREEN_MIN 25
-#define ROOM_SCREEN_MAX 100
-
-// Per-room defaults; xr_room.c's room table and the Java preferences both use these.
-// Glow and resizable are 0/1.
-#define ROOM_THEATER_BRIGHTNESS 37
-#define ROOM_THEATER_SCREEN 80
-#define ROOM_THEATER_GLOW 1
-#define ROOM_THEATER_RESIZABLE 1
-#define ROOM_GRAND_CINEMA_BRIGHTNESS 21
-#define ROOM_GRAND_CINEMA_SCREEN 100
-#define ROOM_GRAND_CINEMA_GLOW 0
-#define ROOM_GRAND_CINEMA_RESIZABLE 0
-#define ROOM_SYNTHWAVE_BRIGHTNESS 53
-#define ROOM_SYNTHWAVE_SCREEN 100
-#define ROOM_SYNTHWAVE_GLOW 1
-#define ROOM_SYNTHWAVE_RESIZABLE 1
-
 // Picture grade, stored units, global. Brightness: hundredths of full scale, added after
 // contrast. Contrast: percent gain about mid grey. Gamma: hundredths. Saturation: percent.
 // Defaults are identity.
@@ -165,17 +140,6 @@
 #define PICTURE_GAMMA 2
 #define PICTURE_SATURATION 3
 #define PICTURE_VALUES 4
-
-// Room model resolution tiers
-#define ENV_RES_LOW 0
-#define ENV_RES_STANDARD 1
-#define ENV_RES_HIGH 2
-#define ENV_RES_ULTRA 3
-
-// Environments: the room around the screen
-#define ENV_CELL_PASSTHROUGH 0
-#define ENV_CELL_VOID 1
-#define ENV_CELL_COUNT 2
 
 // Colour mode: Natural signals BT.709 (accurate); Vivid signals a wider gamut, so the
 // display stretches colours toward its own primaries

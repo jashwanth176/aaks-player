@@ -3,8 +3,16 @@
 #include "xr_renderer.h"
 #include "xr_shaders.h"
 
-// Lazily created on the first frame a model is shown. Swapchain matches the
-// room pass (side-by-side eyes). A failure is not retried.
+// Eye size: the runtime's recommendation, capped
+static void modelEyeSize(XrCtx* ctx, int* outW, int* outH) {
+    int eyeW = ctx->recommendedEyeWidth > 0 ? ctx->recommendedEyeWidth : 1024;
+    int eyeH = ctx->recommendedEyeHeight > 0 ? ctx->recommendedEyeHeight : 1024;
+    *outW = eyeW > MODEL_MAX_EYE ? MODEL_MAX_EYE : eyeW;
+    *outH = eyeH > MODEL_MAX_EYE ? MODEL_MAX_EYE : eyeH;
+}
+
+// Lazily created on the first frame a model is shown, one side-by-side image for both
+// eyes. A failure is not retried.
 static int initModelPass(XrCtx* ctx) {
     if (ctx->modelPassReady) {
         return 1;
@@ -43,15 +51,15 @@ static int initModelPass(XrCtx* ctx) {
 
     int eyeW;
     int eyeH;
-    worldEyeSize(ctx, &eyeW, &eyeH);
-    if (!createArtSwapchain(ctx, eyeW * ROOM_EYES, eyeH, "create controller model swapchain",
+    modelEyeSize(ctx, &eyeW, &eyeH);
+    if (!createArtSwapchain(ctx, eyeW * MODEL_EYES, eyeH, "create controller model swapchain",
                             &ctx->modelSwapchain, &ctx->modelImages, &ctx->modelImageCount)) {
         return 0;
     }
     LOGEV("swapchains alive %d with the controller models'", ctx->swapchainsAlive);
     glGenRenderbuffers(1, &ctx->modelDepthBuffer);
     glBindRenderbuffer(GL_RENDERBUFFER, ctx->modelDepthBuffer);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, eyeW * ROOM_EYES, eyeH);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, eyeW * MODEL_EYES, eyeH);
     glBindRenderbuffer(GL_RENDERBUFFER, 0);
     glGenFramebuffers(1, &ctx->modelFbo);
     glBindFramebuffer(GL_FRAMEBUFFER, ctx->modelFbo);
@@ -77,14 +85,14 @@ static int locateModelViews(XrCtx* ctx) {
     locateInfo.displayTime = ctx->predictedDisplayTime;
     locateInfo.space = ctx->localSpace;
     XrViewState state = { XR_TYPE_VIEW_STATE };
-    XrView views[ROOM_EYES];
-    for (int eye = 0; eye < ROOM_EYES; eye++) {
+    XrView views[MODEL_EYES];
+    for (int eye = 0; eye < MODEL_EYES; eye++) {
         views[eye].type = XR_TYPE_VIEW;
         views[eye].next = NULL;
     }
     uint32_t count = 0;
-    if (XR_FAILED(xrLocateViews(ctx->session, &locateInfo, &state, ROOM_EYES, &count, views))
-            || count < ROOM_EYES) {
+    if (XR_FAILED(xrLocateViews(ctx->session, &locateInfo, &state, MODEL_EYES, &count, views))
+            || count < MODEL_EYES) {
         return 0;
     }
     XrViewStateFlags needed = XR_VIEW_STATE_ORIENTATION_VALID_BIT
@@ -92,14 +100,13 @@ static int locateModelViews(XrCtx* ctx) {
     if ((state.viewStateFlags & needed) != needed) {
         return 0;
     }
-    for (int eye = 0; eye < ROOM_EYES; eye++) {
+    for (int eye = 0; eye < MODEL_EYES; eye++) {
         ctx->modelViews[eye] = views[eye];
     }
     return 1;
 }
 
-// Collects a finished GPU timer query, with the same sanity filter as the
-// warp and room passes
+// Collects a finished GPU timer query, with the same sanity filter as the warp
 static void collectModelTimer(XrCtx* ctx) {
     int other = ctx->modelTimerSlot;
     if (!ctx->modelTimerPending[other]) {
@@ -205,7 +212,7 @@ void renderControllerModels(XrCtx* ctx) {
     wait.timeout = XR_INFINITE_DURATION;
     xrWaitSwapchainImage(ctx->modelSwapchain, &wait);
 
-    // Timer starts after the image is acquired, as in the room pass
+    // Timer starts after the image is acquired
     int timing = ctx->timerSupported && !ctx->captureRequested
             && !ctx->modelTimerPending[ctx->modelTimerSlot];
     if (timing) {
@@ -248,13 +255,13 @@ void renderControllerModels(XrCtx* ctx) {
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, (const void*)(8 * sizeof(float)));
     glEnableVertexAttribArray(2);
-    for (int eye = 0; eye < ROOM_EYES; eye++) {
+    for (int eye = 0; eye < MODEL_EYES; eye++) {
         glViewport(eye * ctx->modelEyeWidth, 0, ctx->modelEyeWidth, ctx->modelEyeHeight);
         float proj[16];
         float view[16];
         float viewProj[16];
         // Near plane close enough for a controller at the face
-        projectionFromFov(proj, ctx->modelViews[eye].fov, ROOM_NEAR_M, ROOM_FAR_MIN_M);
+        projectionFromFov(proj, ctx->modelViews[eye].fov, MODEL_NEAR_M, MODEL_FAR_M);
         viewFromPose(view, ctx->modelViews[eye].pose);
         matMul(viewProj, proj, view);
         glUniformMatrix4fv(ctx->modelViewProjUniform, 1, GL_FALSE, viewProj);

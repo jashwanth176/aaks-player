@@ -2,33 +2,9 @@
 // settings panel's rows and cells.
 #include "xr_renderer.h"
 
-// In a room, panels are placed and sized off the stand-in screen rather than the
-// picture. The bar is the exception (see barFrame).
-int furnitureOnStandIn(XrCtx* ctx) {
-    return roomEffective(ctx) > 0;
-}
-
-// Picture pose outside a room, stand-in pose inside one
-XrPosef furniturePose(XrCtx* ctx) {
-    return furnitureOnStandIn(ctx) ? standInPose() : ctx->screenPose;
-}
-
-float furnitureWidth(XrCtx* ctx) {
-    return furnitureOnStandIn(ctx) ? STAND_IN_WIDTH_M : ctx->screenWidth;
-}
-
-// Same aspect as the picture
-float furnitureHeight(XrCtx* ctx) {
-    return furnitureWidth(ctx) * screenAspect(ctx);
-}
-
-// Frame the bar row is laid out in. In a room: under the room's picture at the
-// stand-in's bar size. Otherwise the picture as drawn (narrower on a cylinder).
+// Frame the bar row is laid out in: the picture as drawn (narrower on a cylinder)
 BarFrame barFrame(XrCtx* ctx) {
     float aspect = screenAspect(ctx);
-    if (roomEffective(ctx) > 0) {
-        return roomBarFrame(ctx->screenPose, ctx->screenWidth * aspect, aspect);
-    }
     BarFrame frame;
     memset(&frame, 0, sizeof(frame));
     frame.pose = ctx->screenPose;
@@ -40,17 +16,8 @@ BarFrame barFrame(XrCtx* ctx) {
     return frame;
 }
 
-// Corner bracket size in metres, 0 for none. In a room only resizable rooms have
-// corners, sized by distance so they look the same at any picture size.
+// Corner bracket size in metres
 float cornerSide(XrCtx* ctx) {
-    int style = roomEffective(ctx);
-    if (style > 0) {
-        if (!roomResizable(style)) {
-            return 0.0f;
-        }
-        XrVector3f p = ctx->screenPose.position;
-        return roomCornerSide(sqrtf(p.x * p.x + p.y * p.y + p.z * p.z));
-    }
     return CORNER_FRAC * ctx->screenWidth;
 }
 
@@ -58,7 +25,7 @@ float cornerSide(XrCtx* ctx) {
 float effectiveCurvature(XrCtx* ctx) {
     // Library with no video: keep flat, or a curved screen behind the page would catch
     // the ray at the sides before the corners
-    if (ctx->playerMode && ctx->playerScreenHidden) {
+    if (ctx->playerScreenHidden) {
         return 0.0f;
     }
     return ctx->panelCurve >= 0.0f ? ctx->panelCurve : ctx->prefCurvature;
@@ -80,23 +47,6 @@ XrQuaternionf screenOrient(float yaw, float pitch, float roll) {
     Vec3 fwd = { 0.0f, 0.0f, 1.0f };
     XrQuaternionf q = quatMul(axisAngleQuat(up, yaw), axisAngleQuat(right, -pitch));
     return quatNorm(quatMul(q, axisAngleQuat(fwd, roll)));
-}
-
-// Roll about the facing axis in radians, positive raises the right edge. Undoes yaw
-// and pitch, so it round-trips through screenOrient at any pitch.
-float screenRoll(XrCtx* ctx) {
-    XrQuaternionf q = ctx->screenPose.orientation;
-    Vec3 back = { 0.0f, 0.0f, 1.0f };
-    Vec3 fwd = quatRotate(q, back);
-    float yaw = atan2f(fwd.x, fwd.z);
-    XrQuaternionf level = screenOrient(yaw, screenPitch(ctx), 0.0f);
-    XrQuaternionf twist = quatMul(quatConj(level), q);
-    // q and -q are the same rotation; normalise to avoid a result a full turn out
-    if (twist.w < 0.0f) {
-        twist.z = -twist.z;
-        twist.w = -twist.w;
-    }
-    return 2.0f * atan2f(twist.z, twist.w);
 }
 
 // Session-only toggle from the bar or the Display tab; not stored.

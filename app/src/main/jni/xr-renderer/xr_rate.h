@@ -60,11 +60,9 @@ typedef struct {
     // CPU time from xrBeginFrame to xrEndFrame
     int64_t cpuTotalNs;
     long cpuFrames;
-    // Warp and room GPU time, per frame that drew them
+    // Warp GPU time, per frame that drew it
     int64_t gpuTotalNs;
     long gpuFrames;
-    int64_t roomTotalNs;
-    long roomFrames;
     // Missed display refreshes
     long missed;
     // Last full window, for logging. frameMs is the slowest of cpu, gpu and pace.
@@ -81,7 +79,6 @@ typedef struct {
 void rateBudgetStart(RateBudget* b, int64_t nowNs, int settle);
 void rateBudgetCpu(RateBudget* b, int64_t frameNs);
 void rateBudgetGpu(RateBudget* b, int64_t gpuNs);
-void rateBudgetRoom(RateBudget* b, int64_t gpuNs);
 void rateBudgetMissed(RateBudget* b, long refreshes);
 
 // Once per frame; returns a RATE_WINDOW_ verdict. OVER means step down.
