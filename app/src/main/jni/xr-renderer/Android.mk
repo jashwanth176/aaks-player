@@ -10,6 +10,7 @@ LOCAL_SRC_FILES := xr_log.c \
                    xr_layout.c \
                    xr_handles.c \
                    xr_uipanels.c \
+                   xr_subsdepth.c \
                    xr_relight.c \
                    xr_roomlight.c \
                    xr_rate.c \

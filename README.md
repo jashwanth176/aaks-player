@@ -62,6 +62,8 @@ and shows each frame in 3D.
 - **Walk around:** in passthrough the guardian boundary steps aside, so you can move about the room.
 - **Immersion and Brightness:** let the screen's light spill into the room, and dim the room as much
   as you like.
+- **House lights:** the room dims as the film starts, comes part way up when you pause, and fully
+  when the film ends. In the dark, pausing brings in a dim view of your room.
 
 ### Sound and subtitles
 - Plays the sound in films that the headset can't decode on its own, such as Dolby TrueHD and DTS.
@@ -70,7 +72,8 @@ and shows each frame in 3D.
 - **Subtitles** from the file, or `.srt`, `.ass`, `.ssa` and `.vtt` files placed next to it with the
   same name.
 - **Subtitle style:** size, colour, background, edge, height on the screen, depth in 3D, and whether
-  to use the file's own styling.
+  to use the file's own styling. Depth is **Auto** by default: the subtitles stay just in front of
+  whatever is nearest along the bottom of the picture, so a 3D scene never cuts through them.
 - **Subtitle sync:** shift them earlier or later, remembered for each film.
 
 ### Library

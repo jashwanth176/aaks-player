@@ -346,13 +346,39 @@ void depthStripRows(int h, float barBottom, float barTop, int* outFrom, int* out
     *outTo = to;
 }
 
+float depthDisparityK(float dispShare, float screenWidth, float ipd) {
+    if (dispShare <= 0.0f || screenWidth <= 0.0f || ipd <= 0.0f) {
+        return SUBS_DEPTH_MARGIN;
+    }
+    float disparity = dispShare * screenWidth;
+    return disparity / (ipd + disparity) + SUBS_DEPTH_MARGIN;
+}
+
 float depthPopK(float pop, float separation, float screenWidth, float ipd) {
-    if (pop < 0.0f || separation <= 0.0f || screenWidth <= 0.0f || ipd <= 0.0f) {
+    if (pop < 0.0f || separation <= 0.0f) {
         return SUBS_DEPTH_MARGIN;
     }
     // Both eyes shift, so the disparity on the screen is twice one eye's
-    float disparity = 2.0f * separation * pop * screenWidth;
-    return disparity / (ipd + disparity) + SUBS_DEPTH_MARGIN;
+    return depthDisparityK(2.0f * separation * pop, screenWidth, ipd);
+}
+
+float stripDisparity(const unsigned char* cells, int count, float reach) {
+    float best = 0.0f, second = 0.0f;
+    for (int i = 0; i < count; i++) {
+        const unsigned char* c = cells + (size_t)i * 4;
+        if (c[2] < STRIP_MIN_CONTRAST || c[1] < (int)(STRIP_MIN_GAIN * 255.0f)) {
+            continue;
+        }
+        float d = (float)c[0] / 255.0f * reach;
+        if (d > best) {
+            second = best;
+            best = d;
+        }
+        else if (d > second) {
+            second = d;
+        }
+    }
+    return second;
 }
 
 float subsDepthEase(float current, float target, float dt) {

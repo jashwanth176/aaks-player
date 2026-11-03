@@ -124,11 +124,18 @@ void stepUiPanels(XrCtx* ctx, int64_t nowNs) {
     if (step < 0.0f) {
         step = 0.0f;
     }
-    // Auto subtitle depth: just in front of the converted picture's nearest point along
-    // the bottom; a little off a 3D file; on the screen for a flat one
-    float subsTarget = ctx->subsSeparation > 0.0f
-            ? depthPopK(ctx->subsPop, ctx->subsSeparation, ctx->screenWidth, SUBS_IPD)
-            : ctx->subsNativeStereo ? SUBS_DEPTH_REST : 0.0f;
+    // Auto subtitle depth: just in front of the picture's nearest point along the bottom,
+    // from the depth map of a converted film or the matched strip of a 3D file (whose eyes
+    // the crop has moved outward); on the screen for a flat one
+    float subsTarget = 0.0f;
+    if (ctx->subsSeparation > 0.0f) {
+        subsTarget = depthPopK(ctx->subsPop, ctx->subsSeparation, ctx->screenWidth, SUBS_IPD);
+    }
+    else if (ctx->subsNativeStereo) {
+        subsTarget = ctx->stripReady
+                ? depthDisparityK(ctx->subsDisparity - ctx->playerCrop, ctx->screenWidth, SUBS_IPD)
+                : SUBS_DEPTH_REST;
+    }
     if (subsTarget > 0.5f) {
         subsTarget = 0.5f;
     }

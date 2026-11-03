@@ -802,6 +802,7 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
     if (ctx->ambiProgram != 0) {
         glDeleteProgram(ctx->ambiProgram);
     }
+    destroyStripMatch(ctx);
     if (ctx->glowProgram != 0) {
         glDeleteProgram(ctx->glowProgram);
     }

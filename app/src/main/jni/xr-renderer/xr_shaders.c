@@ -316,6 +316,62 @@ const char* const DOWNSCALE_FRAGMENT_SRC =
 
 // Ambilight colour sample, 32x32, 4x4 box per texel. u_crop is the sampled
 // region (x0 y0 w h). Graded per tap.
+// Subtitle depth on a 3D file: each output texel is a cell of the strip along the
+// bottom of the picture. Its block of the left eye is matched against the right eye
+// shifted left by each candidate crossed disparity; out go the best shift as a share
+// of the reach, how much it beat no shift, and the block's contrast.
+const char* const STRIP_MATCH_FRAGMENT_SRC =
+    "#version 300 es\n"
+    "#extension GL_OES_EGL_image_external_essl3 : require\n"
+    "precision highp float;\n"
+    "in vec2 v_plain;\n"
+    "uniform samplerExternalOES u_texture;\n"
+    "uniform mat4 u_texmatrix;\n"
+    "uniform vec4 u_left;\n"
+    "uniform vec4 u_right;\n"
+    "uniform float u_strip;\n"
+    "uniform float u_reach;\n"
+    "out vec4 fragColor;\n"
+    "float luma(vec4 r, vec2 p) {\n"
+    "    vec2 tc = r.xy + p * r.zw;\n"
+    "    vec3 c = texture(u_texture, (u_texmatrix * vec4(tc, 0.0, 1.0)).xy).rgb;\n"
+    "    return dot(c, vec3(0.299, 0.587, 0.114));\n"
+    "}\n"
+    "void main() {\n"
+    "    vec2 c = vec2(u_reach + v_plain.x * (1.0 - 2.0 * u_reach), v_plain.y * u_strip);\n"
+    "    vec2 sp = vec2(0.012, 0.012);\n"
+    "    float l[32];\n"
+    "    float mean = 0.0;\n"
+    "    for (int y = 0; y < 4; y++) {\n"
+    "        for (int x = 0; x < 8; x++) {\n"
+    "            float v = luma(u_left, c + (vec2(float(x), float(y)) - vec2(3.5, 1.5)) * sp);\n"
+    "            l[y * 8 + x] = v;\n"
+    "            mean += v;\n"
+    "        }\n"
+    "    }\n"
+    "    mean *= 1.0 / 32.0;\n"
+    "    float contrast = 0.0;\n"
+    "    for (int i = 0; i < 32; i++) {\n"
+    "        contrast += abs(l[i] - mean);\n"
+    "    }\n"
+    "    contrast *= 1.0 / 32.0;\n"
+    "    float best = 1e9, bestD = 0.0, sad0 = 0.0;\n"
+    "    for (int s = 0; s < 16; s++) {\n"
+    "        float d = u_reach * float(s) / 15.0;\n"
+    "        float sad = 0.0;\n"
+    "        for (int y = 0; y < 4; y++) {\n"
+    "            for (int x = 0; x < 8; x++) {\n"
+    "                vec2 off = (vec2(float(x), float(y)) - vec2(3.5, 1.5)) * sp;\n"
+    "                sad += abs(l[y * 8 + x] - luma(u_right, c + off - vec2(d, 0.0)));\n"
+    "            }\n"
+    "        }\n"
+    "        if (s == 0) sad0 = sad;\n"
+    "        if (sad < best) { best = sad; bestD = d; }\n"
+    "    }\n"
+    "    float gain = clamp(1.0 - best / max(sad0, 1e-4), 0.0, 1.0);\n"
+    "    fragColor = vec4(bestD / u_reach, gain, clamp(contrast * 4.0, 0.0, 1.0), 1.0);\n"
+    "}\n";
+
 const char* const AMBI_FRAGMENT_SRC =
     "#version 300 es\n"
     "#extension GL_OES_EGL_image_external_essl3 : require\n"

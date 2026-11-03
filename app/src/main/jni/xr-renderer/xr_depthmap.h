@@ -86,8 +86,26 @@ float depthThumbCorr(const DepthThumb* a, const DepthThumb* b);
 // Ease rates per second: forward fast, back slowly
 #define SUBS_DEPTH_RATE_IN 10.0f
 #define SUBS_DEPTH_RATE_OUT 1.5f
-// Where they rest on a 3D file, whose depth is not measured yet
+// Where they rest on a 3D file whose strip could not be matched
 #define SUBS_DEPTH_REST 0.06f
+// 3D files: the strip is matched between the eyes in a grid of cells, each trying
+// crossed disparities up to this share of the eye's width
+#define STRIP_CELLS_X 24
+#define STRIP_CELLS_Y 3
+#define STRIP_REACH 0.06f
+// A cell counts when its block has this much contrast (0..255) and the best match
+// beats no shift by this share
+#define STRIP_MIN_CONTRAST 20
+#define STRIP_MIN_GAIN 0.35f
+
+// The strip's crossed disparity from the matcher's cells (RGBA8: disparity as a share
+// of reach, match gain, contrast), as a share of the eye's width: the second largest
+// of the cells that count, 0 with fewer than two
+float stripDisparity(const unsigned char* cells, int count, float reach);
+
+// Share of the viewing distance a point sits in front of the screen for a crossed
+// disparity of dispShare of the screen's width, for eyes ipd apart, plus the margin
+float depthDisparityK(float dispShare, float screenWidth, float ipd);
 
 // Rows of the strip in a map h rows high whose row 0 is the bottom, given the black
 // bar shares at the bottom and top: [*outFrom, *outTo)

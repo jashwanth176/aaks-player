@@ -1018,6 +1018,20 @@ typedef struct {
     float subsSeparation;
     int subsNativeStereo;
     float subsDepthK;
+    // The strip matcher for 3D files (xr_subsdepth.c): its disparity a frame late
+    GLuint stripProgram;
+    GLint stripTexMatrixUniform;
+    GLint stripLeftUniform;
+    GLint stripRightUniform;
+    GLint stripStripUniform;
+    GLint stripReachUniform;
+    GLuint stripTexture;
+    GLuint stripFbo;
+    GLuint stripPbo[2];
+    int stripPboFull[2];
+    int stripPboSlot;
+    int stripReady;
+    float subsDisparity;
     // -1 for none.
     int uiHover[SRC_COUNT];
     int64_t uiStepNs;
@@ -1151,6 +1165,10 @@ float screenPitch(XrCtx* ctx);
 XrQuaternionf screenOrient(float yaw, float pitch, float roll);
 // The local player's panels (xr_uipanels.c)
 XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight);
+// Subtitle depth on 3D files (xr_subsdepth.c)
+int initStripMatch(XrCtx* ctx);
+void runStripMatch(XrCtx* ctx, const float* texMatrix);
+void destroyStripMatch(XrCtx* ctx);
 // Metres per pixel of a fixed-size panel
 float uiMetresPerPx(const XrCtx* ctx);
 int uiPanelAt(XrCtx* ctx, XrPosef aim, float* outU, float* outV);

@@ -358,6 +358,10 @@ int initGl(XrCtx* ctx) {
         LOGW("GL_EXT_sRGB_write_control not available, expect wrong gamma");
     }
 
+    // Without the matcher subtitles on 3D files rest at a fixed depth
+    if (!initStripMatch(ctx)) {
+        LOGW("subtitle strip matcher unavailable");
+    }
     if (!initAmbilight(ctx)) {
         return 0;
     }
@@ -487,6 +491,9 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
     runFrameColorSample(ctx, texMatrix);
     if (relightWanted(ctx)) {
         relightSample(ctx);
+    }
+    if (nativeStereo(ctx) && ctx->ui[UI_PANEL_SUBS].depthAuto) {
+        runStripMatch(ctx, texMatrix);
     }
     runGlowRender(ctx);
 

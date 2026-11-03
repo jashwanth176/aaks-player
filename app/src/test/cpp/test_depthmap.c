@@ -769,6 +769,22 @@ static void testSubsDepth(void) {
     }
     CHECK(d > 0.1f && d < 0.2f);
     CHECK_NEAR(subsDepthEase(0.0f, 0.3f, 10.0f), 0.3f, 1e-5f);
+
+    // A 3D file: one eye's shift straight to a depth, same answer as the warp's two
+    CHECK_NEAR(depthDisparityK(0.05f, 2.4f, SUBS_IPD), depthPopK(0.625f, 0.04f, 2.4f, SUBS_IPD), 1e-6f);
+    CHECK_NEAR(depthDisparityK(0.0f, 2.4f, SUBS_IPD), SUBS_DEPTH_MARGIN, 1e-6f);
+    // Cells: flat ones and weak matches are ignored, one outlier does not count
+    unsigned char cells[6 * 4] = {
+        255, 255, 255, 255, // the lone far-out cell
+        128, 255, 255, 255,
+        100, 255, 255, 255,
+        255, 255, 5, 255,   // flat
+        255, 20, 255, 255,  // no better than no shift
+        0, 255, 255, 255,
+    };
+    CHECK_NEAR(stripDisparity(cells, 6, 0.06f), 128.0f / 255.0f * 0.06f, 1e-6f);
+    CHECK_NEAR(stripDisparity(cells, 1, 0.06f), 0.0f, 1e-6f);
+    CHECK_NEAR(stripDisparity(cells, 0, 0.06f), 0.0f, 1e-6f);
 }
 
 int main(void) {
