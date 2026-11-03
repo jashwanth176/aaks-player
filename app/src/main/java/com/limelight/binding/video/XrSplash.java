@@ -236,14 +236,6 @@ final class XrSplash {
         }
     }
 
-    static ByteBuffer toBuffer(Bitmap bitmap) {
-        ByteBuffer pixels = ByteBuffer.allocateDirect(
-                bitmap.getWidth() * bitmap.getHeight() * 4);
-        bitmap.copyPixelsToBuffer(pixels);
-        pixels.rewind();
-        return pixels;
-    }
-
     static void closeQuietly(InputStream in) {
         if (in != null) {
             try {

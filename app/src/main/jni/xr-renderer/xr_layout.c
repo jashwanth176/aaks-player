@@ -42,7 +42,3 @@ int hoverTest(float u, float v, float width, float height, float cornerSide, int
 
     return HOVER_NONE;
 }
-
-float separationOf(int units) {
-    return units * 0.001f;
-}

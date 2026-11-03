@@ -31,14 +31,12 @@
 #define BAR_GAP_FRAC    0.035f
 #define CORNER_FRAC     0.075f
 // Hover zones are larger than the art for easier aiming
-#define HOVER_MARGIN 1.7f
 #define CORNER_HOVER 1.5f
 // The bar is small, so its hover zone is proportionally wider
 #define BAR_HOVER 2.0f
 
 // Bar row centre below the frame's bottom edge
 #define BAR_DROP_FRAC (BAR_GAP_FRAC + BAR_HEIGHT_FRAC * 0.5f)
-
 
 // Frame the bar row is laid out in, bottom-aligned with the picture
 typedef struct {
@@ -49,14 +47,8 @@ typedef struct {
     int curved;
 } BarFrame;
 
-
 // Hover target at uv. cornerSide is the bracket size in metres (0 for none);
 // corners are numbered TL, TR, BL, BR.
 int hoverTest(float u, float v, float width, float height, float cornerSide, int* corner);
-
-
-
-// Stereo separation from stored units (0.1% of frame width)
-float separationOf(int units);
 
 #endif

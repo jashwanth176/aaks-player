@@ -385,7 +385,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                     .putInt(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING,
                             passthroughOn ? PreferenceConfiguration.VR_ENV_PASSTHROUGH
                                           : PreferenceConfiguration.VR_ENV_VOID)
-                    .putBoolean(PreferenceConfiguration.VR_PASSTHROUGH_PREF_STRING, passthroughOn)
                     .apply();
         }
         if (uiBatch.get() > 0) {
@@ -451,8 +450,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private native long nativeInit(Activity activity, int width, int height, int fps,
                                    int stereoMode, int depthWidth, int depthHeight,
                                    boolean depthDebug, int convergence, int depthScale,
-                                   boolean handTracking, int sharpenMode, int supersampleMode,
-                                   boolean perfOverlay);
+                                   boolean handTracking, int sharpenMode, int supersampleMode);
     private native void nativeSetCaptureDir(long ctx, String dir);
     private native int nativeGetTexId(long ctx);
     private native ByteBuffer nativeGetModelInput(long ctx, int pair);
@@ -480,19 +478,14 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private native void nativeUploadControllerModel(long ctx, ByteBuffer mesh, int length);
     // Whether the controller model is drawn; the Display tab's row changes it
     private native void nativeSetControllerModel(long ctx, boolean on);
-    // The running model's default separation and convergence (preference units) for the 3D
-    // tab's reset, and the preset separations in cell order
-    private native void nativeSetDepthDefaults(long ctx, int separation, int convergence);
     // Brightness, contrast, gamma and saturation, in PICTURE_ order and units
     private native void nativeSetPicture(long ctx, int[] picture);
-    private native boolean nativeGetCylinderSupported(long ctx);
     // A PRESENCE_ value
     private native int nativeGetPresence(long ctx);
     // Whether the headset starts apps in passthrough
     private native boolean nativeSystemPrefersPassthrough(long ctx);
     // Why the runtime ended the frame loop, or null
     private native String nativeGetExitReason(long ctx);
-    private native String nativeGetRuntime(long ctx);
     private native void nativeSetPlayerLighting(long ctx, float ambient, float brightness);
     private native void nativeSetPlayerContent(long ctx, float top, float bottom);
     private native void nativeSetPlayerScreenHidden(long ctx, boolean hidden);
@@ -510,8 +503,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private native void nativeSetShowRay(long ctx, boolean on);
     // The depth model will make no maps this session, so the splash stops waiting. Any thread.
     private native void nativeDepthGaveUp(long ctx);
-    // The rate the display is on
-    private native float nativeGetDisplayRate(long ctx);
     // Maximum depth maps per second; the governor starts here and cuts when frames are missed
     private native void nativeSetDepthRate(long ctx, int perSecond);
     // Frame loop, with a new frame: whether to capture it for the depth model. force ignores
@@ -559,8 +550,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 nativeCtx = nativeInit(activity, videoWidth, videoHeight, prefs.fps,
                         prefs.vrDepthMode, mapSize.width, mapSize.height,
                         prefs.vrDepthDebug, prefs.vrConvergence, prefs.vrDepthScale,
-                        prefs.vrHandTracking, prefs.vrSharpening, prefs.vrSupersampling,
-                        prefs.enablePerfOverlay);
+                        prefs.vrHandTracking, prefs.vrSharpening, prefs.vrSupersampling);
                 if (nativeCtx == 0) {
                     initLatch.countDown();
                     return;
@@ -573,8 +563,6 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 XrDisplayRates.remember(prefsContext, nativeGetOfferedRates(nativeCtx));
                 // Kept: the panel's settings rows write back to this same instance
                 prefConfig = prefs;
-                nativeSetDepthDefaults(nativeCtx, depthSpec.defaultSeparation,
-                        depthSpec.defaultConvergence);
                 nativeSetPicture(nativeCtx, prefs.vrPicture);
                 nativeSetDepthRate(nativeCtx, prefs.vrDepthRate);
                 nativeSetPlayerLighting(nativeCtx, playerAmbient, playerBrightness);
@@ -1072,8 +1060,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     private void startEnvironment(PreferenceConfiguration prefs) {
         SharedPreferences saved = PreferenceManager.getDefaultSharedPreferences(prefsContext);
         int id = saved.getInt(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING,
-                prefs.vrPassthrough ? PreferenceConfiguration.VR_ENV_PASSTHROUGH
-                                    : PreferenceConfiguration.VR_ENV_VOID);
+                PreferenceConfiguration.VR_ENV_PASSTHROUGH);
         boolean passthrough = id == PreferenceConfiguration.VR_ENV_PASSTHROUGH;
         // If the headset starts apps in passthrough, the player does too; the saved choice is kept
         if (!passthrough && nativeSystemPrefersPassthrough(nativeCtx)) {

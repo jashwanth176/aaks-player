@@ -85,24 +85,6 @@ XrPosef poseRecentred(XrPosef screen) {
     return out;
 }
 
-// Used to rotate the virtual surround speakers. Forward is -z; positive yaw
-// about +y is toward -x (left), so heading = atan2(-x, -z). Pitch and roll
-// are ignored.
-float yawBetween(XrQuaternionf head, XrQuaternionf screen) {
-    Vec3 forward = { 0.0f, 0.0f, -1.0f };
-    Vec3 h = quatRotate(head, forward);
-    Vec3 s = quatRotate(screen, forward);
-    float yaw = atan2f(-h.x, -h.z) - atan2f(-s.x, -s.z);
-    // Wrap to the short way round
-    while (yaw > (float)M_PI) {
-        yaw -= 2.0f * (float)M_PI;
-    }
-    while (yaw <= -(float)M_PI) {
-        yaw += 2.0f * (float)M_PI;
-    }
-    return yaw;
-}
-
 static float euroAlpha(float cutoff, float dt) {
     float tau = 1.0f / (2.0f * (float)M_PI * cutoff);
     return 1.0f / (1.0f + tau / dt);

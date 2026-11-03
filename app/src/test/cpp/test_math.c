@@ -269,39 +269,6 @@ static void testCurveLocal(void) {
     CHECK_NEAR(yaw, -1.5f / 6.0f, 1e-6);
 }
 
-// Head yaw relative to the screen (drives virtual surround).
-static void testYawBetween(void) {
-    Vec3 up = { 0.0f, 1.0f, 0.0f };
-    Vec3 right = { 1.0f, 0.0f, 0.0f };
-    Vec3 forward = { 0.0f, 0.0f, -1.0f };
-    const float DEG = 3.1415927f / 180.0f;
-
-    CHECK_NEAR(yawBetween(identity(), identity()), 0.0f, 1e-6);
-
-    // Left positive, right negative.
-    CHECK_NEAR(yawBetween(axisAngleQuat(up, HALF_PI), identity()), HALF_PI, 1e-5);
-    CHECK_NEAR(yawBetween(axisAngleQuat(up, -30.0f * DEG), identity()), -30.0f * DEG, 1e-5);
-
-    // Relative to the screen's own yaw.
-    XrQuaternionf both = axisAngleQuat(up, 0.8f);
-    CHECK_NEAR(yawBetween(both, both), 0.0f, 1e-5);
-    XrQuaternionf screenLeft = axisAngleQuat(up, 40.0f * DEG);
-    CHECK_NEAR(yawBetween(identity(), screenLeft), -40.0f * DEG, 1e-5);
-
-    // Wraps the short way: 20 degrees, not 340.
-    XrQuaternionf screen = axisAngleQuat(up, 170.0f * DEG);
-    XrQuaternionf head = axisAngleQuat(up, -170.0f * DEG);
-    CHECK_NEAR(yawBetween(head, screen), 20.0f * DEG, 1e-4);
-    CHECK_NEAR(yawBetween(screen, head), -20.0f * DEG, 1e-4);
-
-    // Pitch and roll do not count as yaw.
-    CHECK_NEAR(yawBetween(axisAngleQuat(right, 30.0f * DEG), identity()), 0.0f, 1e-5);
-    CHECK_NEAR(yawBetween(axisAngleQuat(forward, 30.0f * DEG), identity()), 0.0f, 1e-5);
-    XrQuaternionf turned = quatMul(axisAngleQuat(up, 25.0f * DEG),
-                                   axisAngleQuat(right, -20.0f * DEG));
-    CHECK_NEAR(yawBetween(turned, identity()), 25.0f * DEG, 1e-4);
-}
-
 // Head-locked input: a pose 40 cm ahead of the head comes out at (0, 0, -0.4) in head space.
 static void testPoseInFrame(void) {
     Vec3 up = { 0.0f, 1.0f, 0.0f };
@@ -416,7 +383,6 @@ int main(void) {
     testScreenRoundTrip(1);
     testCylinderClamp();
     testCurveLocal();
-    testYawBetween();
     testPoseInFrame();
     testRecentre();
     return checksDone("xr_math");

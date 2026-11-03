@@ -157,7 +157,6 @@ static inline int64_t nowNs(void) {
 
 // Resize limits, metres.
 #define SCREEN_MIN_WIDTH 0.8f
-#define SCREEN_MAX_WIDTH 8.0f
 
 // Hover zones and handle sizes are in xr_layout.h.
 
@@ -165,69 +164,17 @@ static inline int64_t nowNs(void) {
 #define GRAB_MOVE   1
 #define GRAB_RESIZE 2
 
-// Sized for a five-column grid.
-#define PICKER_WIDTH_FRAC 0.91f
-#define OUTLINE_TEX 128
-
-#define COG_WIDTH_FRAC 0.36f
-#define COG_THUMB_TEX 64
-// Panel face for the Room tab, which replaces the first
-// tab while a room is up. Numbered past the real tabs.
-#define COG_FACE_ROOM COG_TAB_COUNT
-
-// Metres. Below the settings slider's 1 m floor so the screen can come right up to the face.
-#define COG_DIST_MIN 0.2f
-#define COG_DIST_MAX 8.0f
-// Metres either side of eye level.
-#define COG_HEIGHT_MIN -2.0f
-#define COG_HEIGHT_MAX 2.0f
-// Radians, 40 degrees each way
-#define COG_TILT_MAX 0.6981f
-// Same track fraction as the roll snap (TILT_MAX * ROLL_SNAP / ROLL_MAX).
-#define COG_TILT_SNAP 0.0388f
-// Radians, 90 degrees each way, for watching lying down.
-#define COG_ROLL_MAX 1.5708f
-// Within 5 degrees of level snaps to level.
-#define COG_ROLL_SNAP 0.0873f
-
-#define KB_WIDTH_FRAC 0.55f
-#define KB_MAX_KEYS 64
-
-#define EXIT_WIDTH_FRAC 0.30f
-
-// Report sheet, centred over the bottom of the picture above the keyboard.
-#define REPORT_WIDTH_FRAC 0.40f
-
-// Hand-lock hint. Waits for a hand to point this long, so a hand
-// that flickers in as a controller is put down does not open it.
-#define HINT_WIDTH_FRAC 0.40f
-#define HINT_POINTING_NS 500000000L
-
-#define KOFI_WIDTH_FRAC 0.40f
-
 // Colour scale slots: the splash, one per player UI panel, and the pointer.
 #define FADE_SLOT_SPLASH 0
 #define FADE_SLOT_UI 1
 #define FADE_SLOT_POINTER (FADE_SLOT_UI + UI_PANEL_COUNT)
 #define FADE_SLOTS (FADE_SLOT_POINTER + 1)
 
-// Toast placement relative to the eyes, metres.
-#define TOAST_W_M 0.56f
-#define TOAST_DISTANCE_M 0.80f
-#define TOAST_DROP_M 0.14f
-
 // Ray length when it hits nothing, metres.
 #define FREE_BEAM_M 4.0f
 
-// Head aim drops frames this long after a recentre,
-// whatever the runtime says about when it lands.
-#define HEAD_AIM_RECENTRE_HOLD_NS 100000000LL
-// Interval of head aim's movement log line.
-#define HEAD_AIM_COUNT_NS 10000000000L
-
 // Ambilight: the frame is reduced to a tiny colour texture that fills
 // a glow quad behind the screen (sizes and colour maths in xr_glow.h).
-
 
 // Controller model pass: one side-by-side image, half per eye, at the runtime's
 // recommended eye size capped here, with these clip planes
@@ -268,10 +215,6 @@ typedef struct XrCompositionLayerSettingsFB {
 } XrCompositionLayerSettingsFB;
 #endif
 
-// Probed and logged only, not enabled.
-#ifndef XR_META_VIRTUAL_KEYBOARD_EXTENSION_NAME
-#define XR_META_VIRTUAL_KEYBOARD_EXTENSION_NAME "XR_META_virtual_keyboard"
-#endif
 
 // Set this property to a new value to dump one frame
 // of warp inputs and outputs for offline work.
@@ -283,7 +226,6 @@ typedef struct XrCompositionLayerSettingsFB {
 #define PROP_UPSAMPLE "debug.moonlight.upsample"
 #define PROP_UPSAMPLE_SIGMA "debug.moonlight.upsamplesigma"
 #define PROP_DEPTH_SHARP "debug.moonlight.depthsharp"
-#define PROP_OVERLAY "debug.moonlight.overlay"
 #define PROP_PASSTHROUGH "debug.moonlight.passthrough"
 
 #define PROP_OCCLUSION "debug.moonlight.occlusion"
@@ -382,13 +324,6 @@ typedef struct {
     int64_t swapchainFormat;
     // Some runtimes cap the swapchain count (Pico 4 Ultra at 32).
     int swapchainsAlive;
-
-    // Stats overlay, a layer of its own so it is never warped or doubled.
-    XrSwapchain overlaySwapchain;
-    uint32_t overlayImageCount;
-    XrSwapchainImageOpenGLESKHR* overlayImages;
-    int overlayHasContent;
-    int overlayVisible;
 
     // Compositor sharpening on the screen layers: 0 off, 1 normal, 2 quality.
     int sharpenMode;
@@ -707,9 +642,6 @@ typedef struct {
     int perfSettingsSupported;
     PFN_xrPerfSettingsSetPerformanceLevelEXT pfnPerfSettingsSetPerformanceLevel;
     int perfLevel;
-
-    // Probed and logged only.
-    int virtualKeyboardSupported;
     // Runtime's max composition layers per frame, and a warn-once flag.
     int maxLayerCount;
     int layerLimitWarned;
@@ -732,7 +664,6 @@ typedef struct {
     PFN_xrEnumerateColorSpacesFB pfnEnumerateColorSpaces;
     PFN_xrSetColorSpaceFB pfnSetColorSpace;
     int colorSpaceP3Offered;
-    int colorSpaceRec709Offered;
     int colorSpaceRec2020Offered;
     atomic_int colourModeWanted;
     int colourModeSet;
@@ -851,11 +782,6 @@ typedef struct {
     GazeBridge gazeBridge;
     // A pinch that woke the pointer is not a click; swallowed until the hand opens.
     int pinchSwallowed[SRC_COUNT];
-    // Hands locked for the session so stray pinches cannot click or drag.
-    // Triple pinch toggles; controllers are unaffected; off at session start.
-    int handsLocked;
-    // Read even while locked, since it is the way back.
-    TriplePinch triplePinch[HAND_COUNT];
 
     PFN_xrGetOpenGLESGraphicsRequirementsKHR pfnGetGlesReqs;
 
@@ -872,13 +798,6 @@ typedef struct {
     XrAction handAimAction;
     XrAction handPinchAction;
     XrAction handGraspAction;
-    // Left menu button, gamepad mode only: Start, and with the left grip
-    // the pad/pointer toggle. menuBound is 0 if no profile took it.
-    XrAction menuAction;
-    int menuBound;
-    // Vibration for gamepad rumble; hapticBound if any profile took it.
-    XrAction hapticAction;
-    int hapticBound;
     XrSpace aimSpaces[SRC_COUNT];
     // Null where unavailable; those hands use the joint-built ray.
     XrSpace handAimSpaces[HAND_COUNT];
@@ -980,8 +899,6 @@ typedef struct {
     int rayFlipped;
     // Beam drawn last frame, -1 before the first; for the log.
     int rayDrawnSaid;
-    // Counts the input passes, so the pointer can tell when it missed one
-    long inputFrames;
     // The head-locked preference, from the last input pass
     int headLockedPref;
     // A restored placement waits for the head to be tracked, then turns to face it
@@ -1036,10 +953,7 @@ typedef struct {
     int headTurnLastValid;
     // A gaze drag is held for a head turn; logged once.
     int dragHeldByHead;
-    XrQuaternionf screenOrientation;
     float beamWidth;
-    // Head yaw relative to the screen, for IN_HEAD_YAW.
-    float audioYaw;
 
     // Seeded from the distance and width preferences, then owned by
     // the grab; moving a slider hands it back to the preferences.
@@ -1054,7 +968,6 @@ typedef struct {
     int grabDown[SRC_COUNT];
     int grabMode;
     int grabHand;
-    float grabU, grabV;
     XrPosef grabAim;
     XrPosef grabScreen;
     float grabWidth;
@@ -1120,17 +1033,10 @@ typedef struct {
     XrSwapchainImageOpenGLESKHR* cornerImages;
     int handleArtReady;
 
-
     // Curvature from the panel, -1 while the preference owns it. The
     // preference is kept too, for use outside the JNI entry points.
     float panelCurve;
     float prefCurvature;
-    // Separation override (-1 while the preference owns it), and the value in force
-    float panelSeparation;
-    float separationCurrent;
-    // The model's default separation and convergence, set by Java before the first frame
-    float defaultSeparation;
-    float defaultConvergence;
 
     long statFrames;
     int64_t statTotalNs;
@@ -1150,11 +1056,6 @@ typedef struct {
     // Samples rejected as implausible, and the last rejected raw value, for the log.
     long gpuDropped;
     GLuint64 gpuLastDroppedNs;
-
-
-    // Separate accumulator so the overlay does not disturb the logcat cadence.
-    int64_t overlayGpuTotalNs;
-    long overlayGpuSamples;
 } XrCtx;
 
 typedef void (*PFNGENQUERIESEXT)(GLsizei, GLuint*);
@@ -1207,7 +1108,6 @@ void waitForDepthSlot(XrCtx* ctx);
 // xr_ambilight.c: the frame colour sample, letterbox detection and the glow
 int initAmbilight(XrCtx* ctx);
 int linkAmbiProgram(XrCtx* ctx);
-void ambiEffective(XrCtx* ctx, int* on, float* level);
 void runFrameColorSample(XrCtx* ctx, const float* texMatrix);
 void runGlowRender(XrCtx* ctx);
 // The glow's inputs changed since it was last drawn.
@@ -1220,7 +1120,6 @@ void contentRect(const XrCtx* ctx, int eye, float out[4]);
 // The player's frame uniforms for one draw: crop and shift are 0 for the glow
 void setFrameUniforms(XrCtx* ctx, GLint frame, GLint look, float crop, float shift);
 void redrawGlow(XrCtx* ctx, const float* texMatrix);
-
 
 // xr_model.c: the bundled controller model
 void updateControllerModels(XrCtx* ctx);
@@ -1252,10 +1151,7 @@ void relightSample(XrCtx* ctx);
 void relightStep(XrCtx* ctx, int64_t nowNs);
 int relightLayerReady(XrCtx* ctx);
 void relightDestroy(XrCtx* ctx);
-void setStereoLive(XrCtx* ctx, int on, const char* from);
-void setRayOn(XrCtx* ctx, int on, const char* from);
 void pictureSet(XrCtx* ctx, int row, int units);
-void pictureReset(XrCtx* ctx);
 
 // xr_assets.c: the swapchains the art goes into and the uploads that fill them
 int createArtSwapchain(XrCtx* ctx, int width, int height, const char* what,

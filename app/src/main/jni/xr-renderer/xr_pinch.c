@@ -1,4 +1,4 @@
-// Pinch detection, triple-pinch hand lock and gaze drag, see xr_pinch.h
+// Pinch detection and gaze drag, see xr_pinch.h
 #include "xr_pinch.h"
 
 #include <string.h>
@@ -37,40 +37,6 @@ int pinchStep(int source, int ext, int wasDown, float value, int aimPinching, in
 
 int pressHysteresis(float value, int wasDown, float on, float off) {
     return value > (wasDown ? off : on);
-}
-
-void triplePinchReset(TriplePinch* t) {
-    memset(t, 0, sizeof(*t));
-}
-
-// Counts press edges only. The window runs from the press two before this
-// one (a sliding window), and a successful lock resets the count.
-int triplePinchStep(TriplePinch* t, int down, int64_t nowNs) {
-    int pressed = down && !t->wasDown;
-    t->wasDown = down;
-    if (!down) {
-        t->holding = 0;
-    }
-    if (!pressed) {
-        return 0;
-    }
-    if (t->presses == 2 && nowNs - t->pressNs[0] <= TRIPLE_PINCH_WINDOW_NS) {
-        t->presses = 0;
-        t->holding = 1;
-        return 1;
-    }
-    if (t->presses == 2) {
-        t->pressNs[0] = t->pressNs[1];
-        t->pressNs[1] = nowNs;
-    }
-    else {
-        t->pressNs[t->presses++] = nowNs;
-    }
-    return 0;
-}
-
-int triplePinchHeld(const TriplePinch* t) {
-    return t->holding;
 }
 
 float dragRampGain(int64_t elapsedNs) {
@@ -123,17 +89,6 @@ float dragScale(Vec3 head, Vec3 target, Vec3 hand) {
         scale = 64.0f;
     }
     return scale;
-}
-
-Vec3 dragDeadZone(Vec3 d, float dead) {
-    float len = sqrtf(vecDot(d, d));
-    if (len <= dead) {
-        Vec3 still = { 0.0f, 0.0f, 0.0f };
-        return still;
-    }
-    float k = (len - dead) / len;
-    Vec3 out = { d.x * k, d.y * k, d.z * k };
-    return out;
 }
 
 float turnRateDegS(XrQuaternionf now, XrQuaternionf was, float dt) {

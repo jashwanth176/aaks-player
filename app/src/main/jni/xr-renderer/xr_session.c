@@ -266,7 +266,6 @@ static int initXrInstance(XrCtx* ctx) {
         if (!strcmp(exts[i].extensionName, XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME)) ctx->handAimOffered = 1;
         if (!strcmp(exts[i].extensionName, XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME)) ctx->eyeGaze = 1;
         if (!strcmp(exts[i].extensionName, XR_FB_COMPOSITION_LAYER_SETTINGS_EXTENSION_NAME)) ctx->layerSettingsSupported = 1;
-        if (!strcmp(exts[i].extensionName, XR_META_VIRTUAL_KEYBOARD_EXTENSION_NAME)) ctx->virtualKeyboardSupported = 1;
         if (!strcmp(exts[i].extensionName, XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME)) ctx->refreshRateSupported = 1;
         if (!strcmp(exts[i].extensionName, XR_EXT_PERFORMANCE_SETTINGS_EXTENSION_NAME)) ctx->perfSettingsSupported = 1;
         if (!strcmp(exts[i].extensionName, XR_KHR_COMPOSITION_LAYER_COLOR_SCALE_BIAS_EXTENSION_NAME)) ctx->colorScaleSupported = 1;
@@ -426,8 +425,6 @@ static int initXrInstance(XrCtx* ctx) {
     LOGEV("passthrough %s", ctx->alphaBlendSupported ? "available" : "not offered by this runtime");
     LOGEV("compositor sharpening %s", ctx->layerSettingsSupported
           ? "available (XR_FB_composition_layer_settings)" : "not offered by this runtime");
-    LOGEV("virtual keyboard extension %s", ctx->virtualKeyboardSupported
-          ? "available (XR_META_virtual_keyboard)" : "not offered by this runtime");
     LOGEV("layer colour scale %s", ctx->colorScaleSupported
           ? "available (XR_KHR_composition_layer_color_scale_bias), the panels and the splash fade"
           : "not offered by this runtime, the panels and the splash cut");
@@ -882,8 +879,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
                                                        jint depthHeight, jboolean depthDebug,
                                                        jint convergence, jint depthScale,
                                                        jboolean handTracking, jint sharpenMode,
-                                                       jint supersampleMode,
-                                                       jboolean perfOverlay) {
+                                                       jint supersampleMode) {
     XrCtx* ctx = calloc(1, sizeof(XrCtx));
     ctx->handsEnabled = handTracking;
     ctx->videoWidth = width;
@@ -927,18 +923,11 @@ Java_com_limelight_binding_video_XrRenderer_nativeInit(JNIEnv* env, jobject thiz
     ctx->seamInset = 1;
     // Off until it proves itself in a blind comparison.
     ctx->depthSharp = 0.0f;
-    ctx->overlayVisible = perfOverlay;
     ctx->separationOverride = -1.0f;
     ctx->distanceOverride = -1.0f;
     ctx->screenOverride = -1.0f;
-    // -1: the curve and separation preferences own their values.
+    // -1: the curve preference owns its value.
     ctx->panelCurve = -1.0f;
-    ctx->panelSeparation = -1.0f;
-    // Placeholder; the first endFrame writes the real value.
-    ctx->separationCurrent = 0.005f;
-    // Placeholders until Java sets the model's defaults.
-    ctx->defaultSeparation = 0.006f;
-    ctx->defaultConvergence = 0.5f;
     ctx->fadeNs = FADE_NS;
     for (int i = 0; i < SPLASH_PARTS; i++) {
         ctx->splashReadyMs[i] = -1;
@@ -1174,25 +1163,6 @@ Java_com_limelight_binding_video_XrRenderer_nativeTakeStartFailure(JNIEnv* env, 
     }
     free(r);
     return out;
-}
-
-// Runtime name and version, or null before the instance is created.
-JNIEXPORT jstring JNICALL
-Java_com_limelight_binding_video_XrRenderer_nativeGetRuntime(JNIEnv* env, jobject thiz,
-                                                             jlong handle) {
-    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
-    if (ctx == NULL || ctx->runtimeLabel[0] == '\0') {
-        return NULL;
-    }
-    return (*env)->NewStringUTF(env, ctx->runtimeLabel);
-}
-
-// Whether curved screens are available; the panel greys out the curve row if not.
-JNIEXPORT jboolean JNICALL
-Java_com_limelight_binding_video_XrRenderer_nativeGetCylinderSupported(JNIEnv* env, jobject thiz,
-                                                                       jlong handle) {
-    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
-    return (ctx != NULL && ctx->cylinderSupported) ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL

@@ -48,9 +48,6 @@ XrPosef poseInFrame(XrPosef frame, XrPosef pose);
 // distance, height, tilt and roll
 XrPosef poseRecentred(XrPosef screen);
 
-// Head yaw relative to the screen's facing, radians, positive left, (-pi, pi]
-float yawBetween(XrQuaternionf head, XrQuaternionf screen);
-
 float euroFilter(EuroState* s, float x, float dt, float minCutoff, float beta);
 XrQuaternionf euroFilterQuat(EuroQuatState* s, XrQuaternionf q, float dt,
                              float minCutoff, float beta);

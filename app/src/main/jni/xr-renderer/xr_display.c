@@ -131,7 +131,6 @@ void startColorSpace(XrCtx* ctx) {
                 "enumerate colour spaces")) {
         for (uint32_t i = 0; i < count; i++) {
             if (spaces[i] == XR_COLOR_SPACE_P3_FB) ctx->colorSpaceP3Offered = 1;
-            if (spaces[i] == XR_COLOR_SPACE_REC709_FB) ctx->colorSpaceRec709Offered = 1;
             if (spaces[i] == XR_COLOR_SPACE_REC2020_FB) ctx->colorSpaceRec2020Offered = 1;
             if (used < (int)sizeof(line) - 1) {
                 used += snprintf(line + used, sizeof(line) - used, "%s%s",
@@ -608,7 +607,7 @@ void displayFrameEnded(XrCtx* ctx) {
         float hz = ctx->displayRate > 0.0f ? ctx->displayRate
                 : ctx->displayPeriodNs > 0 ? 1e9f / (float)ctx->displayPeriodNs : 0.0f;
         ctx->rateSettled = 1;
-        LOGI("display rate settled on %s Hz, a change from here on goes on the toast",
+        LOGI("display rate settled on %s Hz",
              hzText(hz, settledHz, sizeof(settledHz)));
     }
     if (!ctx->refreshRateSupported || ctx->rateAsked <= 0.0f) {
@@ -877,20 +876,6 @@ Java_com_limelight_binding_video_XrRenderer_nativeGetDepthTarget(JNIEnv* env, jo
                                                                  jlong handle) {
     XrCtx* ctx = (XrCtx*)(intptr_t)handle;
     return ctx != NULL ? ctx->depthGov.target : 0;
-}
-
-// Current rate for the stats: the runtime's value, else derived from the frame period
-JNIEXPORT jfloat JNICALL
-Java_com_limelight_binding_video_XrRenderer_nativeGetDisplayRate(JNIEnv* env, jobject thiz,
-                                                                 jlong handle) {
-    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
-    if (ctx == NULL) {
-        return 0.0f;
-    }
-    if (ctx->refreshRateSupported && ctx->displayRate > 0.0f) {
-        return ctx->displayRate;
-    }
-    return ctx->displayPeriodNs > 0 ? (float)(1e9 / (double)ctx->displayPeriodNs) : 0.0f;
 }
 
 // Offered rates; empty if the runtime doesn't report them

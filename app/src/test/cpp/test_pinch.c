@@ -110,115 +110,6 @@ static void testPinchJoints(void) {
     CHECK(pinchStep(PINCH_SRC_JOINTS, 0, 0, 0.0f, 0, 1, 0.006f));
 }
 
-// Steps a series of pinches (start times atMs, each held holdMs) from *now.
-// Counts lock toggles and presses that pass through as clicks: none pass while
-// locked, and the gesture withholds its own third press.
-typedef struct {
-    int turned;
-    int clicks;
-} PinchRun;
-
-static PinchRun pinches(TriplePinch* tp, int64_t* now, int* locked, const int* atMs, int count,
-                        int holdMs) {
-    PinchRun run = { 0, 0 };
-    int64_t from = *now;
-    int64_t end = from + (int64_t)(atMs[count - 1] + holdMs + 300) * MS;
-    int reached = 0;
-    for (int64_t t = from; t <= end; t += FRAME_NS) {
-        int down = 0;
-        for (int i = 0; i < count; i++) {
-            int64_t on = from + (int64_t)atMs[i] * MS;
-            down |= t >= on && t < on + (int64_t)holdMs * MS;
-        }
-        if (triplePinchStep(tp, down, t)) {
-            *locked = !*locked;
-            run.turned++;
-        }
-        int reaches = down && !*locked && !triplePinchHeld(tp);
-        run.clicks += reaches && !reached;
-        reached = reaches;
-        *now = t;
-    }
-    *now += 2000 * MS;
-    return run;
-}
-
-static void testTriplePinch(void) {
-    TriplePinch tp;
-    triplePinchReset(&tp);
-    int64_t now = 1000 * MS;
-    int locked = 0;
-
-    // Three pinches inside the window lock. The first two click; the third is
-    // consumed.
-    const int quick[3] = { 0, 300, 600 };
-    PinchRun run = pinches(&tp, &now, &locked, quick, 3, 120);
-    CHECK(run.turned == 1 && locked);
-    CHECK(run.clicks == 2);
-
-    // While locked the same three unlock with no clicks.
-    run = pinches(&tp, &now, &locked, quick, 3, 120);
-    CHECK(run.turned == 1 && !locked);
-    CHECK(run.clicks == 0);
-
-    // Spread over 1.3 s: three clicks, no lock.
-    const int slow[3] = { 0, 650, 1300 };
-    run = pinches(&tp, &now, &locked, slow, 3, 120);
-    CHECK(run.turned == 0 && !locked);
-    CHECK(run.clicks == 3);
-
-    const int twice[2] = { 0, 250 };
-    run = pinches(&tp, &now, &locked, twice, 2, 100);
-    CHECK(run.turned == 0 && !locked);
-    CHECK(run.clicks == 2);
-
-    // The window is measured from the press two before the latest, not from
-    // the first of the run.
-    const int late[4] = { 0, 1000, 1300, 1600 };
-    run = pinches(&tp, &now, &locked, late, 4, 120);
-    CHECK(run.turned == 1 && locked);
-    CHECK(run.clicks == 3);
-
-    // Six quick pinches toggle twice; a new run starts at the fourth.
-    const int six[6] = { 0, 250, 500, 750, 1000, 1250 };
-    run = pinches(&tp, &now, &locked, six, 6, 100);
-    CHECK(run.turned == 2 && locked);
-    // Starts locked: 1-3 unlock, 4-5 click, 6 locks.
-    CHECK(run.clicks == 2);
-    locked = 0;
-    triplePinchReset(&tp);
-
-    // Overlapping holds are one press.
-    const int held[3] = { 0, 100, 200 };
-    run = pinches(&tp, &now, &locked, held, 3, 400);
-    CHECK(run.turned == 0 && run.clicks == 1);
-
-    // Window edge: third press at exactly 0.9 s toggles, 1 ms later does not.
-    triplePinchReset(&tp);
-    int64_t t0 = now;
-    CHECK(!triplePinchStep(&tp, 1, t0));
-    CHECK(!triplePinchStep(&tp, 0, t0 + 50 * MS));
-    CHECK(!triplePinchStep(&tp, 1, t0 + 400 * MS));
-    CHECK(!triplePinchStep(&tp, 0, t0 + 450 * MS));
-    CHECK(triplePinchStep(&tp, 1, t0 + TRIPLE_PINCH_WINDOW_NS));
-    // The third press is withheld until released.
-    CHECK(triplePinchHeld(&tp));
-    CHECK(!triplePinchStep(&tp, 1, t0 + 1000 * MS));
-    CHECK(triplePinchHeld(&tp));
-    CHECK(!triplePinchStep(&tp, 0, t0 + 1100 * MS));
-    CHECK(!triplePinchHeld(&tp));
-
-    triplePinchReset(&tp);
-    t0 += 5000 * MS;
-    CHECK(!triplePinchStep(&tp, 1, t0));
-    CHECK(!triplePinchStep(&tp, 0, t0 + 50 * MS));
-    CHECK(!triplePinchStep(&tp, 1, t0 + 400 * MS));
-    CHECK(!triplePinchStep(&tp, 0, t0 + 450 * MS));
-    CHECK(!triplePinchStep(&tp, 1, t0 + TRIPLE_PINCH_WINDOW_NS + MS));
-    CHECK(!triplePinchHeld(&tp));
-    CHECK(TRIPLE_PINCH_WINDOW_NS == 900 * MS);
-}
-
 static void testDragRamp(void) {
     CHECK_NEAR(dragRampGain(0), 0.0, 1e-6);
     CHECK_NEAR(dragRampGain(GAZE_DRAG_RAMP_NS / 2), 0.5, 1e-6);
@@ -284,11 +175,6 @@ static void testDragRamp(void) {
     Vec3 atHead = { 0.0f, 0.01f, 0.0f };
     CHECK_NEAR(dragScale(head, target, atHead), 1.0, 1e-6);
 
-    Vec3 small = { 0.010f, 0.0f, 0.0f };
-    Vec3 big = { 0.025f, 0.0f, 0.0f };
-    CHECK_NEAR(dragDeadZone(small, GAZE_DRAG_DEAD_M).x, 0.0, 1e-6);
-    CHECK_NEAR(dragDeadZone(big, GAZE_DRAG_DEAD_M).x, 0.010, 1e-6);
-
     // 1 degree in one 90 Hz frame is 90 deg/s.
     XrQuaternionf was = { 0.0f, 0.0f, 0.0f, 1.0f };
     float half = 0.5f * 3.14159265f / 180.0f;
@@ -306,7 +192,6 @@ int main(void) {
     testPinchAim();
     testPinchExtValue();
     testPinchJoints();
-    testTriplePinch();
     testDragRamp();
     return checksDone("xr_pinch");
 }

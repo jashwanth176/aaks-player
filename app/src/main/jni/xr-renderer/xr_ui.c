@@ -49,52 +49,6 @@ XrQuaternionf screenOrient(float yaw, float pitch, float roll) {
     return quatNorm(quatMul(q, axisAngleQuat(fwd, roll)));
 }
 
-// Session-only toggle from the bar or the Display tab; not stored.
-void setRayOn(XrCtx* ctx, int on, const char* from) {
-    on = on ? 1 : 0;
-    if (raySwitchOn(ctx->raySetting, ctx->rayFlipped) == on) {
-        return;
-    }
-    ctx->rayFlipped = rayFlipFor(ctx->raySetting, on);
-    LOGEV("ray %s from %s%s", on ? "on" : "off", from,
-          on ? "" : ", the dot stays and presses land as before");
-}
-
-// Session-only 3D toggle from the bar or 3D tab; forces a redraw. Turning back on with
-// a model running waits for a fresh depth map.
-void setStereoLive(XrCtx* ctx, int on, const char* from) {
-    on = on ? 1 : 0;
-    if (ctx->stereoMode == DEPTH_MODE_OFF || ctx->stereoLive == on) {
-        return;
-    }
-    ctx->stereoLive = on;
-    ctx->warpRedraw = 1;
-    ctx->stereoWaiting = on && ctx->stereoMode == DEPTH_MODE_MODEL;
-    ctx->stereoWaitIndex = atomic_load_explicit(&ctx->depthStagedIndex, memory_order_acquire);
-    ctx->stereoWaitNs = nowNs();
-    // Re-run the shift test in the new state
-    ctx->barTestFramesLogged = 0;
-    LOGEV("3d %s from %s", on ? "on" : "off", from);
-}
-
-// The model's default separation and convergence, in stored units. Before the first frame.
-JNIEXPORT void JNICALL
-Java_com_limelight_binding_video_XrRenderer_nativeSetDepthDefaults(JNIEnv* env, jobject thiz,
-                                                                   jlong handle, jint separation,
-                                                                   jint convergence) {
-    (void)env;
-    (void)thiz;
-    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
-    if (ctx == NULL) {
-        return;
-    }
-    int units = separation < 0 ? 0 : separation;
-    int percent = convergence < 0 ? 0 : (convergence > 100 ? 100 : convergence);
-    ctx->defaultSeparation = separationOf(units);
-    ctx->defaultConvergence = percent / 100.0f;
-    LOGEV("3d defaults: separation %d, convergence %d", units, percent);
-}
-
 // Ray visibility at session start; the bar and Display tab toggle it per session.
 // Before the first frame.
 JNIEXPORT void JNICALL
@@ -117,14 +71,6 @@ void pictureSet(XrCtx* ctx, int row, int units) {
     ctx->pictureUnits[row] = pictureClamp(row, units);
     ctx->grade = pictureGradeFor(ctx->pictureUnits);
     ctx->gradeOn = !pictureNeutral(ctx->pictureUnits);
-}
-
-// Picture tab reset: all defaults, grade off
-void pictureReset(XrCtx* ctx) {
-    for (int row = 0; row < PICTURE_VALUES; row++) {
-        pictureSet(ctx, row, pictureDefault(row));
-    }
-    LOGEV("picture reset from the panel, grade %s", ctx->gradeOn ? "on" : "off");
 }
 
 // Picture values from preferences, PICTURE_ order. Before the first frame.

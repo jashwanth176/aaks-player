@@ -86,19 +86,11 @@ static XrAction makeAction(XrCtx* ctx, XrActionType type, const char* name, cons
     return action;
 }
 
-// Binding levels: aim and trigger only; everything the pointer uses; plus the
-// left menu button.
-#define BIND_REDUCED 0
-#define BIND_FULL 1
-#define BIND_MENU 2
-
-// One unsupported path rejects a whole profile, so on rejection this retries
-// without haptics, then without the menu button, then with aim and trigger only.
-static void suggestBindings(XrCtx* ctx, const char* profile, int level, int haptic) {
+// One unsupported path rejects a whole profile, so on rejection this retries with aim
+// and trigger only.
+static void suggestBindings(XrCtx* ctx, const char* profile, int full) {
     XrActionSuggestedBinding b[24];
     uint32_t n = 0;
-    int full = level >= BIND_FULL;
-    int menu = 0;
     static const char* hands[HAND_COUNT] = { "/user/hand/left", "/user/hand/right" };
     // x and y on the left controller, a and b on the right
     static const char* rightClick[HAND_COUNT] = { "input/x/click", "input/a/click" };
@@ -121,12 +113,6 @@ static void suggestBindings(XrCtx* ctx, const char* profile, int level, int hapt
         if (full && ctx->gripAction != XR_NULL_HANDLE) {
             snprintf(path, sizeof(path), "%s/input/grip/pose", hands[h]);
             b[n].action = ctx->gripAction;
-            b[n++].binding = toPath(ctx, path);
-        }
-
-        if (haptic && ctx->hapticAction != XR_NULL_HANDLE) {
-            snprintf(path, sizeof(path), "%s/output/haptic", hands[h]);
-            b[n].action = ctx->hapticAction;
             b[n++].binding = toPath(ctx, path);
         }
 
@@ -153,14 +139,6 @@ static void suggestBindings(XrCtx* ctx, const char* profile, int level, int hapt
         snprintf(path, sizeof(path), "%s/input/squeeze/value", hands[h]);
         b[n].action = ctx->grabAction;
         b[n++].binding = toPath(ctx, path);
-
-        // Left only: the right menu button is reserved by the system.
-        if (level >= BIND_MENU && h == HAND_LEFT && ctx->menuAction != XR_NULL_HANDLE) {
-            snprintf(path, sizeof(path), "%s/input/menu/click", hands[h]);
-            b[n].action = ctx->menuAction;
-            b[n++].binding = toPath(ctx, path);
-            menu = 1;
-        }
     }
 
     XrInteractionProfileSuggestedBinding suggest = { XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING };
@@ -168,27 +146,13 @@ static void suggestBindings(XrCtx* ctx, const char* profile, int level, int hapt
     suggest.countSuggestedBindings = n;
     suggest.suggestedBindings = b;
 
-    int vibration = haptic && ctx->hapticAction != XR_NULL_HANDLE;
     XrResult res = xrSuggestInteractionProfileBindings(ctx->instance, &suggest);
     if (XR_SUCCEEDED(res)) {
-        LOGI("bindings accepted for %s (%s%s)", profile,
-             menu ? "full, with the menu button" : (full ? "full" : "reduced"),
-             vibration ? ", with the vibration" : "");
-        ctx->menuBound |= menu;
-        ctx->hapticBound |= vibration;
-    }
-    else if (vibration) {
-        LOGW("bindings with the vibration rejected for %s (%d), trying without it", profile, res);
-        suggestBindings(ctx, profile, level, 0);
-    }
-    else if (menu) {
-        LOGW("full bindings with the menu button rejected for %s (%d), trying without it",
-             profile, res);
-        suggestBindings(ctx, profile, BIND_FULL, 0);
+        LOGI("bindings accepted for %s (%s)", profile, full ? "full" : "reduced");
     }
     else if (full) {
         LOGW("full bindings rejected for %s (%d), trying aim and trigger only", profile, res);
-        suggestBindings(ctx, profile, BIND_REDUCED, 0);
+        suggestBindings(ctx, profile, 0);
     }
     else {
         LOGW("bindings rejected for %s (%d)", profile, res);
@@ -292,25 +256,19 @@ int initXrInput(XrCtx* ctx) {
                                       "Grasp to move the screen");
     // Controller model placement only; hands never bind it.
     ctx->gripAction = makeAction(ctx, XR_ACTION_TYPE_POSE_INPUT, "grip", "Controller");
-    ctx->menuAction = makeAction(ctx, XR_ACTION_TYPE_BOOLEAN_INPUT, "menu",
-                                 "Start, or with the grip the gamepad switch");
-    // Driven only by gamepad-mode rumble.
-    ctx->hapticAction = makeAction(ctx, XR_ACTION_TYPE_VIBRATION_OUTPUT, "rumble",
-                                   "Rumble from the game");
 
     if (ctx->aimAction == XR_NULL_HANDLE || ctx->triggerAction == XR_NULL_HANDLE) {
         return 0;
     }
 
-    // The simple controller has no stick or face buttons: aim, trigger, grip
-    // and haptics only.
-    suggestBindings(ctx, "/interaction_profiles/khr/simple_controller", BIND_FULL, 1);
-    suggestBindings(ctx, "/interaction_profiles/oculus/touch_controller", BIND_MENU, 1);
+    // The simple controller has no stick or face buttons: aim, trigger and grip only.
+    suggestBindings(ctx, "/interaction_profiles/khr/simple_controller", 1);
+    suggestBindings(ctx, "/interaction_profiles/oculus/touch_controller", 1);
     if (ctx->picoInteraction) {
         // One extension covers both; the Neo 3 needs its own suggestion or it
         // falls back to the simple controller.
-        suggestBindings(ctx, "/interaction_profiles/bytedance/pico4_controller", BIND_MENU, 1);
-        suggestBindings(ctx, "/interaction_profiles/bytedance/pico_neo3_controller", BIND_MENU, 1);
+        suggestBindings(ctx, "/interaction_profiles/bytedance/pico4_controller", 1);
+        suggestBindings(ctx, "/interaction_profiles/bytedance/pico_neo3_controller", 1);
     }
 
     // Gaze is its own top-level path, so it needs its own action. It has no
@@ -438,14 +396,9 @@ int initXrInput(XrCtx* ctx) {
     ctx->pointerOn = 1;
     initJointTracking(ctx);
     refreshInputSource(ctx);
-    LOGI("controller input ready (pico bindings %s, hand pinch %s, menu button %s, "
-         "vibration %s)",
+    LOGI("controller input ready (pico bindings %s, hand pinch %s)",
          ctx->picoInteraction ? "offered" : "not offered by this runtime",
-         ctx->handClickOk ? "bound" : (ctx->jointTracking ? "from joints" : "unavailable"),
-         ctx->menuBound ? "bound" : "not bound, so gamepad mode has no Start or switch",
-         ctx->hapticBound ? "bound" : "not bound, so gamepad mode has no rumble");
-    LOGEV("hand lock: three pinches on one hand, the third within %ld ms of the first, the "
-          "third held back from the host", TRIPLE_PINCH_WINDOW_NS / 1000000L);
+         ctx->handClickOk ? "bound" : (ctx->jointTracking ? "from joints" : "unavailable"));
     return 1;
 }
 
@@ -2087,7 +2040,6 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
         updateControllerAwake(ctx);
         updateGazeBridge(ctx);
         ctx->prefCurvature = curvature;
-        ctx->inputFrames++;
     }
 
     // Release everything held when input is not read, including under the splash.
@@ -2212,7 +2164,6 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     }
     ctx->backHover = f.hand >= 0 && f.hover == HOVER_UIPANEL && ctx->uiHover[f.hand] == UI_PANEL_BACK;
 
-    ctx->screenOrientation = f.screenPose.orientation;
     ctx->beamVisible = 0;
     ctx->beamFree = 0;
     // Gaze draws no ray or cursor; hover highlights are the feedback. A gaze

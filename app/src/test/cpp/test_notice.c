@@ -7,88 +7,6 @@
 // ~72 Hz frame.
 #define FRAME (14 * MS)
 
-static void testFadeRisesAndLands(void) {
-    Fade fade = { 0 };
-    long long now = 1000 * MS;
-    // First frame has no previous time, so the level does not move.
-    CHECK(fadeStep(&fade, 1, now, FADE_NS, 1) == FADE_NONE);
-    CHECK_NEAR(fade.level, 0.0, 1e-6);
-
-    int done = FADE_NONE;
-    int frames = 0;
-    while (done == FADE_NONE && frames < 100) {
-        now += FRAME;
-        done = fadeStep(&fade, 1, now, FADE_NS, 1);
-        frames++;
-        if (done == FADE_NONE) {
-            CHECK(fade.level > 0.0f && fade.level < 1.0f);
-        }
-    }
-    CHECK(done == FADE_IN_DONE);
-    CHECK_NEAR(fade.level, 1.0, 1e-6);
-    // 150 ms at 14 ms/frame completes on the 11th frame after the first.
-    CHECK(frames == 11);
-    CHECK(fade.frames == 12);
-    CHECK(now - fade.fromNs == 11 * FRAME);
-
-    // Holding reports nothing further.
-    now += FRAME;
-    CHECK(fadeStep(&fade, 1, now, FADE_NS, 1) == FADE_NONE);
-    CHECK_NEAR(fade.level, 1.0, 1e-6);
-}
-
-static void testFadeFallsAndTurnsRound(void) {
-    Fade fade = { 0 };
-    long long now = 5000 * MS;
-    fadeStep(&fade, 1, now, FADE_NS, 0);
-    CHECK_NEAR(fade.level, 1.0, 1e-6);
-
-    // Reversing mid-fade continues from the current level and restarts the run.
-    now += FRAME;
-    fadeStep(&fade, 0, now, FADE_NS, 1);
-    for (int i = 0; i < 4; i++) {
-        now += FRAME;
-        CHECK(fadeStep(&fade, 0, now, FADE_NS, 1) == FADE_NONE);
-    }
-    float halfway = fade.level;
-    CHECK_NEAR(halfway, 1.0 - 5.0 * 14.0 / 150.0, 1e-4);
-    now += FRAME;
-    CHECK(fadeStep(&fade, 1, now, FADE_NS, 1) == FADE_NONE);
-    CHECK(fade.level > halfway);
-    CHECK(fade.fromNs == now);
-    CHECK(fade.frames == 1);
-
-    int done = FADE_NONE;
-    for (int i = 0; i < 100 && done == FADE_NONE; i++) {
-        now += FRAME;
-        done = fadeStep(&fade, 1, now, FADE_NS, 1);
-    }
-    CHECK(done == FADE_IN_DONE);
-
-    done = FADE_NONE;
-    for (int i = 0; i < 100 && done == FADE_NONE; i++) {
-        now += FRAME;
-        done = fadeStep(&fade, 0, now, FADE_NS, 1);
-    }
-    CHECK(done == FADE_OUT_DONE);
-    CHECK_NEAR(fade.level, 0.0, 1e-6);
-}
-
-static void testFadeWithoutTheExtensionCuts(void) {
-    // Without layer fade support the level snaps.
-    Fade fade = { 0 };
-    long long now = 100 * MS;
-    CHECK(fadeStep(&fade, 1, now, FADE_NS, 0) == FADE_NONE);
-    CHECK_NEAR(fade.level, 1.0, 1e-6);
-    now += FRAME;
-    CHECK(fadeStep(&fade, 0, now, FADE_NS, 0) == FADE_NONE);
-    CHECK_NEAR(fade.level, 0.0, 1e-6);
-    // Zero-length fade also snaps.
-    now += FRAME;
-    CHECK(fadeStep(&fade, 1, now, 0, 1) == FADE_NONE);
-    CHECK_NEAR(fade.level, 1.0, 1e-6);
-}
-
 static void testSplashHoldsItsFloor(void) {
     // Ready at once still holds the splash for SPLASH_FLOOR_NS.
     Splash splash = { 0 };
@@ -199,9 +117,6 @@ static void testSplashWedgesTick(void) {
 }
 
 int main(void) {
-    testFadeRisesAndLands();
-    testFadeFallsAndTurnsRound();
-    testFadeWithoutTheExtensionCuts();
     testSplashHoldsItsFloor();
     testSplashWaitsThenGivesUp();
     testSplashCutsWithoutAFade();

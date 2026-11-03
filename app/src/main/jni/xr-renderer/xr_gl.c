@@ -693,8 +693,6 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
                 if (elapsed > 0 && elapsed < 50000000ull) {
                     ctx->gpuTotalNs += (int64_t)elapsed;
                     ctx->gpuSamples++;
-                    ctx->overlayGpuTotalNs += (int64_t)elapsed;
-                    ctx->overlayGpuSamples++;
                     rateBudgetGpu(&ctx->rateBudget, (int64_t)elapsed);
                     if ((int64_t)elapsed > ctx->gpuMaxNs) {
                         ctx->gpuMaxNs = (int64_t)elapsed;

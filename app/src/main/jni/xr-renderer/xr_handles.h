@@ -19,10 +19,6 @@
 #define HANDLE_SCALE_MAX_NEAR 1.6f
 #define HANDLE_SCALE_MAX_SPAN 5.4f
 
-// Default screen placement
-#define HANDLE_DEFAULT_DIST 2.5f
-#define HANDLE_DEFAULT_WIDTH 2.4f
-
 // Elastic overshoot past a limit, as a fraction of that limit
 #define HANDLE_DIST_STRETCH 0.05f
 #define HANDLE_SIZE_OVERSHOOT 0.1f

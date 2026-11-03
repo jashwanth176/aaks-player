@@ -2,10 +2,8 @@
 #include "xr_renderer.h"
 
 // The runtime limit is 16 layers on the Pico, and on the Quest 3 in practice (it
-// reports 32). Modals hide the bar furniture on the frame they open, so the two never
-// stack. The fullest settings tabs, with controller models and the toast, can still
-// exceed 16; nativeEndFrame then sheds layers in a fixed order until the frame fits.
-// The array is sized well past the worst case, since an overflow would smash the stack.
+// reports 32). Over the limit, nativeEndFrame sheds the controller models. The array
+// is sized well past the worst case, since an overflow would smash the stack.
 #define FRAME_MAX_LAYERS 24
 
 // Every layer a frame can carry; lives on nativeEndFrame's stack until xrEndFrame.
@@ -699,15 +697,10 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     ctx->prefCurvature = curvature;
     pollCaptureRequest(ctx);
     propFlag(PROP_PASSTHROUGH, &ctx->passthrough);
-    // Panel value first, then the debug property, which always wins.
-    if (ctx->panelSeparation >= 0.0f) {
-        separation = ctx->panelSeparation;
-    }
+    // The debug property wins
     if (ctx->separationOverride >= 0.0f) {
         separation = ctx->separationOverride;
     }
-    // Read back by the panel's thumb.
-    ctx->separationCurrent = separation;
     if (ctx->distanceOverride > 0.0f) {
         distance = ctx->distanceOverride;
     }

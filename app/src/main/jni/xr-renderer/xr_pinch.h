@@ -1,5 +1,5 @@
-// Pinch source selection and detection, the triple-pinch hand lock, and gaze
-// drags carried by the pinching hand. No OpenXR calls.
+// Pinch source selection and detection, and gaze drags carried by the pinching hand.
+// No OpenXR calls.
 
 #ifndef XR_PINCH_H
 #define XR_PINCH_H
@@ -40,34 +40,11 @@ int pinchStep(int source, int ext, int wasDown, float value, int aimPinching, in
 // Analog press with hysteresis
 int pressHysteresis(float value, int wasDown, float on, float off);
 
-// Hand lock toggle: three pinches on one hand within 0.9 s. The third press
-// is swallowed until released.
-#define TRIPLE_PINCH_WINDOW_NS 900000000L
-
-typedef struct {
-    // Last two press times, oldest first, and how many are counted
-    int64_t pressNs[2];
-    int presses;
-    int wasDown;
-    // Lock press, swallowed until released
-    int holding;
-} TriplePinch;
-
-void triplePinchReset(TriplePinch* t);
-
-// Returns 1 on the frame the third press completes the gesture
-int triplePinchStep(TriplePinch* t, int down, int64_t nowNs);
-
-// Whether the current press is the swallowed lock press
-int triplePinchHeld(const TriplePinch* t);
-
 // Gaze drags follow the pinching hand. Gain ramps in over 0.5 s (then 1.25x
 // to catch up) and freezes above 12 deg/s head turn, where hand tracking drifts.
 #define GAZE_DRAG_RAMP_NS 500000000L
 #define GAZE_DRAG_RAMP_GAIN 1.25f
 #define HEAD_TURN_HOLD_DEG_S 12.0f
-// Hand travel dead zone for gaze-picked sliders; gearing amplifies pinch shake
-#define GAZE_DRAG_DEAD_M 0.015f
 
 typedef struct {
     Vec3 prev;
@@ -84,8 +61,6 @@ Vec3 dragRampStep(DragRamp* r, Vec3 d, float headTurnDegS, int64_t nowNs, int* o
 
 // Drag gearing: target distance over hand distance from the head, 0.5 to 64
 float dragScale(Vec3 head, Vec3 target, Vec3 hand);
-// Subtracts a radial dead zone from the travel
-Vec3 dragDeadZone(Vec3 d, float dead);
 
 // Head turn rate in deg/s from two orientations dt seconds apart
 float turnRateDegS(XrQuaternionf now, XrQuaternionf was, float dt);

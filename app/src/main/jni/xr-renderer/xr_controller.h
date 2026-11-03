@@ -9,9 +9,6 @@
 // Ray switch for the session: the saved setting, inverted by each toggle
 int raySwitchOn(int settingOn, int flipped);
 
-// The flip value that makes the switch read wantOn
-int rayFlipFor(int settingOn, int wantOn);
-
 // Whether the beam is drawn this frame. While a panel is open it is always
 // drawn so the panel can be aimed at. The dot and hit test do not depend on it.
 int rayDrawn(int settingOn, int flipped, int panelOpen);

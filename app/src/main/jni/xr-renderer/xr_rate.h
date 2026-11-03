@@ -49,7 +49,7 @@ float rateStepDown(float hz, const float* rates, int count, float floorHz);
 float rateChoose(float fps, const float* rates, int count, int warpOn, float heldHz,
                  float frameMs);
 
-// Settled (later changes get a toast) after a focused frame and the first
+// Settled after a focused frame and the first
 // request resolved. Sticky.
 int rateSettled(int settled, int focusedFrame, float asked, int confirmed);
 

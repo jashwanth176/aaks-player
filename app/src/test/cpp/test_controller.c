@@ -12,15 +12,6 @@ static void testRaySwitch(void) {
     // Any non-zero counts as set.
     CHECK(raySwitchOn(5, 0) == 1);
     CHECK(raySwitchOn(5, 7) == 0);
-
-    // rayFlipFor reaches the wanted state from either setting.
-    for (int setting = 0; setting < 2; setting++) {
-        for (int want = 0; want < 2; want++) {
-            CHECK(raySwitchOn(setting, rayFlipFor(setting, want)) == want);
-        }
-    }
-    CHECK(rayFlipFor(1, 1) == 0);
-    CHECK(rayFlipFor(0, 0) == 0);
 }
 
 static void testRayDrawn(void) {

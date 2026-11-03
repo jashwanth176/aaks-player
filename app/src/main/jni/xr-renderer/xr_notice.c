@@ -1,37 +1,6 @@
-// Panel fades, splash timing and the toast queue. No GL.
+// Splash timing. No GL.
 #include "xr_notice.h"
 #include "xr_shared.h"
-
-int fadeStep(Fade* fade, int shown, int64_t now, int64_t durationNs, int smooth) {
-    float target = shown ? 1.0f : 0.0f;
-    int64_t dt = fade->lastNs != 0 ? now - fade->lastNs : 0;
-    fade->lastNs = now;
-    if (!smooth || durationNs <= 0) {
-        fade->level = target;
-        fade->running = 0;
-        return FADE_NONE;
-    }
-    if (fade->level == target) {
-        fade->running = 0;
-        return FADE_NONE;
-    }
-    // A new run starts on leaving rest or reversing direction
-    if (!fade->running || fade->rising != shown) {
-        fade->running = 1;
-        fade->rising = shown;
-        fade->fromNs = now;
-        fade->frames = 0;
-    }
-    fade->frames++;
-    float step = dt > 0 ? (float)dt / (float)durationNs : 0.0f;
-    fade->level += shown ? step : -step;
-    if ((shown && fade->level >= 1.0f) || (!shown && fade->level <= 0.0f)) {
-        fade->level = target;
-        fade->running = 0;
-        return shown ? FADE_IN_DONE : FADE_OUT_DONE;
-    }
-    return FADE_NONE;
-}
 
 int splashStep(Splash* splash, int64_t now, int waiting, int64_t fadeNs) {
     if (splash->firstNs == 0) {

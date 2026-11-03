@@ -142,7 +142,6 @@ void pollCaptureRequest(XrCtx* ctx) {
     propIntEvent(PROP_SEAM_INSET, &ctx->seamInset, 1, "eye seam inset");
     propPercent(PROP_UPSAMPLE_SIGMA, &ctx->upsampleSigmaR);
     propPercent(PROP_DEPTH_SHARP, &ctx->depthSharp);
-    propFlag(PROP_OVERLAY, &ctx->overlayVisible);
     propFlag(PROP_UPSAMPLE, &ctx->upsampleEnabled);
     propFlag(PROP_OCCLUSION, &ctx->occlusionEnabled);
     propPercent(PROP_CONVERGENCE, &ctx->convergence);

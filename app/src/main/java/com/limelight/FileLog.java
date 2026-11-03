@@ -172,27 +172,8 @@ public class FileLog {
         flushFile();
     }
 
-    /** The log before this one, which may not exist, or null when logging is off. */
-    public static File getPreviousLogFile() {
-        if (logPath == null) {
-            return null;
-        }
-        return new File(new File(logPath).getParentFile(), PREVIOUS_LOG_NAME);
-    }
-
     public static int getLevel() {
         return level;
-    }
-
-    /** Maps the setting value onto one of the level constants. */
-    public static int levelFromName(String name) {
-        if ("verbose".equals(name)) {
-            return VERBOSE;
-        }
-        if ("basic".equals(name)) {
-            return BASIC;
-        }
-        return OFF;
     }
 
     // Device lines at the top of each log file

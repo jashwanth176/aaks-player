@@ -10,25 +10,6 @@
 #define FADE_NS 150000000LL
 #define SPLASH_FADE_NS 300000000LL
 
-// fadeStep results
-#define FADE_NONE 0
-#define FADE_IN_DONE 1
-#define FADE_OUT_DONE 2
-
-// Layer opacity plus the current run, so the caller can log its duration
-typedef struct {
-    float level;
-    int64_t lastNs;
-    int64_t fromNs;
-    int frames;
-    int rising;
-    int running;
-} Fade;
-
-// Moves toward 1 (shown) or 0 over durationNs, or jumps if !smooth. Returns
-// FADE_IN_DONE / FADE_OUT_DONE on the frame a fade completes.
-int fadeStep(Fade* fade, int shown, int64_t now, int64_t durationNs, int smooth);
-
 // Splash shown for at least FLOOR and at most CEILING; logo wedges open one
 // per tick, hold, then restart
 #define SPLASH_FLOOR_NS 1500000000LL

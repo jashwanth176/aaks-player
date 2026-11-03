@@ -154,21 +154,8 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugConvert")) {
             convert2d = true;
         }
-        // Default the environment to passthrough
-        if (!saved.contains(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING)) {
-            saved.edit()
-                    .putInt(PreferenceConfiguration.VR_ENVIRONMENT_ID_PREF_STRING,
-                            PreferenceConfiguration.VR_ENV_PASSTHROUGH)
-                    .apply();
-        }
-
-        PreferenceConfiguration prefs = PreferenceConfiguration.readPreferences(this);
-        prefs.vrPassthrough = true;
-        // World-locked flat screen, 2.5 m away and 2.4 m wide by default (units of 0.1 m)
-        prefs.vrHeadLocked = false;
-        prefs.vrDistance = 25;
-        prefs.vrScreenSize = 24;
-        prefs.vrCurvature = 0;
+        // A world-locked flat screen, 2.5 m away and 2.4 m wide to start with
+        PreferenceConfiguration prefs = new PreferenceConfiguration();
         Film film = plan();
         // The renderer picks a display rate that is a multiple of this (72 Hz for 24 fps)
         prefs.fps = film.probe.fps;
