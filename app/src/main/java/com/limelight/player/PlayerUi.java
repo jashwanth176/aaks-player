@@ -1599,6 +1599,13 @@ final class PlayerUi implements XrRenderer.UiListener {
         return row;
     }
 
+    // Plain sub-heading
+    private TextView label(String name) {
+        TextView label = UiKit.text(context, name, 32, false, TEXT_SOFT);
+        label.setPadding(4, 26, 0, 12);
+        return label;
+    }
+
     private static final int ICON_SMALL = 56;
 
     private ImageView icon(int res) {
