@@ -144,7 +144,7 @@ static inline int64_t nowNs(void) {
 #define POINTER_SLEEP_SEC 5.0f
 // Hand pointer hides this long after the last pinch
 // or panel hover; an open palm brings it back.
-#define HAND_POINTER_SLEEP_SEC 1.5f
+#define HAND_POINTER_SLEEP_SEC 4.0f
 // Ray fade-out when the pointer sleeps.
 #define POINTER_FADE_NS 400000000LL
 // Wake thresholds, m/s and rad/s.
@@ -1144,6 +1144,8 @@ typedef struct {
     long inputFrames;
     // The head-locked preference, from the last input pass
     int headLockedPref;
+    // A restored placement waits for the head to be tracked, then turns to face it
+    int placeAtHead;
     // Bundled controller model at each grip, in its own projection layer.
     // modelOn is also set from the Display tab; buffers arrive from Java.
     int modelOn;

@@ -2177,6 +2177,8 @@ static void handBack(JNIEnv* env, XrCtx* ctx, float* out, jfloatArray outArr) {
     (*env)->SetFloatArrayRegion(env, outArr, 0, IN_SLOTS, out);
 }
 
+static void placeAtHead(XrCtx* ctx);
+
 // Per-frame input pass. Fills the IN_ slots that Java turns into UI and mouse
 // events.
 JNIEXPORT void JNICALL
@@ -2195,6 +2197,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
         ctx->gazeEnabled = gazeEnabled;
         ctx->pointerSleepOn = pointerSleep;
         ctx->headLockedPref = headLocked;
+        placeAtHead(ctx);
         // Uses last frame's clocks and gaze; must run before anything asks who points.
         updateControllerAwake(ctx);
         updateGazeBridge(ctx);
@@ -2413,8 +2416,41 @@ Java_com_limelight_binding_video_XrRenderer_nativeRecentreScreen(JNIEnv* env, jo
     (void)thiz;
     XrCtx* ctx = (XrCtx*)(intptr_t)handle;
     if (ctx != NULL) {
-        recentreScreen(ctx);
+        ctx->placeAtHead = 1;
     }
+}
+
+// Turns a restored placement to face where the head looks now, around the head,
+// keeping its distance, height, size and tilt. Once the head is tracked.
+static void placeAtHead(XrCtx* ctx) {
+    if (!ctx->placeAtHead || !ctx->placementValid || !ctx->sessionRunning) {
+        return;
+    }
+    const XrSpaceLocationFlags placed = XR_SPACE_LOCATION_POSITION_VALID_BIT
+            | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT
+            | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+    XrSpaceLocation head = { XR_TYPE_SPACE_LOCATION };
+    if (XR_FAILED(xrLocateSpace(ctx->viewSpace, ctx->localSpace, ctx->predictedDisplayTime,
+                                &head))
+            || (head.locationFlags & placed) != placed) {
+        return;
+    }
+    ctx->placeAtHead = 0;
+    XrPosef ahead = poseRecentred(ctx->screenPose);
+    Vec3 back = { 0.0f, 0.0f, -1.0f };
+    Vec3 look = quatRotate(head.pose.orientation, back);
+    float yaw = atan2f(-look.x, -look.z);
+    Vec3 up = { 0.0f, 1.0f, 0.0f };
+    XrQuaternionf turn = axisAngleQuat(up, yaw);
+    Vec3 flat = { ahead.position.x, 0.0f, ahead.position.z };
+    Vec3 out = quatRotate(turn, flat);
+    ctx->screenPose.position.x = head.pose.position.x + out.x;
+    ctx->screenPose.position.y = ahead.position.y;
+    ctx->screenPose.position.z = head.pose.position.z + out.z;
+    ctx->screenPose.orientation = quatNorm(quatMul(turn, ahead.orientation));
+    ctx->grabMode = GRAB_NONE;
+    LOGI("screen placed in front of the head: %.2f m ahead, turned %.0f degrees",
+         sqrtf(out.x * out.x + out.z * out.z), yaw * 180.0f / (float)M_PI);
 }
 
 // Player mode: disables the hand hint and bar detection, and switches the
