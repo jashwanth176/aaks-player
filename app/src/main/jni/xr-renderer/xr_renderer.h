@@ -698,6 +698,9 @@ typedef struct {
     PFN_xrPassthroughLayerSetStyleFB pfnPassthroughLayerSetStyle;
     // 0..1, from the player.
     float relightBrightness;
+    // House lights: 0 film lighting, 1 lights up. Target from the player, eased.
+    float houseTarget;
+    float houseLevel;
     // 0..1.
     float relightAmbientTarget;
     // Eased; the glow follows it.

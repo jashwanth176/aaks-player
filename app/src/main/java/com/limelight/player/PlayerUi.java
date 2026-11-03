@@ -105,6 +105,8 @@ final class PlayerUi implements XrRenderer.UiListener {
         /** Hide an idle hand's pointer until a palm is shown. */
         void onHandAutoHide(boolean on);
         boolean handAutoHide();
+        void onHouseLights(boolean on);
+        boolean houseLights();
         /** Per-file subtitle delay, positive = later. */
         void onSubtitleDelay(long ms);
         long subtitleDelayMs();
@@ -253,6 +255,7 @@ final class PlayerUi implements XrRenderer.UiListener {
     private boolean exitAsking;
     private TextView colourNatural, colourVivid;
     private TextView handHide, handAlways;
+    private TextView houseOff, houseOn;
     private TextView jumpText;
     private TextView speedButton;
     private final java.util.Map<Float, TextView> speedOptions = new java.util.HashMap<>();
@@ -877,6 +880,9 @@ final class PlayerUi implements XrRenderer.UiListener {
         boolean hide = actions.handAutoHide();
         setSelected(handHide, hide, UI_PANEL_SHEET);
         setSelected(handAlways, !hide, UI_PANEL_SHEET);
+        boolean house = actions.houseLights();
+        setSelected(houseOn, house, UI_PANEL_SHEET);
+        setSelected(houseOff, !house, UI_PANEL_SHEET);
 
         if (dragLine != ambientLine && Math.abs(ambientLine.fraction - actions.ambient()) > 0.001f) {
             ambientLine.setFraction(actions.ambient());
@@ -1437,6 +1443,27 @@ final class PlayerUi implements XrRenderer.UiListener {
             actions.onCurve(f, done);
         };
         box.addView(curveLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 72));
+
+        LinearLayout houseRow = row(com.limelight.R.drawable.player_ic_lamp, "House lights",
+                "Up when you pause, down as the film plays");
+        houseOff = UiKit.segment(context, "Off", v -> {
+            actions.onHouseLights(false);
+            refreshState();
+            renderDirty();
+        });
+        houseOn = UiKit.segment(context, "On", v -> {
+            actions.onHouseLights(true);
+            refreshState();
+            renderDirty();
+        });
+        for (TextView option : new TextView[] { houseOff, houseOn }) {
+            LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(130, 76);
+            olp.leftMargin = 12;
+            houseRow.addView(option, olp);
+        }
+        lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 112);
+        lp.topMargin = 10;
+        box.addView(houseRow, lp);
         return UiKit.wrap(context, box);
     }
 

@@ -91,6 +91,24 @@ float relightEaseAmbient(float current, float target, float dt) {
     return current + (target - current) * step;
 }
 
+float relightEaseHouse(float current, float target, float dt) {
+    float step = dt * RELIGHT_HOUSE_RATE;
+    if (step > 1.0f) step = 1.0f;
+    if (step < 0.0f) step = 0.0f;
+    return current + (target - current) * step;
+}
+
+void relightHouseMix(float scale[3], float house) {
+    float h = clamp01(house);
+    for (int i = 0; i < 3; i++) {
+        scale[i] += (1.0f - scale[i]) * h;
+    }
+}
+
+float relightHouseDark(float house) {
+    return RELIGHT_HOUSE_DARK * clamp01(house);
+}
+
 float relightGlowScale(float immersion) {
     float i = clamp01(immersion);
     return RELIGHT_GLOW_SCALE + (RELIGHT_GLOW_SCALE_FULL - RELIGHT_GLOW_SCALE) * i * i;

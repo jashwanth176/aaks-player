@@ -43,6 +43,11 @@ interface PlaybackEngine {
     /** True while playing or about to play; false when paused. */
     boolean isPlaying();
 
+    /** True once the film has played to its end. */
+    default boolean isEnded() {
+        return false;
+    }
+
     void setPlaying(boolean playing);
 
     /** Subtitle offset, positive = later. May be called before start and during playback. */

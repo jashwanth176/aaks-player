@@ -792,9 +792,10 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     int wantPassthrough = ctx->passthrough && ctx->alphaBlendSupported;
     int blendNow = wantPassthrough && ctx->focusedFrames > 0 && !splashUp;
     // The player shows the room through its own dimmable,
-    // tintable passthrough layer, with an opaque frame.
+    // tintable passthrough layer, with an opaque frame. In the
+    // dark the same layer brings the room up with the house lights.
     relightStep(ctx, frameNs);
-    int roomLayer = blendNow && relightLayerReady(ctx);
+    int roomLayer = ctx->focusedFrames > 0 && !splashUp && relightLayerReady(ctx);
     if (roomLayer) {
         blendNow = 0;
     }

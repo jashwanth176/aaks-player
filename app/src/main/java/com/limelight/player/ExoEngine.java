@@ -184,6 +184,11 @@ final class ExoEngine implements PlaybackEngine {
     }
 
     @Override
+    public boolean isEnded() {
+        return player != null && player.getPlaybackState() == Player.STATE_ENDED;
+    }
+
+    @Override
     public void setPlaying(boolean playing) {
         if (player != null) {
             player.setPlayWhenReady(playing);

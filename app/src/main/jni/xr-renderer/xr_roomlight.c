@@ -13,8 +13,9 @@ static int sampleTopLevel(void) {
     return level;
 }
 
+// In the dark the layer carries only the house lights.
 int relightWanted(XrCtx* ctx) {
-    return ctx->passthrough && ctx->fbPassthroughSupported
+    return (ctx->passthrough || ctx->houseLevel > 0.001f) && ctx->fbPassthroughSupported
             && ctx->fbPassthroughState >= 0;
 }
 
@@ -136,6 +137,10 @@ void relightStep(XrCtx* ctx, int64_t nowNs) {
     }
     ctx->relightStepNs = nowNs;
     ctx->relightAmbient = relightEaseAmbient(ctx->relightAmbient, ctx->relightAmbientTarget, dt);
+    ctx->houseLevel = relightEaseHouse(ctx->houseLevel, ctx->houseTarget, dt);
+    if (fabsf(ctx->houseLevel - ctx->houseTarget) < 0.001f) {
+        ctx->houseLevel = ctx->houseTarget;
+    }
     // Ease letterbox changes rather than jump
     for (int i = 0; i < 2; i++) {
         ctx->contentCur[i] = relightEaseAmbient(ctx->contentCur[i], ctx->contentTarget[i], dt * 2.0f);
@@ -156,8 +161,14 @@ void relightStep(XrCtx* ctx, int64_t nowNs) {
 
     float target[3] = { 1.0f, 1.0f, 1.0f };
     float keep = 1.0f - RELIGHT_NEUTRAL_RETURN;
-    if (ctx->relightAvgValid && ctx->everRendered && !ctx->playerScreenHidden) {
+    if (!ctx->passthrough) {
+        float dark = relightHouseDark(ctx->houseLevel);
+        target[0] = target[1] = target[2] = dark;
+        keep = RELIGHT_KEEP;
+    }
+    else if (ctx->relightAvgValid && ctx->everRendered && !ctx->playerScreenHidden) {
         relightScaleFor(ctx->relightAvg, ctx->relightBrightness, target);
+        relightHouseMix(target, ctx->houseLevel);
         keep = RELIGHT_KEEP;
     }
     relightFollow(ctx->relightScale, target, keep);
@@ -200,6 +211,23 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetPlayerLighting(JNIEnv* env,
     }
     ctx->relightAmbientTarget = ambient < 0.0f ? 0.0f : (ambient > 1.0f ? 1.0f : ambient);
     ctx->relightBrightness = brightness < 0.0f ? 0.0f : (brightness > 1.0f ? 1.0f : brightness);
+}
+
+// House lights level, 0..1; now skips the fade
+JNIEXPORT void JNICALL
+Java_com_limelight_binding_video_XrRenderer_nativeSetHouseLights(JNIEnv* env, jobject thiz,
+                                                                 jlong handle, jfloat level,
+                                                                 jboolean now) {
+    (void)env;
+    (void)thiz;
+    XrCtx* ctx = (XrCtx*)(intptr_t)handle;
+    if (ctx == NULL) {
+        return;
+    }
+    ctx->houseTarget = level < 0.0f ? 0.0f : (level > 1.0f ? 1.0f : level);
+    if (now) {
+        ctx->houseLevel = ctx->houseTarget;
+    }
 }
 
 // Stereo crop: outward eye shift as a fraction of width, 0..0.05

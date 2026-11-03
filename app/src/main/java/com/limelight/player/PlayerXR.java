@@ -47,6 +47,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     // A COLOUR_MODE_ value
     private static final String PREF_COLOUR = "player_colour";
     private static final String PREF_HAND_AUTO_HIDE = "player_hand_auto_hide";
+    private static final String PREF_HOUSE_LIGHTS = "player_house_lights";
     // Per-file subtitle delay in ms, keyed by suffixing the file key
     private static final String PREF_SUB_DELAY = "player_subdelay:";
     private static final float DEFAULT_BRIGHTNESS = 0.4f;
@@ -74,6 +75,11 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     private float curve;
     private int colourMode;
     private boolean handAutoHide;
+    // Cinema house lights: the room comes part way up when paused, fully at the end
+    private boolean houseLights;
+    private static final float HOUSE_PAUSED = 0.6f;
+    private static final long HOUSE_EVERY_MS = 250;
+    private float houseLevel = -1.0f;
     // Not persisted; a new file starts at 1x
     private float speed = 1.0f;
     private long subtitleDelayMs;
@@ -145,6 +151,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         curve = saved.getFloat(PREF_CURVE, 0.0f);
         colourMode = saved.getInt(PREF_COLOUR, XrShared.COLOUR_MODE_NATURAL);
         handAutoHide = saved.getBoolean(PREF_HAND_AUTO_HIDE, true);
+        houseLights = saved.getBoolean(PREF_HOUSE_LIGHTS, true);
         depth = saved.getString(PREF_DEPTH, DEPTH_FULL);
         if (depth.equals("photon")) {
             // Legacy value
@@ -165,6 +172,9 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         // Must precede start() so the library window placement is restored
         renderer.setPlayerScreenHidden(browse);
         renderer.setPlayerLighting(immersion, brightness);
+        // A film opens with the lights up, then they dim as it starts
+        houseLevel = houseLights && !browse ? 1.0f : 0.0f;
+        renderer.setHouseLights(houseLevel, true);
         renderer.setPlayerCurve(curve);
         renderer.setColourMode(colourMode);
         renderer.setHandAutoHide(handAutoHide);
@@ -428,6 +438,20 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             }
 
             @Override
+            public void onHouseLights(boolean on) {
+                if (on != houseLights) {
+                    houseLights = on;
+                    saved.edit().putBoolean(PREF_HOUSE_LIGHTS, on).apply();
+                    houseTick.run();
+                }
+            }
+
+            @Override
+            public boolean houseLights() {
+                return houseLights;
+            }
+
+            @Override
             public void onOpen(File file) {
                 openFile(Uri.fromFile(file));
             }
@@ -530,6 +554,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         }
 
         main.postDelayed(saver, SAVE_EVERY_MS);
+        main.postDelayed(houseTick, HOUSE_EVERY_MS);
         if (com.limelight.BuildConfig.DEBUG && "stress".equals(getIntent().getStringExtra("debugScript"))) {
             debugStress();
         }
@@ -690,6 +715,26 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         }
     };
 
+    // Follows the play state rather than every call that changes it
+    private final Runnable houseTick = new Runnable() {
+        @Override
+        public void run() {
+            main.removeCallbacks(this);
+            PlaybackEngine e = engine;
+            float level = 0.0f;
+            if (houseLights && e != null && !browse) {
+                level = e.isEnded() ? 1.0f : e.isPlaying() ? 0.0f : HOUSE_PAUSED;
+            }
+            if (level != houseLevel && renderer != null) {
+                houseLevel = level;
+                renderer.setHouseLights(level, false);
+            }
+            if (!finishing) {
+                main.postDelayed(this, HOUSE_EVERY_MS);
+            }
+        }
+    };
+
     private void saveProgress() {
         // Debug scripts don't overwrite the real resume point
         if (com.limelight.BuildConfig.DEBUG && (getIntent().hasExtra("debugScript") || getIntent().hasExtra("debugHeadless"))) {
@@ -815,6 +860,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     protected void onDestroy() {
         finishing = true;
         main.removeCallbacks(saver);
+        main.removeCallbacks(houseTick);
         saveProgress();
         if (ui != null) {
             ui.stop();

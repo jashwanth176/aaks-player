@@ -154,6 +154,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
 
     private volatile float playerAmbient = 1.0f;
     private volatile float playerBrightness = 0.4f;
+    private volatile float playerHouse;
     private volatile float playerCrop = 0.015f;
     private volatile float playerBarTop, playerBarBottom;
     private volatile boolean playerScreenHidden;
@@ -253,6 +254,18 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
         long ctx = nativeCtx;
         if (ctx != 0) {
             nativeSetPlayerLighting(ctx, ambient, brightness);
+        }
+    }
+
+    /**
+     * House lights, 0 (the film's lighting) to 1 (the room fully up; in the dark, a dim
+     * passthrough). The renderer fades between levels unless now. Any thread.
+     */
+    public void setHouseLights(float level, boolean now) {
+        playerHouse = level;
+        long ctx = nativeCtx;
+        if (ctx != 0) {
+            nativeSetHouseLights(ctx, level, now);
         }
     }
 
@@ -487,6 +500,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
     // Why the runtime ended the frame loop, or null
     private native String nativeGetExitReason(long ctx);
     private native void nativeSetPlayerLighting(long ctx, float ambient, float brightness);
+    private native void nativeSetHouseLights(long ctx, float level, boolean now);
     private native void nativeSetPlayerContent(long ctx, float top, float bottom);
     private native void nativeSetPlayerScreenHidden(long ctx, boolean hidden);
     private native void nativeSetPlayerCrop(long ctx, float crop);
@@ -566,6 +580,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 nativeSetPicture(nativeCtx, prefs.vrPicture);
                 nativeSetDepthRate(nativeCtx, prefs.vrDepthRate);
                 nativeSetPlayerLighting(nativeCtx, playerAmbient, playerBrightness);
+                nativeSetHouseLights(nativeCtx, playerHouse, true);
                 nativeSetPlayerCrop(nativeCtx, playerCrop);
                 nativeSetPlayerContent(nativeCtx, playerBarTop, playerBarBottom);
                 nativeSetPlayerScreenHidden(nativeCtx, playerScreenHidden);
