@@ -76,6 +76,31 @@ float depthThumbHistDiff(const DepthThumb* a, const DepthThumb* b);
 // Grid correlation, -1..1; 0 when either grid is flat
 float depthThumbCorr(const DepthThumb* a, const DepthThumb* b);
 
+// Subtitles in front of the picture. The nearest depth in a strip along the bottom of
+// the content sets how far they float toward the viewer.
+// Share of the content's height the strip covers, up from its bottom edge
+#define SUBS_STRIP_SHARE 0.3f
+// Margin in front of the nearest point, as a share of the viewing distance
+#define SUBS_DEPTH_MARGIN 0.02f
+#define SUBS_IPD 0.063f
+// Ease rates per second: forward fast, back slowly
+#define SUBS_DEPTH_RATE_IN 10.0f
+#define SUBS_DEPTH_RATE_OUT 1.5f
+// Where they rest on a 3D file, whose depth is not measured yet
+#define SUBS_DEPTH_REST 0.06f
+
+// Rows of the strip in a map h rows high whose row 0 is the bottom, given the black
+// bar shares at the bottom and top: [*outFrom, *outTo)
+void depthStripRows(int h, float barBottom, float barTop, int* outFrom, int* outTo);
+
+// Share of the viewing distance a point popping out by pop (map units in front of the
+// convergence plane) sits in front of the screen, for each eye shifted by separation
+// (a share of the screen's width) on a screen screenWidth metres wide, plus the margin
+float depthPopK(float pop, float separation, float screenWidth, float ipd);
+
+// Eases the subtitle depth toward its target over dt seconds
+float subsDepthEase(float current, float target, float dt);
+
 // Thresholds tuned on a Quest 3 log of an 81 s reel with 31 cuts. A false
 // jump only costs one unaveraged map; the gates below reject them.
 #define DEPTH_CUT_JUMP_DIFF 0.06f

@@ -21,9 +21,11 @@ final class SubtitleStyle {
     // Lift as a fraction of screen width
     static final float[] LIFTS = { 0.0f, 0.07f, 0.15f };
 
-    // Distance in front of the screen as a fraction of viewing distance (~15/30/50 cm at 2.5 m)
-    static final String[] DEPTH_NAMES = { "Screen", "Near", "Mid", "Far" };
-    static final float[] DEPTHS = { 0.0f, 0.06f, 0.12f, 0.2f };
+    // Distance in front of the screen as a fraction of viewing distance (~15/30/50 cm at
+    // 2.5 m), or Auto (-1): just in front of the picture's nearest point
+    static final String[] DEPTH_NAMES = { "Screen", "Near", "Mid", "Far", "Auto" };
+    static final float[] DEPTHS = { 0.0f, 0.06f, 0.12f, 0.2f, -1.0f };
+    static final int DEPTH_AUTO = 4;
 
     static final int EDGE_NONE = 0, EDGE_SHADOW = 1, EDGE_OUTLINE = 2;
 
@@ -34,7 +36,7 @@ final class SubtitleStyle {
     int background = 1;
     int edge = 1;
     int height = 0;
-    int depth = 0;
+    int depth = DEPTH_AUTO;
     boolean fileStyling = true;
 
     int textPx() {
@@ -70,7 +72,7 @@ final class SubtitleStyle {
         s.background = clamp(p.getInt(PREF + "background", 1), BACKGROUNDS.length);
         s.edge = clamp(p.getInt(PREF + "edge", 1), EDGE_NAMES.length);
         s.height = clamp(p.getInt(PREF + "height", 0), LIFTS.length);
-        s.depth = clamp(p.getInt(PREF + "depth", 0), DEPTHS.length);
+        s.depth = clamp(p.getInt(PREF + "depth", DEPTH_AUTO), DEPTHS.length);
         s.fileStyling = p.getBoolean(PREF + "file", true);
         return s;
     }

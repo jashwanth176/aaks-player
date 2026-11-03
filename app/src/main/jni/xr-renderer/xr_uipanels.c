@@ -80,7 +80,7 @@ XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
 
     // Float toward the eyes and scale down by the same factor: same angular
     // size, nearer stereo depth
-    float k = ctx->ui[id].depthK;
+    float k = ctx->ui[id].depthAuto ? ctx->subsDepthK : ctx->ui[id].depthK;
     if (k > 0.0f && k < 0.9f) {
         float f = 1.0f - k;
         XrVector3f eye = ctx->headPos;
@@ -119,10 +119,20 @@ int uiPanelAt(XrCtx* ctx, XrPosef aim, float* outU, float* outV) {
 
 void stepUiPanels(XrCtx* ctx, int64_t nowNs) {
     float step = ctx->uiStepNs > 0 ? (float)(nowNs - ctx->uiStepNs) / (float)UI_FADE_NS : 1.0f;
+    float dt = ctx->uiStepNs > 0 ? (float)(nowNs - ctx->uiStepNs) / 1e9f : 0.0f;
     ctx->uiStepNs = nowNs;
     if (step < 0.0f) {
         step = 0.0f;
     }
+    // Auto subtitle depth: just in front of the converted picture's nearest point along
+    // the bottom; a little off a 3D file; on the screen for a flat one
+    float subsTarget = ctx->subsSeparation > 0.0f
+            ? depthPopK(ctx->subsPop, ctx->subsSeparation, ctx->screenWidth, SUBS_IPD)
+            : ctx->subsNativeStereo ? SUBS_DEPTH_REST : 0.0f;
+    if (subsTarget > 0.5f) {
+        subsTarget = 0.5f;
+    }
+    ctx->subsDepthK = subsDepthEase(ctx->subsDepthK, subsTarget, dt > 0.1f ? 0.1f : dt);
     ctx->ui[UI_PANEL_LOADING].visible = !ctx->playerScreenHidden
             && !ctx->videoReady && nowNs - ctx->videoWaitNs > UI_LOADING_DELAY_NS;
     // With the bar, and as abruptly as the bar
@@ -198,6 +208,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetUiPanelDepth(JNIEnv* env, j
     if (ctx == NULL || !validId(id)) {
         return;
     }
+    ctx->ui[id].depthAuto = k < 0.0f;
     ctx->ui[id].depthK = k < 0.0f ? 0.0f : (k > 0.5f ? 0.5f : k);
 }
 

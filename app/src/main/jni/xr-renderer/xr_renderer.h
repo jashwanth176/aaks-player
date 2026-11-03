@@ -1006,10 +1006,18 @@ typedef struct {
         float gapFrac;
         // Sideways from the screen's centre line, in the gap's units
         float xOff;
-        // Fraction of the distance toward the viewer the panel floats off the screen.
+        // Fraction of the distance toward the viewer the panel floats off the screen,
+        // or (auto) in front of the picture's nearest point.
         float depthK;
+        int depthAuto;
         float level;
     } ui[UI_PANEL_COUNT];
+    // Auto subtitle depth: the strip's pop-out from the latest map (stage thread), the
+    // eye shift and stereo source of the latest draw, and the eased depth
+    float subsPop;
+    float subsSeparation;
+    int subsNativeStereo;
+    float subsDepthK;
     // -1 for none.
     int uiHover[SRC_COUNT];
     int64_t uiStepNs;

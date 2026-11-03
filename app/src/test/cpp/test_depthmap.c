@@ -742,7 +742,37 @@ static void testResetsInPipeline(void) {
     CHECK(got[5] == 0 && got[6] == 0);
 }
 
+static void testSubsDepth(void) {
+    // The strip is the bottom third of the content, above the bottom bar
+    int from, to;
+    depthStripRows(100, 0.0f, 0.0f, &from, &to);
+    CHECK(from == 0 && to == 30);
+    depthStripRows(100, 0.1f, 0.1f, &from, &to);
+    CHECK(from == 10 && to == 34);
+    depthStripRows(100, 0.5f, 0.5f, &from, &to);
+    CHECK(from == 50 && to > from && to <= 100);
+    // Nothing popping out: only the margin. A 3 cm shift each way on a 2.4 m screen is
+    // 6 cm of disparity against 6.3 cm eyes: about half way to the viewer.
+    CHECK_NEAR(depthPopK(0.0f, 0.02f, 2.4f, SUBS_IPD), SUBS_DEPTH_MARGIN, 1e-5f);
+    float k = depthPopK(0.625f, 0.02f, 2.4f, SUBS_IPD);
+    CHECK_NEAR(k, 0.06f / 0.123f + SUBS_DEPTH_MARGIN, 1e-4f);
+    CHECK(depthPopK(0.5f, 0.02f, 2.4f, SUBS_IPD) < k);
+    CHECK_NEAR(depthPopK(-1.0f, 0.02f, 2.4f, SUBS_IPD), SUBS_DEPTH_MARGIN, 1e-5f);
+    // Comes forward within a few frames, goes back over a second or more
+    float d = 0.0f;
+    for (int i = 0; i < 12; i++) {
+        d = subsDepthEase(d, 0.3f, 1.0f / 72.0f);
+    }
+    CHECK(d > 0.24f);
+    for (int i = 0; i < 36; i++) {
+        d = subsDepthEase(d, 0.0f, 1.0f / 72.0f);
+    }
+    CHECK(d > 0.1f && d < 0.2f);
+    CHECK_NEAR(subsDepthEase(0.0f, 0.3f, 10.0f), 0.3f, 1e-5f);
+}
+
 int main(void) {
+    testSubsDepth();
     testRobustRange();
     testLowPass();
     testLowPassRect();

@@ -463,6 +463,8 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
     if (nativeStereo(ctx)) {
         separation = 0.0f;
     }
+    ctx->subsSeparation = warping ? separation : 0.0f;
+    ctx->subsNativeStereo = nativeStereo(ctx);
     int occluding = upsampling && ctx->occlusionEnabled && separation > 0.0f;
 
     // Capture frames read back and write files; on this driver that inside a query can leave

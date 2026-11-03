@@ -451,6 +451,9 @@ Java_com_limelight_binding_video_XrRenderer_nativeUploadDepth(JNIEnv* env, jobje
     // The low pass (about 10 ms) only serves the shape/detail remap; skip it
     // when the remap is identity
     int remapping = kg < 0.995f || kg > 1.005f || kl < 0.995f || kl > 1.005f;
+    int stripFrom, stripTo;
+    depthStripRows(h, ctx->contentCur[1], ctx->contentCur[0], &stripFrom, &stripTo);
+    float pop = 0.0f;
     if (remapping) {
         // Radius scales with the map size
         lowPass(ctx->depthNorm, ctx->depthLow, ctx->depthScratch, ctx->depthColSums, w, h,
@@ -468,6 +471,9 @@ Java_com_limelight_binding_video_XrRenderer_nativeUploadDepth(JNIEnv* env, jobje
                                 : norm[x];
             if (v < 0.0f) v = 0.0f;
             if (v > 1.0f) v = 1.0f;
+            if (y >= stripFrom && y < stripTo && v - conv > pop) {
+                pop = v - conv;
+            }
 
             dst[x * 4 + 0] = (unsigned char)(guide[x * 3 + 0] * 255.0f + 0.5f);
             dst[x * 4 + 1] = (unsigned char)(guide[x * 3 + 1] * 255.0f + 0.5f);
@@ -475,6 +481,8 @@ Java_com_limelight_binding_video_XrRenderer_nativeUploadDepth(JNIEnv* env, jobje
             dst[x * 4 + 3] = (unsigned char)(v * 255.0f + 0.5f);
         }
     }
+
+    ctx->subsPop = pop;
 
     int writeIndex = ctx->depthWriteIndex;
     glActiveTexture(GL_TEXTURE0);

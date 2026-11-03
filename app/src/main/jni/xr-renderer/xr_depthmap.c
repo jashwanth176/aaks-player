@@ -332,6 +332,37 @@ int depthCutStep(DepthCut* c, const DepthThumb* t, float* diff, float* hist) {
     return result;
 }
 
+void depthStripRows(int h, float barBottom, float barTop, int* outFrom, int* outTo) {
+    if (barBottom < 0.0f) barBottom = 0.0f;
+    if (barTop < 0.0f) barTop = 0.0f;
+    float content = 1.0f - barBottom - barTop;
+    if (content < 0.05f) content = 0.05f;
+    int from = (int)(barBottom * (float)h);
+    int to = (int)((barBottom + SUBS_STRIP_SHARE * content) * (float)h + 0.5f);
+    if (from < 0) from = 0;
+    if (to > h) to = h;
+    if (to <= from) to = from < h ? from + 1 : h;
+    *outFrom = from;
+    *outTo = to;
+}
+
+float depthPopK(float pop, float separation, float screenWidth, float ipd) {
+    if (pop < 0.0f || separation <= 0.0f || screenWidth <= 0.0f || ipd <= 0.0f) {
+        return SUBS_DEPTH_MARGIN;
+    }
+    // Both eyes shift, so the disparity on the screen is twice one eye's
+    float disparity = 2.0f * separation * pop * screenWidth;
+    return disparity / (ipd + disparity) + SUBS_DEPTH_MARGIN;
+}
+
+float subsDepthEase(float current, float target, float dt) {
+    float rate = target > current ? SUBS_DEPTH_RATE_IN : SUBS_DEPTH_RATE_OUT;
+    float step = dt * rate;
+    if (step > 1.0f) step = 1.0f;
+    if (step < 0.0f) step = 0.0f;
+    return current + (target - current) * step;
+}
+
 void depthResetsSet(DepthResets* r, int pair, int flags) {
     r->pair[pair] = flags;
 }
