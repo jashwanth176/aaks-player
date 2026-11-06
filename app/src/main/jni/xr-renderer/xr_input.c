@@ -1874,10 +1874,12 @@ static void updatePointerWake(XrCtx* ctx, InputFrame* f) {
         ctx->stillFor = 0.0f;
     }
 
-    // A menu waits on a press, so the pointer stays awake over it
+    // A menu waits on a press, so the pointer stays awake over it, and idle hands
+    // do not count down to putting it away
     if (ctx->ui[UI_PANEL_SHEET].visible) {
         ctx->pointerAwake = 1;
         ctx->stillFor = 0.0f;
+        ctx->handIdleFor = 0.0f;
     }
 
     updateControllerClocks(ctx, f);
