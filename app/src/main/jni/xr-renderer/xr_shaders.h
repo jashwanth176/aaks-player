@@ -16,5 +16,7 @@ extern const char* const GLOW_EDGE_FRAGMENT_SRC;
 extern const char* const GLOW_FRAGMENT_SRC;
 extern const char* const MODEL_VERTEX_SRC;
 extern const char* const MODEL_FRAGMENT_SRC;
+extern const char* const HAND_VERTEX_SRC;
+extern const char* const HAND_FRAGMENT_SRC;
 
 #endif

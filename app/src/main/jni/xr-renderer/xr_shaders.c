@@ -615,6 +615,49 @@ const char* const GLOW_FRAGMENT_SRC =
 
 // Controller model: vertex colours, per-vertex lighting from one fixed light
 // above and behind the seat, plus ambient
+// Hand outline: the runtime's hand mesh skinned to this frame's joints
+const char* const HAND_VERTEX_SRC =
+    "#version 300 es\n"
+    "precision highp float;\n"
+    "in vec3 a_position;\n"
+    "in vec3 a_normal;\n"
+    "in vec4 a_joints;\n"
+    "in vec4 a_weights;\n"
+    "uniform mat4 u_viewproj;\n"
+    "uniform mat4 u_joints[26];\n"
+    "out vec3 v_normal;\n"
+    "out vec3 v_world;\n"
+    "void main() {\n"
+    "    mat4 skin = a_weights.x * u_joints[int(a_joints.x)]\n"
+    "            + a_weights.y * u_joints[int(a_joints.y)]\n"
+    "            + a_weights.z * u_joints[int(a_joints.z)]\n"
+    "            + a_weights.w * u_joints[int(a_joints.w)];\n"
+    "    vec4 world = skin * vec4(a_position, 1.0);\n"
+    "    v_world = world.xyz;\n"
+    "    v_normal = mat3(skin) * a_normal;\n"
+    "    gl_Position = u_viewproj * world;\n"
+    "}\n";
+
+// A glowing rim where the hand turns away from the eye, over a faint fill (u_look:
+// fill, rim). Premultiplied.
+const char* const HAND_FRAGMENT_SRC =
+    "#version 300 es\n"
+    "precision highp float;\n"
+    "in vec3 v_normal;\n"
+    "in vec3 v_world;\n"
+    "uniform vec3 u_eye;\n"
+    "uniform vec2 u_look;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    vec3 n = normalize(v_normal);\n"
+    "    vec3 v = normalize(u_eye - v_world);\n"
+    "    float edge = 1.0 - abs(dot(n, v));\n"
+    "    float rim = u_look.y * edge * edge * edge;\n"
+    "    float a = clamp(u_look.x + rim, 0.0, 1.0);\n"
+    "    vec3 rgb = vec3(0.5, 0.53, 0.58) * u_look.x + vec3(0.82, 0.91, 1.0) * rim;\n"
+    "    fragColor = vec4(min(rgb, vec3(a)), a);\n"
+    "}\n";
+
 const char* const MODEL_VERTEX_SRC =
     "#version 300 es\n"
     "precision highp float;\n"

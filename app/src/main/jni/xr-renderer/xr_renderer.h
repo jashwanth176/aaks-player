@@ -64,6 +64,7 @@ typedef XrResult (XRAPI_PTR *PFN_xrRequestBoundaryVisibilityMETA)(
 #include "xr_videocolour.h"
 #include "xr_depthmap.h"
 #include "xr_poke.h"
+#include "xr_handmesh.h"
 #include "xr_roommesh.h"
 #include "xr_layout.h"
 #include "xr_rate.h"
@@ -963,6 +964,30 @@ typedef struct {
     int modelShown[HAND_COUNT];
     XrPosef modelGrip[HAND_COUNT];
     int modelsShowing;
+    // Hand outlines (xr_hands.c): each hand's mesh from XR_FB_hand_tracking_mesh, its
+    // joints this frame in local space, and the pass drawn with the controller models.
+    int handMeshOffered;
+    PFN_xrGetHandMeshFB pfnGetHandMesh;
+    struct {
+        float* vertices;
+        uint16_t* indices;
+        int vertexCount;
+        int indexCount;
+        XrPosef bind[XR_HAND_JOINT_COUNT_EXT];
+        GLuint vbo;
+        GLuint ibo;
+    } handMesh[HAND_COUNT];
+    XrPosef handJoints[HAND_COUNT][XR_HAND_JOINT_COUNT_EXT];
+    int handJointsOk[HAND_COUNT];
+    int handShown[HAND_COUNT];
+    int handsShowing;
+    int handsSaid;
+    GLuint handProgram;
+    GLint handViewProjUniform;
+    GLint handJointsUniform;
+    GLint handEyeUniform;
+    GLint handLookUniform;
+    int handPassFailed;
     int modelsSaid;
     // Actions already synced this frame by the input pass.
     int actionsSynced;
@@ -1188,6 +1213,11 @@ void redrawGlow(XrCtx* ctx, const float* texMatrix);
 // xr_model.c: the bundled controller model
 void updateControllerModels(XrCtx* ctx);
 void renderControllerModels(XrCtx* ctx);
+// Hand outlines (xr_hands.c)
+void loadHandMeshes(XrCtx* ctx);
+void updateHands(XrCtx* ctx);
+void drawHandOutlines(XrCtx* ctx);
+void destroyHands(XrCtx* ctx);
 
 // xr_input.c: actions, hands, the ray and the per frame input pass
 int initXrInput(XrCtx* ctx);

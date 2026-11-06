@@ -199,7 +199,8 @@ void renderControllerModels(XrCtx* ctx) {
     if (ctx->modelPassReady && ctx->timerSupported) {
         collectModelTimer(ctx);
     }
-    if (!ctx->modelsShowing || !initModelPass(ctx) || !locateModelViews(ctx)) {
+    if ((!ctx->modelsShowing && !ctx->handsShowing) || !initModelPass(ctx)
+            || !locateModelViews(ctx)) {
         return;
     }
     uint32_t index = 0;
@@ -274,6 +275,7 @@ void renderControllerModels(XrCtx* ctx) {
                            (const void*)0);
         }
     }
+    drawHandOutlines(ctx);
 
     if (timing) {
         pfnEndQuery(GL_TIME_ELAPSED_EXT);

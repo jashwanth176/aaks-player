@@ -34,6 +34,7 @@ static void initJointTracking(XrCtx* ctx) {
     }
     ctx->jointTracking = 1;
     ctx->handAim = ctx->handAimOffered;
+    loadHandMeshes(ctx);
     LOGI("reading hand joints for pinch%s",
          ctx->handAim ? ", with the runtime's pinch flags beside them" : "");
 }
@@ -563,6 +564,7 @@ static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPo
                        int headValid) {
     ctx->tipsValid[hand] = 0;
     ctx->indexTipValid[hand] = 0;
+    ctx->handJointsOk[hand] = 0;
     ctx->aimPinch[hand] = 0;
     ctx->handTrust[hand] = 0.0f;
     ctx->palmShown[hand] = 0;
@@ -598,6 +600,14 @@ static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPo
         if (systemGesture) {
             ctx->aimPinch[hand] = 0;
         }
+    }
+    // Kept in local space for the outline, before the joints move into the screen's frame
+    int whole = located;
+    const XrSpaceLocationFlags posed = XR_SPACE_LOCATION_POSITION_VALID_BIT
+            | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+    for (int j = 0; located && j < XR_HAND_JOINT_COUNT_EXT; j++) {
+        ctx->handJoints[hand][j] = joints[j].pose;
+        whole = whole && (joints[j].locationFlags & posed) == posed;
     }
     for (int j = 0; located && j < XR_HAND_JOINT_COUNT_EXT; j++) {
         located = intoFrame(xform, &joints[j].pose);
@@ -640,6 +650,7 @@ static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPo
         return;
     }
     ctx->handTrust[hand] = trust;
+    ctx->handJointsOk[hand] = whole;
 
     if (headValid) {
         PalmHand palm;

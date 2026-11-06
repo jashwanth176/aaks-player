@@ -452,8 +452,9 @@ static void addUiPanelLayers(XrCtx* ctx, const FrameView* view, FrameLayers* lay
 
 // The controller models' projection layer, alpha blended over the picture and panels
 // since a controller is nearer. World locked, with the poses it was drawn from.
+// Controllers in the dark; hand outlines in passthrough too.
 static void addModelLayer(XrCtx* ctx, FrameLayers* layers) {
-    if (!ctx->modelsShowing || !ctx->modelRendered || ctx->passthrough) {
+    if ((!ctx->modelsShowing && !ctx->handsShowing) || !ctx->modelRendered) {
         return;
     }
     XrCompositionLayerProjection* models = &layers->models;
@@ -734,6 +735,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     applyBoundary(ctx);
 
     updateControllerModels(ctx);
+    updateHands(ctx);
 
     // A 3D switch redraws the latched frame, since the decoder sends nothing while paused;
     // never the last film's frame on a new film's screen.

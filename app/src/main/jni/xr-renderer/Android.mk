@@ -13,6 +13,8 @@ LOCAL_SRC_FILES := xr_log.c \
                    xr_subsdepth.c \
                    xr_frost.c \
                    xr_poke.c \
+                   xr_handmesh.c \
+                   xr_hands.c \
                    xr_relight.c \
                    xr_roomlight.c \
                    xr_rate.c \

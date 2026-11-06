@@ -264,6 +264,7 @@ static int initXrInstance(XrCtx* ctx) {
         if (!strcmp(exts[i].extensionName, XR_MSFT_HAND_INTERACTION_EXTENSION_NAME)) ctx->msftHandInteraction = 1;
         if (!strcmp(exts[i].extensionName, XR_EXT_HAND_TRACKING_EXTENSION_NAME)) ctx->handTracking = 1;
         if (!strcmp(exts[i].extensionName, XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME)) ctx->handAimOffered = 1;
+        if (!strcmp(exts[i].extensionName, XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME)) ctx->handMeshOffered = 1;
         if (!strcmp(exts[i].extensionName, XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME)) ctx->eyeGaze = 1;
         if (!strcmp(exts[i].extensionName, XR_FB_COMPOSITION_LAYER_SETTINGS_EXTENSION_NAME)) ctx->layerSettingsSupported = 1;
         if (!strcmp(exts[i].extensionName, XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME)) ctx->refreshRateSupported = 1;
@@ -282,6 +283,7 @@ static int initXrInstance(XrCtx* ctx) {
         ctx->msftHandInteraction = 0;
         ctx->handTracking = 0;
         ctx->handAimOffered = 0;
+        ctx->handMeshOffered = 0;
         LOGI("hand tracking off by preference");
     }
 
@@ -323,6 +325,11 @@ static int initXrInstance(XrCtx* ctx) {
     ctx->handAimOffered = ctx->handAimOffered && ctx->handTracking;
     if (ctx->handAimOffered) {
         enableExt(enabledExts, &enabledCount, XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME);
+    }
+    // The hands' shape, for their outlines
+    ctx->handMeshOffered = ctx->handMeshOffered && ctx->handTracking;
+    if (ctx->handMeshOffered) {
+        enableExt(enabledExts, &enabledCount, XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME);
     }
     if (ctx->eyeGaze) {
         enableExt(enabledExts, &enabledCount, XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME);
@@ -818,6 +825,7 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
     if (ctx->modelProgram != 0) {
         glDeleteProgram(ctx->modelProgram);
     }
+    destroyHands(ctx);
 
     destroyArtSwapchain(ctx, &ctx->swapchain, &ctx->swapchainImages);
     destroyArtSwapchain(ctx, &ctx->pointerSwapchain, &ctx->pointerImages);
