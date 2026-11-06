@@ -1,5 +1,17 @@
 // Hand outlines: skinning maths.
+#include <math.h>
+
 #include "xr_handmesh.h"
+
+float handFadeStep(float level, int tracked, float lostFor, float dt) {
+    if (tracked) {
+        return fminf(1.0f, level + dt / HAND_FADE_IN_SEC);
+    }
+    if (lostFor < HAND_HOLD_SEC) {
+        return level;
+    }
+    return fmaxf(0.0f, level - dt / HAND_FADE_OUT_SEC);
+}
 
 void matFromPose(float* m, XrPosef pose) {
     float x = pose.orientation.x, y = pose.orientation.y;

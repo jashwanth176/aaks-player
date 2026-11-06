@@ -89,15 +89,36 @@ void loadHandMeshes(XrCtx* ctx) {
     }
 }
 
-// Which hands to draw this frame: tracked well, with the headset in use
+// Which hands to draw this frame, and how strongly: tracked well, or just lost and
+// held at their last good pose while fading
 void updateHands(XrCtx* ctx) {
+    int64_t now = nowNs();
+    float dt = ctx->handStepNs > 0 ? (float)(now - ctx->handStepNs) / 1e9f : 0.0f;
+    ctx->handStepNs = now;
+    if (dt > 0.1f) {
+        dt = 0.1f;
+    }
     int live = ctx->shouldRender && ctx->sessionState == XR_SESSION_STATE_FOCUSED
             && ctx->splash.phase == SPLASH_GONE && !ctx->handPassFailed;
     int said = 0;
     ctx->handsShowing = 0;
     for (int h = 0; h < HAND_COUNT; h++) {
-        ctx->handShown[h] = live && ctx->handMesh[h].vertexCount > 0 && ctx->handJointsOk[h]
+        int tracked = ctx->handMesh[h].vertexCount > 0 && ctx->handJointsOk[h]
                 && ctx->profileKind[h] != PROFILE_CONTROLLER;
+        if (tracked) {
+            memcpy(ctx->handJointsLast[h], ctx->handJoints[h], sizeof(ctx->handJointsLast[h]));
+            ctx->handLastValid[h] = 1;
+            ctx->handLostFor[h] = 0.0f;
+        }
+        else {
+            ctx->handLostFor[h] += dt;
+        }
+        // Picked up a controller: no hold
+        if (ctx->profileKind[h] == PROFILE_CONTROLLER) {
+            ctx->handLevel[h] = 0.0f;
+        }
+        ctx->handLevel[h] = handFadeStep(ctx->handLevel[h], tracked, ctx->handLostFor[h], dt);
+        ctx->handShown[h] = live && ctx->handLastValid[h] && ctx->handLevel[h] > 0.0f;
         ctx->handsShowing |= ctx->handShown[h];
         said |= ctx->handShown[h] << h;
     }
@@ -178,11 +199,11 @@ void drawHandOutlines(XrCtx* ctx) {
             continue;
         }
         for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++) {
-            handSkinMatrix(&skins[h][j * 16], ctx->handJoints[h][j], ctx->handMesh[h].bind[j]);
+            handSkinMatrix(&skins[h][j * 16], ctx->handJointsLast[h][j], ctx->handMesh[h].bind[j]);
         }
     }
     glUseProgram(ctx->handProgram);
-    glUniform2f(ctx->handLookUniform, ctx->passthrough ? 0.0f : HAND_FILL_DARK, HAND_RIM);
+    float fill = ctx->passthrough ? 0.0f : HAND_FILL_DARK;
     GLsizei stride = HAND_VERTEX_FLOATS * sizeof(float);
     for (int eye = 0; eye < MODEL_EYES; eye++) {
         glViewport(eye * ctx->modelEyeWidth, 0, ctx->modelEyeWidth, ctx->modelEyeHeight);
@@ -200,6 +221,7 @@ void drawHandOutlines(XrCtx* ctx) {
                 continue;
             }
             glUniformMatrix4fv(ctx->handJointsUniform, XR_HAND_JOINT_COUNT_EXT, GL_FALSE, skins[h]);
+            glUniform2f(ctx->handLookUniform, fill * ctx->handLevel[h], HAND_RIM * ctx->handLevel[h]);
             glBindBuffer(GL_ARRAY_BUFFER, ctx->handMesh[h].vbo);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->handMesh[h].ibo);
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (const void*)0);
@@ -230,6 +252,8 @@ void destroyHands(XrCtx* ctx) {
         free(ctx->handMesh[h].indices);
         memset(&ctx->handMesh[h], 0, sizeof(ctx->handMesh[h]));
         ctx->handShown[h] = 0;
+        ctx->handLastValid[h] = 0;
+        ctx->handLevel[h] = 0.0f;
     }
     if (ctx->handProgram != 0) {
         glDeleteProgram(ctx->handProgram);

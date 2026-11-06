@@ -979,6 +979,12 @@ typedef struct {
     } handMesh[HAND_COUNT];
     XrPosef handJoints[HAND_COUNT][XR_HAND_JOINT_COUNT_EXT];
     int handJointsOk[HAND_COUNT];
+    // The last good joints, drawn through short tracking drops, and the fade
+    XrPosef handJointsLast[HAND_COUNT][XR_HAND_JOINT_COUNT_EXT];
+    int handLastValid[HAND_COUNT];
+    float handLevel[HAND_COUNT];
+    float handLostFor[HAND_COUNT];
+    int64_t handStepNs;
     int handShown[HAND_COUNT];
     int handsShowing;
     int handsSaid;

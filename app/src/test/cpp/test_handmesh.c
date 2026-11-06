@@ -57,7 +57,39 @@ static void testSkin(void) {
     CHECK_NEAR(turned.z, -1.0f, 1e-5f);
 }
 
+static void testFade(void) {
+    const float dt = 1.0f / 72.0f;
+    // Fades in within a few frames
+    float level = 0.0f;
+    for (int i = 0; i < 9; i++) {
+        level = handFadeStep(level, 1, 0.0f, dt);
+    }
+    CHECK_NEAR(level, 1.0f, 1e-6f);
+    // A short drop at the edge of view: held, no blink
+    float lost = 0.0f;
+    for (int i = 0; i < 14; i++) {
+        lost += dt;
+        level = handFadeStep(level, 0, lost, dt);
+    }
+    CHECK_NEAR(level, 1.0f, 1e-6f);
+    level = handFadeStep(level, 1, 0.0f, dt);
+    CHECK_NEAR(level, 1.0f, 1e-6f);
+    // Gone for good: held a quarter second, then out within another fifth
+    lost = 0.0f;
+    float atHold = -1.0f;
+    for (int i = 0; i < 40; i++) {
+        lost += dt;
+        level = handFadeStep(level, 0, lost, dt);
+        if (atHold < 0.0f && lost >= HAND_HOLD_SEC) {
+            atHold = level;
+        }
+    }
+    CHECK(atHold > 0.9f);
+    CHECK_NEAR(level, 0.0f, 1e-6f);
+}
+
 int main(void) {
     testSkin();
+    testFade();
     return checksDone("handmesh");
 }
