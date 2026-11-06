@@ -728,9 +728,9 @@ final class PlayerUi implements XrRenderer.UiListener {
                 dragPanel = panelId;
                 dragTo(x);
             }
-            // A fingertip acts on contact, as on a touchscreen. The library list waits for
-            // the release, since the touch may be the start of a scroll.
-            else if (touch && target != null && pressV < 0) {
+            // A fingertip acts on contact, as on a touchscreen. A film in the library list
+            // waits for the release, since the touch may be the start of a scroll.
+            else if (touch && target != null && !LibraryView.inList(target)) {
                 target.performClick();
                 pressView = null;
                 pressClicked = true;
@@ -999,7 +999,7 @@ final class PlayerUi implements XrRenderer.UiListener {
             p.wrap = !SHEET_FULL[which];
             // In browse mode the library is the window, which the viewer sizes; other sheets
             // take its place at the menus' own size
-            p.fixed = !(browse && which == SHEET_LIBRARY);
+            p.fixed = !browse;
             p.widthFrac = 1.0f;
             p.gap = browse ? 0.0f : SHEET_GAP;
             p.dirty = true;

@@ -811,6 +811,11 @@ final class LibraryView {
     }
 
     /** Grid card: thumbnail with progress bar and badge, title and details below. */
+    /** A film in the list, which a touch may be scrolling rather than opening. */
+    static boolean inList(View view) {
+        return view instanceof Card || view instanceof Row;
+    }
+
     private static final class Card extends View {
         // Height reserved below the thumbnail for two text lines
         private static final int TEXT_AREA = 78;

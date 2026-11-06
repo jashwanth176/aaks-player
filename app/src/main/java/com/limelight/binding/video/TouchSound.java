@@ -21,10 +21,11 @@ final class TouchSound {
             r -> new Thread(r, "Video - XR Touch sound"));
     private final AudioTrack press;
     private final AudioTrack release;
+    private boolean played;
 
     TouchSound() {
-        press = track(click(0.03f, new float[] { 1700.0f, 3100.0f }, 0.0045f, 0.22f));
-        release = track(click(0.02f, new float[] { 2600.0f }, 0.0028f, 0.10f));
+        press = track(click(0.04f, new float[] { 1700.0f, 3100.0f }, 0.006f, 0.45f));
+        release = track(click(0.025f, new float[] { 2600.0f }, 0.0035f, 0.22f));
     }
 
     // Decaying tones with a half millisecond rise, so the start does not pop
@@ -45,8 +46,10 @@ final class TouchSound {
     private static AudioTrack track(short[] pcm) {
         try {
             AudioTrack track = new AudioTrack.Builder()
+                    // Game, not UI sounds: it then follows the media volume, which the
+                    // headset's system sound volume may have turned down
                     .setAudioAttributes(new AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                            .setUsage(AudioAttributes.USAGE_GAME)
                             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                             .build())
                     .setAudioFormat(new AudioFormat.Builder()
@@ -83,6 +86,10 @@ final class TouchSound {
                 track.stop();
                 track.reloadStaticData();
                 track.play();
+                if (!played) {
+                    played = true;
+                    LimeLog.info("Touch sound playing, state " + track.getPlayState());
+                }
             }
             catch (IllegalStateException e) {
                 // Released meanwhile

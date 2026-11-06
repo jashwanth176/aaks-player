@@ -598,10 +598,12 @@ static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPo
                                                          &locations))
             && locations.isActive;
     if (located && ctx->handMeshOffered && scale.currentOutput > 0.5f && scale.currentOutput < 2.0f) {
-        ctx->handScale[hand] = scale.currentOutput;
-        if (fabsf(scale.currentOutput - ctx->handScaleSaid[hand]) > 0.02f) {
-            LOGI("hand %d is %.2f times the mesh's size", hand, scale.currentOutput);
-            ctx->handScaleSaid[hand] = scale.currentOutput;
+        float was = ctx->handScale[hand];
+        ctx->handScale[hand] = was > 0.0f ? was + (scale.currentOutput - was) * HAND_SCALE_FOLLOW
+                                          : scale.currentOutput;
+        if (fabsf(ctx->handScale[hand] - ctx->handScaleSaid[hand]) > 0.03f) {
+            LOGI("hand %d is %.2f times the mesh's size", hand, ctx->handScale[hand]);
+            ctx->handScaleSaid[hand] = ctx->handScale[hand];
         }
     }
     // During the system gesture the hand neither points nor pinches, but its

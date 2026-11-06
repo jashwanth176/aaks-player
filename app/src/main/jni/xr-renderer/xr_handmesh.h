@@ -11,6 +11,8 @@
 // also filled faintly so it can be seen at all
 #define HAND_RIM 0.85f
 #define HAND_FILL_DARK 0.3f
+// Share of the runtime's hand size estimate taken each frame (about two seconds to settle)
+#define HAND_SCALE_FOLLOW 0.02f
 
 // Tracking drops for a few frames at the edge of view: the outline holds its last
 // good pose that long, then fades, and fades in when the hand is back
