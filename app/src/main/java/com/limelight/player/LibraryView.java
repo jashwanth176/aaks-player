@@ -122,7 +122,7 @@ final class LibraryView {
         LinearLayout head = new LinearLayout(context);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.addView(UiKit.text(context, "Library", 42, true, TEXT),
+        head.addView(UiKit.text(context, "Library", UiKit.TYPE_TITLE, true, TEXT),
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         String[] names = { "Continue", "Films", "Folders" };
         for (Tab t : Tab.values()) {
@@ -138,7 +138,7 @@ final class LibraryView {
         head.addView(doneButton, doneLp);
         sheet.addView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 96));
 
-        note = UiKit.text(context, "", 28, false, TEXT_SOFT);
+        note = UiKit.text(context, "", UiKit.TYPE_SMALL, false, TEXT_SOFT);
         note.setGravity(Gravity.CENTER_VERTICAL);
         note.setMaxLines(1);
         note.setEllipsize(TextUtils.TruncateAt.END);
@@ -179,7 +179,7 @@ final class LibraryView {
         body.addView(browser, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        empty = UiKit.text(context, "", 34, false, TEXT_SOFT);
+        empty = UiKit.text(context, "", UiKit.TYPE_BODY, false, TEXT_SOFT);
         empty.setGravity(Gravity.CENTER);
         body.addView(empty, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
@@ -202,13 +202,13 @@ final class LibraryView {
         dialog.setBackground(UiKit.frost(40, UiKit.DIALOG_BASE));
         dialog.setPadding(48, 40, 48, 40);
         dialog.setClickable(true);
-        dialog.addView(UiKit.text(context, "Delete this film?", 40, true, TEXT));
-        confirmName = UiKit.text(context, "", 30, false, TEXT);
+        dialog.addView(UiKit.text(context, "Delete this film?", UiKit.TYPE_HEADING, true, TEXT));
+        confirmName = UiKit.text(context, "", UiKit.TYPE_BODY, false, TEXT);
         confirmName.setMaxLines(2);
         confirmName.setEllipsize(TextUtils.TruncateAt.END);
         confirmName.setPadding(0, 18, 0, 6);
         dialog.addView(confirmName);
-        confirmInfo = UiKit.text(context, "", 26, false, TEXT_SOFT);
+        confirmInfo = UiKit.text(context, "", UiKit.TYPE_SMALL, false, TEXT_SOFT);
         dialog.addView(confirmInfo);
         LinearLayout buttons = new LinearLayout(context);
         buttons.setOrientation(LinearLayout.HORIZONTAL);
@@ -573,7 +573,7 @@ final class LibraryView {
             }
         }
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setTextSize(32);
+        paint.setTextSize(UiKit.TYPE_BODY);
         paint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         int budget = WIDTH - 112 - 84 - 40;
         List<CharSequence> names = new ArrayList<>();
@@ -605,7 +605,7 @@ final class LibraryView {
     private static final int CRUMB_PAD = 16, CRUMB_GAP = 36;
 
     private void addCrumb(CharSequence name, File target, boolean current) {
-        TextView crumb = UiKit.text(context, "", 32, true, current ? TEXT : TEXT_SOFT);
+        TextView crumb = UiKit.text(context, "", UiKit.TYPE_BODY, true, current ? TEXT : TEXT_SOFT);
         crumb.setText(name);
         crumb.setMaxLines(1);
         crumb.setGravity(Gravity.CENTER);
@@ -619,7 +619,7 @@ final class LibraryView {
     }
 
     private void addCrumbSeparator() {
-        TextView sep = UiKit.text(context, "›", 32, false, TEXT_SOFT);
+        TextView sep = UiKit.text(context, "›", UiKit.TYPE_BODY, false, TEXT_SOFT);
         sep.setGravity(Gravity.CENTER);
         crumbBar.addView(sep, new LinearLayout.LayoutParams(CRUMB_GAP, 60));
     }
@@ -832,12 +832,12 @@ final class LibraryView {
         Card(Context context) {
             super(context);
             setClickable(true);
-            titlePaint.setTextSize(28);
+            titlePaint.setTextSize(UiKit.TYPE_SMALL);
             titlePaint.setColor(TEXT);
             titlePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            subPaint.setTextSize(23);
+            subPaint.setTextSize(UiKit.TYPE_TINY);
             subPaint.setColor(TEXT_SOFT);
-            badgePaint.setTextSize(24);
+            badgePaint.setTextSize(UiKit.TYPE_TINY);
             badgePaint.setColor(UiKit.TEXT_ON_LIGHT);
             badgePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
             film = icon(context, com.limelight.R.drawable.player_ic_movie);
@@ -925,10 +925,10 @@ final class LibraryView {
         Row(Context context) {
             super(context);
             setClickable(true);
-            titlePaint.setTextSize(32);
+            titlePaint.setTextSize(UiKit.TYPE_BODY);
             titlePaint.setColor(TEXT);
             titlePaint.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            infoPaint.setTextSize(28);
+            infoPaint.setTextSize(UiKit.TYPE_SMALL);
             infoPaint.setColor(TEXT_SOFT);
             folderIcon = icon(context, com.limelight.R.drawable.player_ic_folder);
             film = icon(context, com.limelight.R.drawable.player_ic_movie);

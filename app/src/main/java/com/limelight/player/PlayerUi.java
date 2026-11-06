@@ -529,8 +529,8 @@ final class PlayerUi implements XrRenderer.UiListener {
         dialog.setBackground(UiKit.frost(40, UiKit.DIALOG_BASE));
         dialog.setPadding(48, 40, 48, 40);
         dialog.setClickable(true);
-        dialog.addView(UiKit.text(context, "Leave AaksVR?", 40, true, TEXT));
-        TextView note = UiKit.text(context, "Where you stopped is saved.", 28, false, TEXT_SOFT);
+        dialog.addView(UiKit.text(context, "Leave AaksVR?", UiKit.TYPE_HEADING, true, TEXT));
+        TextView note = UiKit.text(context, "Where you stopped is saved.", UiKit.TYPE_SMALL, false, TEXT_SOFT);
         note.setPadding(0, 14, 0, 0);
         dialog.addView(note);
         LinearLayout buttons = new LinearLayout(context);
@@ -1132,7 +1132,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         pill.setPadding(16, 0, 16, 0);
         backButton = UiKit.iconButton(context, com.limelight.R.drawable.player_ic_back, ICON, v -> actions.onBack());
         pill.addView(backButton);
-        titleText = UiKit.text(context, "", 40, true, TEXT);
+        titleText = UiKit.text(context, "", UiKit.TYPE_HEADING, true, TEXT);
         titleText.setGravity(Gravity.CENTER);
         titleText.setMaxLines(1);
         titleText.setEllipsize(TextUtils.TruncateAt.END);
@@ -1173,12 +1173,12 @@ final class PlayerUi implements XrRenderer.UiListener {
         playButton = UiKit.iconButton(context, com.limelight.R.drawable.player_ic_pause, ICON,
                 v -> actions.onTogglePlay());
         pill.addView(playButton);
-        elapsedText = UiKit.text(context, "0:00", 34, false, TEXT);
+        elapsedText = UiKit.text(context, "0:00", UiKit.TYPE_BODY, false, TEXT);
         elapsedText.setPadding(20, 0, 24, 0);
         elapsedText.setGravity(Gravity.CENTER_VERTICAL);
         pill.addView(elapsedText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
-        jumpText = UiKit.text(context, "", 30, true, UiKit.AIM);
+        jumpText = UiKit.text(context, "", UiKit.TYPE_BODY, true, UiKit.AIM);
         jumpText.setPadding(0, 0, 24, 0);
         jumpText.setGravity(Gravity.CENTER_VERTICAL);
         jumpText.setVisibility(View.GONE);
@@ -1192,7 +1192,7 @@ final class PlayerUi implements XrRenderer.UiListener {
             refreshState();
         };
         pill.addView(seekLine, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
-        remainingText = UiKit.text(context, "", 34, false, TEXT_SOFT);
+        remainingText = UiKit.text(context, "", UiKit.TYPE_BODY, false, TEXT_SOFT);
         remainingText.setPadding(24, 0, 0, 0);
         remainingText.setGravity(Gravity.CENTER_VERTICAL);
         pill.addView(remainingText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -1320,7 +1320,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         LinearLayout head = new LinearLayout(context);
         head.setOrientation(LinearLayout.HORIZONTAL);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.addView(UiKit.text(context, heading, 46, true, TEXT),
+        head.addView(UiKit.text(context, heading, UiKit.TYPE_TITLE, true, TEXT),
                 new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         head.addView(UiKit.segment(context, "Done", v -> openSheet(SHEET_NONE)),
                 new LinearLayout.LayoutParams(200, 88));
@@ -1404,7 +1404,7 @@ final class PlayerUi implements XrRenderer.UiListener {
 
         LinearLayout ambientRow = row(com.limelight.R.drawable.player_ic_ambient, "Immersion",
                 "How far the screen's light fills the room");
-        ambientValue = UiKit.text(context, "", 34, false, TEXT_SOFT);
+        ambientValue = UiKit.text(context, "", UiKit.TYPE_BODY, false, TEXT_SOFT);
         ambientValue.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         ambientRow.addView(ambientValue, new LinearLayout.LayoutParams(140, ViewGroup.LayoutParams.MATCH_PARENT));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 112);
@@ -1419,7 +1419,7 @@ final class PlayerUi implements XrRenderer.UiListener {
 
         LinearLayout brightRow = row(com.limelight.R.drawable.player_ic_brightness, "Brightness",
                 "How dark the room gets while the film plays");
-        brightnessValue = UiKit.text(context, "", 34, false, TEXT_SOFT);
+        brightnessValue = UiKit.text(context, "", UiKit.TYPE_BODY, false, TEXT_SOFT);
         brightnessValue.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         brightRow.addView(brightnessValue, new LinearLayout.LayoutParams(140, ViewGroup.LayoutParams.MATCH_PARENT));
         lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 112);
@@ -1434,7 +1434,7 @@ final class PlayerUi implements XrRenderer.UiListener {
 
         LinearLayout curveRow = row(com.limelight.R.drawable.player_ic_curve, "Curve",
                 "Flat to wrapped round you");
-        curveValue = UiKit.text(context, "", 34, false, TEXT_SOFT);
+        curveValue = UiKit.text(context, "", UiKit.TYPE_BODY, false, TEXT_SOFT);
         curveValue.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         curveRow.addView(curveValue, new LinearLayout.LayoutParams(140, ViewGroup.LayoutParams.MATCH_PARENT));
         lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 112);
@@ -1484,8 +1484,8 @@ final class PlayerUi implements XrRenderer.UiListener {
         LinearLayout words = new LinearLayout(context);
         words.setOrientation(LinearLayout.VERTICAL);
         words.setPadding(28, 0, 0, 0);
-        words.addView(UiKit.text(context, name, 36, true, TEXT));
-        TextView sub = UiKit.text(context, hint, 28, false, TEXT_SOFT);
+        words.addView(UiKit.text(context, name, UiKit.TYPE_HEADING, true, TEXT));
+        TextView sub = UiKit.text(context, hint, UiKit.TYPE_SMALL, false, TEXT_SOFT);
         sub.setPadding(0, 6, 0, 0);
         words.addView(sub);
         row.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
@@ -1598,7 +1598,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(0, 22, 0, 12);
         row.addView(icon(icon), new LinearLayout.LayoutParams(ICON_SMALL, ICON_SMALL));
-        TextView label = UiKit.text(context, name, 32, false, TEXT_SOFT);
+        TextView label = UiKit.text(context, name, UiKit.TYPE_BODY, false, TEXT_SOFT);
         label.setPadding(16, 0, 0, 0);
         row.addView(label);
         return row;
@@ -1606,7 +1606,7 @@ final class PlayerUi implements XrRenderer.UiListener {
 
     // Plain sub-heading
     private TextView label(String name) {
-        TextView label = UiKit.text(context, name, 32, false, TEXT_SOFT);
+        TextView label = UiKit.text(context, name, UiKit.TYPE_BODY, false, TEXT_SOFT);
         label.setPadding(4, 26, 0, 12);
         return label;
     }
@@ -1698,7 +1698,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.addView(icon(icon), new LinearLayout.LayoutParams(ICON_SMALL, ICON_SMALL));
-        TextView label = UiKit.text(context, name, 30, false, TEXT_SOFT);
+        TextView label = UiKit.text(context, name, UiKit.TYPE_BODY, false, TEXT_SOFT);
         label.setPadding(16, 0, 0, 0);
         row.addView(label, new LinearLayout.LayoutParams(STYLE_LABEL_W - ICON_SMALL, ViewGroup.LayoutParams.WRAP_CONTENT));
         TextView[] views = new TextView[options.length];
@@ -1719,7 +1719,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         return row;
     }
 
-    private static final int STYLE_LABEL_W = 230;
+    private static final int STYLE_LABEL_W = 290;
 
     // Per-file subtitle delay: step buttons and reset, clamped to +/-60 s
     private LinearLayout syncRow() {
@@ -1727,7 +1727,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.addView(icon(com.limelight.R.drawable.player_ic_clock), new LinearLayout.LayoutParams(ICON_SMALL, ICON_SMALL));
-        syncLabel = UiKit.text(context, "", 30, false, TEXT_SOFT);
+        syncLabel = UiKit.text(context, "", UiKit.TYPE_BODY, false, TEXT_SOFT);
         syncLabel.setPadding(16, 0, 0, 0);
         row.addView(syncLabel, new LinearLayout.LayoutParams(STYLE_LABEL_W - ICON_SMALL, ViewGroup.LayoutParams.WRAP_CONTENT));
         String[] names = { "\u2212 1 s", "\u2212 0.1 s", "Reset", "+ 0.1 s", "+ 1 s" };
@@ -1802,7 +1802,7 @@ final class PlayerUi implements XrRenderer.UiListener {
             this.choose = choose;
             view = new LinearLayout(context);
             view.setOrientation(LinearLayout.VERTICAL);
-            TextView head = UiKit.text(context, heading, 32, false, TEXT_SOFT);
+            TextView head = UiKit.text(context, heading, UiKit.TYPE_BODY, false, TEXT_SOFT);
             head.setPadding(4, 22, 0, 12);
             view.addView(head);
             for (int i = 0; i < ROWS; i++) {
@@ -1827,7 +1827,7 @@ final class PlayerUi implements XrRenderer.UiListener {
             pager.setGravity(Gravity.CENTER);
             prev = UiKit.iconButton(context, com.limelight.R.drawable.player_ic_prev, 72, v -> turn(-1));
             next = UiKit.iconButton(context, com.limelight.R.drawable.player_ic_next, 72, v -> turn(1));
-            pageText = UiKit.text(context, "", 28, false, TEXT_SOFT);
+            pageText = UiKit.text(context, "", UiKit.TYPE_SMALL, false, TEXT_SOFT);
             pageText.setGravity(Gravity.CENTER);
             pager.addView(prev);
             pager.addView(pageText, new LinearLayout.LayoutParams(150, ViewGroup.LayoutParams.WRAP_CONTENT));

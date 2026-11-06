@@ -41,6 +41,15 @@ final class UiKit {
     static final int GLASS_SHEEN_TOP = 0x47FFFFFF;
     static final int GLASS_SHEEN_BOTTOM = 0x24FFFFFF;
     static final int GLASS_EDGE = 0x59FFFFFF;
+    // Type scale in panel pixels; every fixed panel is drawn at one angular scale, so a size
+    // here looks the same on any panel. Headings of sheets and the library; film, dialog
+    // and row titles; labels, options, values and lists; hints, notes and card titles;
+    // card details and badges.
+    static final int TYPE_TITLE = 44;
+    static final int TYPE_HEADING = 36;
+    static final int TYPE_BODY = 32;
+    static final int TYPE_SMALL = 28;
+    static final int TYPE_TINY = 24;
     static final int TEXT = 0xFFFFFFFF;
     static final int TEXT_SOFT = 0xB3FFFFFF;
     static final int TEXT_ON_LIGHT = 0xFF1C1C1E;
@@ -177,7 +186,7 @@ final class UiKit {
             }
         };
         option.setText(name);
-        option.setTextSize(TypedValue.COMPLEX_UNIT_PX, 32);
+        option.setTextSize(TypedValue.COMPLEX_UNIT_PX, TYPE_BODY);
         option.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         option.setGravity(Gravity.CENTER);
         option.setTextColor(TEXT);
