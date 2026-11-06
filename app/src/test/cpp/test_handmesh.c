@@ -35,7 +35,7 @@ static void testSkin(void) {
     bind.orientation.y /= n;
     bind.orientation.z /= n;
     bind.orientation.w /= n;
-    handSkinMatrix(m, bind, bind);
+    handSkinMatrix(m, bind, bind, 1.0f);
     Vec3 same = apply(m, v);
     CHECK_NEAR(same.x, v.x, 1e-5f);
     CHECK_NEAR(same.y, v.y, 1e-5f);
@@ -44,17 +44,26 @@ static void testSkin(void) {
     XrPosef moved = bind;
     moved.position.x += 0.3f;
     moved.position.z -= 0.5f;
-    handSkinMatrix(m, moved, bind);
+    handSkinMatrix(m, moved, bind, 1.0f);
     Vec3 shifted = apply(m, v);
     CHECK_NEAR(shifted.x, v.x + 0.3f, 1e-5f);
     CHECK_NEAR(shifted.z, v.z - 0.5f, 1e-5f);
     // Turned a quarter about up from a bind at the origin: x goes to -z
     float h = sqrtf(0.5f);
-    handSkinMatrix(m, pose(0.0f, h, 0.0f, h, 0.0f, 0.0f, 0.0f), pose(0, 0, 0, 1, 0, 0, 0));
+    handSkinMatrix(m, pose(0.0f, h, 0.0f, h, 0.0f, 0.0f, 0.0f), pose(0, 0, 0, 1, 0, 0, 0), 1.0f);
     Vec3 x = { 1.0f, 0.0f, 0.0f };
     Vec3 turned = apply(m, x);
     CHECK_NEAR(turned.x, 0.0f, 1e-5f);
     CHECK_NEAR(turned.z, -1.0f, 1e-5f);
+    // A bigger hand: the mesh grows, and a point on a joint lands on where it is now
+    XrPosef at = pose(0, 0, 0, 1, 0.02f, 0.05f, 0.0f);
+    XrPosef now = pose(0, 0, 0, 1, 0.3f, 1.2f, -0.4f);
+    handSkinMatrix(m, now, at, 1.1f);
+    Vec3 onJoint = apply(m, (Vec3){ 0.02f, 0.05f, 0.0f });
+    CHECK_NEAR(onJoint.x, 0.3f, 1e-5f);
+    CHECK_NEAR(onJoint.y, 1.2f, 1e-5f);
+    Vec3 skin = apply(m, (Vec3){ 0.03f, 0.05f, 0.0f });
+    CHECK_NEAR(skin.x - onJoint.x, 0.011f, 1e-5f);
 }
 
 static void testFade(void) {

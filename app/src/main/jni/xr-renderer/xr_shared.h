@@ -87,7 +87,12 @@
 // larger thumbstick X, -1..1
 #define IN_PLAYER_BUTTONS (IN_UI_PRESS + 1)
 #define IN_PLAYER_STICK_X (IN_PLAYER_BUTTONS + 1)
-#define IN_SLOTS    (IN_PLAYER_STICK_X + 1)
+// Fingertip touch of the pointing hand: a TOUCH_ value
+#define IN_TOUCH    (IN_PLAYER_STICK_X + 1)
+#define IN_SLOTS    (IN_TOUCH + 1)
+#define TOUCH_NONE 0
+#define TOUCH_NEAR 1
+#define TOUCH_PRESSING 2
 
 // Player panels, drawn in Java. Subtitles and the browse library scale with the
 // screen; the rest keep one pixel size whatever the screen's size.

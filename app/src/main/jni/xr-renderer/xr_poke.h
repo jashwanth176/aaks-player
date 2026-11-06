@@ -5,6 +5,7 @@
 #define XR_POKE_H
 
 #include "xr_math.h"
+#include "xr_shared.h"
 
 // A fingertip this close in front of a surface hovers it
 #define POKE_HOVER_M 0.08f
@@ -18,7 +19,7 @@
 // The touch ray starts this far in front of the surface, too short to draw a beam
 #define POKE_RAY_BACK_M 0.06f
 
-enum { POKE_IDLE, POKE_HOVER, POKE_PRESSED };
+enum { POKE_IDLE = TOUCH_NONE, POKE_HOVER = TOUCH_NEAR, POKE_PRESSED = TOUCH_PRESSING };
 
 typedef struct {
     int state;

@@ -34,11 +34,18 @@ void matFromPose(float* m, XrPosef pose) {
     m[15] = 1.0f;
 }
 
-void handSkinMatrix(float* out, XrPosef joint, XrPosef bind) {
+void handSkinMatrix(float* out, XrPosef joint, XrPosef bind, float scale) {
     float now[16];
     float unbind[16];
+    float moved[16];
     matFromPose(now, joint);
-    // The inverse of the bind pose, as a view matrix is of a camera's
+    // The mesh grows about its origin, the bind pose with it; then the inverse of the
+    // bind pose, as a view matrix is of a camera's
+    bind.position.x *= scale;
+    bind.position.y *= scale;
+    bind.position.z *= scale;
     viewFromPose(unbind, bind);
-    matMul(out, now, unbind);
+    matMul(moved, now, unbind);
+    float grow[16] = { scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, 1 };
+    matMul(out, moved, grow);
 }

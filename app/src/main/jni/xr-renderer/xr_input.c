@@ -565,6 +565,7 @@ static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPo
     ctx->tipsValid[hand] = 0;
     ctx->indexTipValid[hand] = 0;
     ctx->handJointsOk[hand] = 0;
+    ctx->handLostWhy[hand] = 1;
     ctx->aimPinch[hand] = 0;
     ctx->handTrust[hand] = 0.0f;
     ctx->palmShown[hand] = 0;
@@ -582,6 +583,13 @@ static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPo
     if (ctx->handAim) {
         locations.next = &aim;
     }
+    // The hand's size, for the outline
+    XrHandTrackingScaleFB scale = { XR_TYPE_HAND_TRACKING_SCALE_FB };
+    scale.overrideHandScale = XR_FALSE;
+    if (ctx->handMeshOffered) {
+        scale.next = locations.next;
+        locations.next = &scale;
+    }
 
     XrHandJointsLocateInfoEXT locate = { XR_TYPE_HAND_JOINTS_LOCATE_INFO_EXT };
     locate.baseSpace = ctx->localSpace;
@@ -589,6 +597,13 @@ static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPo
     int located = XR_SUCCEEDED(ctx->pfnLocateHandJoints(ctx->handTrackers[hand], &locate,
                                                          &locations))
             && locations.isActive;
+    if (located && ctx->handMeshOffered && scale.currentOutput > 0.5f && scale.currentOutput < 2.0f) {
+        ctx->handScale[hand] = scale.currentOutput;
+        if (fabsf(scale.currentOutput - ctx->handScaleSaid[hand]) > 0.02f) {
+            LOGI("hand %d is %.2f times the mesh's size", hand, scale.currentOutput);
+            ctx->handScaleSaid[hand] = scale.currentOutput;
+        }
+    }
     // During the system gesture the hand neither points nor pinches, but its
     // joints are still read for the palm check.
     int systemGesture = 0;
@@ -643,14 +658,18 @@ static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPo
     int sane = (wrist->locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
             && (middle->locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT)
             && span > 0.06f && span < 0.30f;
+    // A still or half-seen hand keeps valid joints with few marked tracked: too doubtful
+    // to point or pinch with, but still drawn, as the system draws it
+    ctx->handJointsOk[hand] = whole && sane;
     if (!sane || trust < HAND_TRUST_MIN) {
+        ctx->handLostWhy[hand] = sane ? 2 : 3;
         ctx->aimPinch[hand] = 0;
         ctx->pinchPointValid[hand] = 0;
         ctx->handRayValid[hand] = 0;
         return;
     }
     ctx->handTrust[hand] = trust;
-    ctx->handJointsOk[hand] = whole;
+    ctx->handLostWhy[hand] = 0;
 
     if (headValid) {
         PalmHand palm;
@@ -1400,6 +1419,8 @@ static int pokeSurface(XrCtx* ctx, const InputFrame* f, int id, int h, Vec3 tip,
 // hand is touching or about to.
 static int pokeHand(XrCtx* ctx, InputFrame* f, int h, int wasDown) {
     Poke* p = &ctx->poke[h];
+    Vec3 none = { 0.0f, 0.0f, 0.0f };
+    ctx->pokePush[h] = none;
     PokeHit best;
     best.target = -1;
     best.depth = 0.0f;
@@ -1436,6 +1457,18 @@ static int pokeHand(XrCtx* ctx, InputFrame* f, int h, int wasDown) {
     }
     if (state == POKE_IDLE) {
         return 0;
+    }
+    if (state == POKE_PRESSED && best.depth < 0.0f) {
+        // Back out along the surface's normal, in local space like the drawn joints
+        Vec3 out = { 0.0f, 0.0f, 1.0f };
+        Vec3 n = quatRotate(best.ray.orientation, out);
+        if (f->xform.toHead) {
+            n = quatRotate(f->xform.head.orientation, n);
+        }
+        float push = fminf(-best.depth, POKE_THROUGH_M);
+        ctx->pokePush[h].x = n.x * push;
+        ctx->pokePush[h].y = n.y * push;
+        ctx->pokePush[h].z = n.z * push;
     }
     f->aimPoses[h] = best.ray;
     f->aimValid[h] = 1;
@@ -1514,8 +1547,12 @@ static void readSources(XrCtx* ctx, InputFrame* f) {
             if (ctx->profileKind[h] != PROFILE_CONTROLLER) {
                 int state = ctx->handTrust[h] >= 0.7f ? 1 : (ctx->handTrust[h] >= HAND_TRUST_MIN ? 2 : 3);
                 if (ctx->trustSaid[h] != state) {
-                    LOGI("hand %d tracking: %s (%.0f percent of joints)", h,
-                         state == 1 ? "good" : (state == 2 ? "weak" : "lost"), ctx->handTrust[h] * 100.0f);
+                    static const char* const why[4] = { "", ", not active", ", low confidence",
+                                                        ", not hand-sized" };
+                    LOGI("hand %d tracking: %s (%.0f percent of joints%s)%s", h,
+                         state == 1 ? "good" : (state == 2 ? "weak" : "lost"), ctx->handTrust[h] * 100.0f,
+                         state == 3 ? why[ctx->handLostWhy[h] & 3] : "",
+                         state == 3 && ctx->handJointsOk[h] ? ", still drawn" : "");
                     ctx->trustSaid[h] = state;
                 }
             }
@@ -2220,6 +2257,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     memset(&f, 0, sizeof(f));
     f.out = out;
     out[IN_UI_PANEL] = -1.0f;
+    out[IN_TOUCH] = TOUCH_NONE;
     // Must match what endFrame submits
     f.xform.toHead = headLocked;
     f.height = ctx->screenWidth * screenAspect(ctx);
@@ -2265,6 +2303,10 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     updatePointerWake(ctx, &f);
     pickPointingSource(ctx, &f);
     logInputSnapshot(ctx, &f);
+
+    if (f.hand >= 0 && f.hand < HAND_COUNT) {
+        out[IN_TOUCH] = (float)ctx->poke[f.hand].state;
+    }
 
     // UI panel hit, which Java treats as a touch.
     if (f.hand >= 0 && f.hover == HOVER_UIPANEL && ctx->uiHover[f.hand] >= 0

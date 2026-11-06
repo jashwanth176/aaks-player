@@ -24,7 +24,8 @@ float handFadeStep(float level, int tracked, float lostFor, float dt);
 // Column-major matrix of a pose
 void matFromPose(float* m, XrPosef pose);
 
-// Skinning matrix of a joint: from its bind pose in the mesh to where it is now
-void handSkinMatrix(float* out, XrPosef joint, XrPosef bind);
+// Skinning matrix of a joint: from its bind pose in the mesh, scaled to the hand's
+// size, to where it is now
+void handSkinMatrix(float* out, XrPosef joint, XrPosef bind, float scale);
 
 #endif

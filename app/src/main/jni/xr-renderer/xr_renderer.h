@@ -982,6 +982,14 @@ typedef struct {
     // The last good joints, drawn through short tracking drops, and the fade
     XrPosef handJointsLast[HAND_COUNT][XR_HAND_JOINT_COUNT_EXT];
     int handLastValid[HAND_COUNT];
+    // The hand's size against the mesh's, from the runtime, and how far a pressing
+    // fingertip has gone past its surface, to draw the hand stopped on it
+    float handScale[HAND_COUNT];
+    // Why a hand last stopped counting for pointing: 1 not active, 2 low confidence,
+    // 3 not hand-sized
+    int handLostWhy[HAND_COUNT];
+    float handScaleSaid[HAND_COUNT];
+    Vec3 pokePush[HAND_COUNT];
     float handLevel[HAND_COUNT];
     float handLostFor[HAND_COUNT];
     int64_t handStepNs;

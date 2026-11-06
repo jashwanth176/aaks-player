@@ -107,6 +107,11 @@ void updateHands(XrCtx* ctx) {
                 && ctx->profileKind[h] != PROFILE_CONTROLLER;
         if (tracked) {
             memcpy(ctx->handJointsLast[h], ctx->handJoints[h], sizeof(ctx->handJointsLast[h]));
+            for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++) {
+                ctx->handJointsLast[h][j].position.x += ctx->pokePush[h].x;
+                ctx->handJointsLast[h][j].position.y += ctx->pokePush[h].y;
+                ctx->handJointsLast[h][j].position.z += ctx->pokePush[h].z;
+            }
             ctx->handLastValid[h] = 1;
             ctx->handLostFor[h] = 0.0f;
         }
@@ -199,7 +204,9 @@ void drawHandOutlines(XrCtx* ctx) {
             continue;
         }
         for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++) {
-            handSkinMatrix(&skins[h][j * 16], ctx->handJointsLast[h][j], ctx->handMesh[h].bind[j]);
+            float size = ctx->handScale[h] > 0.0f ? ctx->handScale[h] : 1.0f;
+            handSkinMatrix(&skins[h][j * 16], ctx->handJointsLast[h][j], ctx->handMesh[h].bind[j],
+                           size);
         }
     }
     glUseProgram(ctx->handProgram);

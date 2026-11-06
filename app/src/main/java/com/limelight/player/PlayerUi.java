@@ -209,12 +209,14 @@ final class PlayerUi implements XrRenderer.UiListener {
         final int panel;
         final float u, v;
         final boolean pressed;
+        final boolean touch;
 
-        PointerEvent(int panel, float u, float v, boolean pressed) {
+        PointerEvent(int panel, float u, float v, boolean pressed, boolean touch) {
             this.panel = panel;
             this.u = u;
             this.v = v;
             this.pressed = pressed;
+            this.touch = touch;
         }
     }
     private final ConcurrentLinkedQueue<PointerEvent> pointerQueue = new ConcurrentLinkedQueue<>();
@@ -223,6 +225,8 @@ final class PlayerUi implements XrRenderer.UiListener {
     private volatile boolean wasPressed;
     private View hoverView;
     private View pressView;
+    // Clicked on contact by a fingertip, so the release does not click again
+    private boolean pressClicked;
     private SeekLine dragLine;
     private int dragPanel = -1;
     // Vertical drag on the library scrolls it, once it has moved DRAG_START_PX. A release
@@ -667,14 +671,14 @@ final class PlayerUi implements XrRenderer.UiListener {
     // ---- pointer --------------------------------------------------------------
 
     @Override
-    public void onUiPointer(int panel, float u, float v, boolean pressed) {
+    public void onUiPointer(int panel, float u, float v, boolean pressed, boolean touch) {
         if (panel >= 0) {
             lastActivityMs = SystemClock.uptimeMillis();
         }
         if (panel < 0 && hoverPanel < 0 && !pressed && !wasPressed && pointerQueue.isEmpty()) {
             return;
         }
-        pointerQueue.add(new PointerEvent(panel, u, v, pressed));
+        pointerQueue.add(new PointerEvent(panel, u, v, pressed, touch));
         if (!pointerBusy) {
             pointerBusy = true;
             main.post(drainPointer);
@@ -687,13 +691,13 @@ final class PlayerUi implements XrRenderer.UiListener {
             pointerBusy = false;
             PointerEvent e;
             while ((e = pointerQueue.poll()) != null) {
-                handlePointer(e.panel, e.u, e.v, e.pressed);
+                handlePointer(e.panel, e.u, e.v, e.pressed, e.touch);
             }
             renderDirty();
         }
     };
 
-    private void handlePointer(int panelId, float u, float v, boolean pressed) {
+    private void handlePointer(int panelId, float u, float v, boolean pressed, boolean touch) {
         Panel panel = panelId >= 0 ? panels[panelId] : null;
         float x = panel != null ? u * panel.width : 0.0f;
         float y = panel != null ? v * panel.drawn : 0.0f;
@@ -724,6 +728,13 @@ final class PlayerUi implements XrRenderer.UiListener {
                 dragPanel = panelId;
                 dragTo(x);
             }
+            // A fingertip acts on contact, as on a touchscreen. The library list waits for
+            // the release, since the touch may be the start of a scroll.
+            else if (touch && target != null && pressV < 0) {
+                target.performClick();
+                pressView = null;
+                pressClicked = true;
+            }
         }
         else if (pressed && pressV >= 0 && panelId == UI_PANEL_SHEET) {
             // The list follows the pointer; a drag cancels the click
@@ -746,9 +757,10 @@ final class PlayerUi implements XrRenderer.UiListener {
         else if (!pressed && wasPressed) {
             boolean near = panel != null && Math.hypot(x - pressX, y - pressY) <= CLICK_SLOP_PX;
             View clicked = pressView != null ? pressView : (near ? target : null);
-            if (clicked != null && (clicked == target || near) && !dragScrolled) {
+            if (clicked != null && (clicked == target || near) && !dragScrolled && !pressClicked) {
                 clicked.performClick();
             }
+            pressClicked = false;
             if (dragScrolled) {
                 library.release(dragVelocity);
             }

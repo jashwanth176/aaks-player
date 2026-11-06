@@ -282,8 +282,12 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
      * the trigger is held. Called on the frame loop thread.
      */
     public interface UiListener {
-        void onUiPointer(int panel, float u, float v, boolean pressed);
+        /** touch: the pointer is a fingertip, which acts on contact. */
+        void onUiPointer(int panel, float u, float v, boolean pressed, boolean touch);
     }
+
+    private final TouchSound touchSound = new TouchSound();
+    private int touchState = TOUCH_NONE;
 
     private volatile UiListener uiListener;
 
@@ -1122,10 +1126,18 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
 
     // Pointer moves go before presses, so a click lands where the pointer is now
     private void dispatchInput() {
+        int touch = (int)inputState[IN_TOUCH];
+        if (touch == TOUCH_PRESSING && touchState != TOUCH_PRESSING) {
+            touchSound.press();
+        }
+        else if (touch != TOUCH_PRESSING && touchState == TOUCH_PRESSING) {
+            touchSound.release();
+        }
+        touchState = touch;
         UiListener ui = uiListener;
         if (ui != null) {
             ui.onUiPointer((int)inputState[IN_UI_PANEL], inputState[IN_UI_U], inputState[IN_UI_V],
-                           inputState[IN_UI_PRESS] != 0.0f);
+                           inputState[IN_UI_PRESS] != 0.0f, touch != TOUCH_NONE);
         }
         // Listener events; the screen placement and environment grid below are handled either way
         if (inputListener != null) {
@@ -1388,6 +1400,7 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
      * loop is still running, it releases the surface on its way out.
      */
     public void cleanup() {
+        touchSound.close();
         boolean releaseNow;
         synchronized (teardownLock) {
             releaseNow = renderThread == null || renderThreadDone;
