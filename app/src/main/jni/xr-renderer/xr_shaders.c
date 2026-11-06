@@ -372,6 +372,39 @@ const char* const STRIP_MATCH_FRAGMENT_SRC =
     "    fragColor = vec4(bestD / u_reach, gain, clamp(contrast * 4.0, 0.0, 1.0), 1.0);\n"
     "}\n";
 
+// Frosted backdrop: the blurred picture where the panel covers it (u_rect is the
+// panel's footprint in picture uv), a dark veil beyond it, inside the panel's mask.
+// u_look: dim, veil alpha, lift.
+const char* const FROST_FRAGMENT_SRC =
+    "#version 300 es\n"
+    "precision highp float;\n"
+    "in vec2 v_plain;\n"
+    "uniform sampler2D u_film;\n"
+    "uniform sampler2D u_mask;\n"
+    "uniform vec4 u_rect;\n"
+    "uniform vec2 u_texel;\n"
+    "uniform float u_filmOn;\n"
+    "uniform vec4 u_look;\n"
+    "out vec4 fragColor;\n"
+    "void main() {\n"
+    "    float m = texture(u_mask, v_plain).r;\n"
+    "    vec2 uv = u_rect.xy + v_plain * u_rect.zw;\n"
+    "    vec2 edge = min(uv, 1.0 - uv);\n"
+    "    float inside = u_filmOn * smoothstep(-0.01, 0.03, min(edge.x, edge.y));\n"
+    "    vec2 c = clamp(uv, vec2(0.0), vec2(1.0));\n"
+    "    vec3 sum = vec3(0.0);\n"
+    "    for (int y = -1; y <= 1; y++) {\n"
+    "        for (int x = -1; x <= 1; x++) {\n"
+    "            float w = (x == 0 ? 2.0 : 1.0) * (y == 0 ? 2.0 : 1.0);\n"
+    "            vec2 off = vec2(float(x), float(y)) * 2.0 * u_texel;\n"
+    "            sum += w * textureLod(u_film, c + off, 1.0).rgb;\n"
+    "        }\n"
+    "    }\n"
+    "    vec3 film = sum * (1.0 / 16.0) * u_look.x + u_look.z;\n"
+    "    float a = mix(u_look.y, 1.0, inside);\n"
+    "    fragColor = vec4(film * inside, a) * m;\n"
+    "}\n";
+
 const char* const AMBI_FRAGMENT_SRC =
     "#version 300 es\n"
     "#extension GL_OES_EGL_image_external_essl3 : require\n"

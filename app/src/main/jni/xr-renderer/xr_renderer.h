@@ -168,7 +168,16 @@ static inline int64_t nowNs(void) {
 #define FADE_SLOT_SPLASH 0
 #define FADE_SLOT_UI 1
 #define FADE_SLOT_POINTER (FADE_SLOT_UI + UI_PANEL_COUNT)
-#define FADE_SLOTS (FADE_SLOT_POINTER + 1)
+// Frosted backdrops: the menu sheet and the playback controls, which sit over the picture
+#define FROST_PANELS 2
+#define FADE_SLOT_FROST (FADE_SLOT_POINTER + 1)
+#define FADE_SLOTS (FADE_SLOT_FROST + FROST_PANELS)
+// The picture is blurred into this, and each backdrop is a quarter of its panel's size
+#define FROST_TEX_W 192
+#define FROST_TEX_H 108
+#define FROST_MASK_DIV 4
+// Panel pixels at least this opaque (0..255) are backdrop
+#define FROST_MASK_ALPHA 64
 
 // Ray length when it hits nothing, metres.
 #define FREE_BEAM_M 4.0f
@@ -1032,6 +1041,26 @@ typedef struct {
     int stripPboSlot;
     int stripReady;
     float subsDisparity;
+    // Frosted backdrops (xr_frost.c): the picture blurred, drawn behind the panels
+    // that sit over it and masked to each panel's shape.
+    GLuint frostProgram;
+    GLint frostRectUniform;
+    GLint frostTexelUniform;
+    GLint frostFilmOnUniform;
+    GLint frostLookUniform;
+    GLuint frostTexture;
+    GLuint frostFbo;
+    GLuint frostDrawFbo;
+    int frostReady;
+    int frostFilmValid;
+    struct {
+        XrSwapchain chain;
+        XrSwapchainImageOpenGLESKHR* images;
+        uint32_t imageCount;
+        GLuint mask;
+        int w, h;
+        int ready;
+    } frost[FROST_PANELS];
     // -1 for none.
     int uiHover[SRC_COUNT];
     int64_t uiStepNs;
@@ -1165,6 +1194,13 @@ float screenPitch(XrCtx* ctx);
 XrQuaternionf screenOrient(float yaw, float pitch, float roll);
 // The local player's panels (xr_uipanels.c)
 XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight);
+// Frosted backdrops (xr_frost.c)
+int initFrost(XrCtx* ctx);
+int frostSlot(int id);
+void runFrostSample(XrCtx* ctx, const float* texMatrix);
+void frostMaskFromPanel(XrCtx* ctx, int id, const unsigned char* px, int width, int height);
+int renderFrostBackdrop(XrCtx* ctx, int slot, XrPosef pose, float width, float height);
+void destroyFrost(XrCtx* ctx);
 // Subtitle depth on 3D files (xr_subsdepth.c)
 int initStripMatch(XrCtx* ctx);
 void runStripMatch(XrCtx* ctx, const float* texMatrix);

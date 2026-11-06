@@ -358,6 +358,10 @@ int initGl(XrCtx* ctx) {
         LOGW("GL_EXT_sRGB_write_control not available, expect wrong gamma");
     }
 
+    // Without it the menus keep their plain tint
+    if (!initFrost(ctx)) {
+        LOGW("frosted backdrops unavailable");
+    }
     // Without the matcher subtitles on 3D files rest at a fixed depth
     if (!initStripMatch(ctx)) {
         LOGW("subtitle strip matcher unavailable");
@@ -489,6 +493,7 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
     // Inside the query window so the glow is included in the GPU time. The glow and the
     // room light read the same colour sample.
     runFrameColorSample(ctx, texMatrix);
+    runFrostSample(ctx, texMatrix);
     if (relightWanted(ctx)) {
         relightSample(ctx);
     }

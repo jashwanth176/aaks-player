@@ -64,8 +64,9 @@ final class UiKit {
         return new LayerDrawable(new Drawable[] { base, sheen });
     }
 
-    // Menu sheet glass: darker base for legibility, top sheen, corner highlight, gradient rim
-    static final int SHEET_BASE = 0x8F1C1D23;
+    // Menu sheet glass: top sheen, corner highlight, gradient rim. The renderer draws the
+    // picture frosted behind it (a dark veil over the room), so the base is light.
+    static final int SHEET_BASE = 0x661C1D23;
     // Dialogs sit over other text, so they are nearly solid
     static final int DIALOG_BASE = 0xF21C1D23;
     static final int SHEET_SHEEN_TOP = 0x2EFFFFFF;

@@ -18,6 +18,8 @@ typedef struct {
     XrCompositionLayerCylinderKHR cylinder[2];
     XrCompositionLayerQuad handle;
     XrCompositionLayerQuad uiPanel[UI_PANEL_COUNT];
+    // Under their panels; the first dropped when a frame has too many layers.
+    XrCompositionLayerQuad frost[FROST_PANELS];
     XrCompositionLayerQuad beam;
     XrCompositionLayerQuad dot;
     // Over the picture and panels, under the beam and dot.
@@ -434,6 +436,13 @@ static void addUiPanelLayers(XrCtx* ctx, const FrameView* view, FrameLayers* lay
         }
         float w, h;
         XrPosef pose = uiPanelPose(ctx, id, &w, &h);
+        int slot = frostSlot(id);
+        if (slot >= 0 && renderFrostBackdrop(ctx, slot, pose, w, h)) {
+            quadLayer(&layers->frost[slot], fadeNext(ctx, layers, FADE_SLOT_FROST + slot, 0, level),
+                      XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->frost[slot].chain,
+                      ctx->frost[slot].w, ctx->frost[slot].h, view->space, pose, w, h);
+            pushLayer(ctx, layers, &layers->frost[slot]);
+        }
         quadLayer(&layers->uiPanel[id], fadeNext(ctx, layers, FADE_SLOT_UI + id, 1, level),
                   XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->ui[id].chain,
                   ctx->ui[id].texW, ctx->ui[id].texH, view->space, pose, w, h);
@@ -847,6 +856,9 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
     // models first: the beam and dot still point.
     if (layers.count > (uint32_t)ctx->maxLayerCount) {
         dropLayer(&layers, &layers.models);
+    }
+    for (int i = 0; i < FROST_PANELS && layers.count > (uint32_t)ctx->maxLayerCount; i++) {
+        dropLayer(&layers, &layers.frost[i]);
     }
 
     // Warn once; a frame that crowds the limit usually repeats. Nothing

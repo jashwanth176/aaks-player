@@ -164,6 +164,7 @@ void destroyUiPanels(XrCtx* ctx) {
         ctx->ui[id].texW = 0;
         ctx->ui[id].texH = 0;
     }
+    destroyFrost(ctx);
 }
 
 // Uploads a panel image: RGBA, top-down rows, premultiplied alpha. Frame loop
@@ -202,6 +203,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeUploadUiPanel(JNIEnv* env, job
     }
     ctx->ui[id].ready = uploadFlipped(ctx, ctx->ui[id].chain, ctx->ui[id].images, px, width,
                                       height);
+    frostMaskFromPanel(ctx, id, px, width, height);
 }
 
 // Panel float depth toward the viewer, fraction of the distance (0 on the
