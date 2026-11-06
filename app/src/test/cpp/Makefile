@@ -12,7 +12,7 @@ TESTS := $(OUT)/test_math $(OUT)/test_depthmap $(OUT)/test_roommesh \
          $(OUT)/test_layout $(OUT)/test_rate $(OUT)/test_gate \
          $(OUT)/test_pinch $(OUT)/test_notice $(OUT)/test_glow $(OUT)/test_grade \
          $(OUT)/test_controller \
-         $(OUT)/test_videocolour $(OUT)/test_palm $(OUT)/test_relight
+         $(OUT)/test_videocolour $(OUT)/test_palm $(OUT)/test_relight $(OUT)/test_poke
 
 .PHONY: test clean
 
@@ -22,6 +22,10 @@ test: $(TESTS)
 $(OUT)/test_math: test_math.c check.h $(SRC)/xr_math.c $(SRC)/xr_math.h
 	@mkdir -p $(OUT)
 	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_math.c $(SRC)/xr_math.c -lm
+
+$(OUT)/test_poke: test_poke.c check.h $(SRC)/xr_poke.c $(SRC)/xr_poke.h $(SRC)/xr_math.c $(SRC)/xr_math.h
+	@mkdir -p $(OUT)
+	$(CC) $(CFLAGS) $(INCLUDES) -o $@ test_poke.c $(SRC)/xr_poke.c $(SRC)/xr_math.c -lm
 
 $(OUT)/test_depthmap: test_depthmap.c check.h $(SRC)/xr_depthmap.c $(SRC)/xr_depthmap.h $(SRC)/xr_shared.h
 	@mkdir -p $(OUT)

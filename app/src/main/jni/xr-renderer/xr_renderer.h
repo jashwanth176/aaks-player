@@ -63,6 +63,7 @@ typedef XrResult (XRAPI_PTR *PFN_xrRequestBoundaryVisibilityMETA)(
 #include "xr_shared.h"
 #include "xr_videocolour.h"
 #include "xr_depthmap.h"
+#include "xr_poke.h"
 #include "xr_roommesh.h"
 #include "xr_layout.h"
 #include "xr_rate.h"
@@ -168,6 +169,8 @@ static inline int64_t nowNs(void) {
 #define FADE_SLOT_SPLASH 0
 #define FADE_SLOT_UI 1
 #define FADE_SLOT_POINTER (FADE_SLOT_UI + UI_PANEL_COUNT)
+// Direct touch target for the picture, after the panels
+#define POKE_SCREEN UI_PANEL_COUNT
 // Frosted backdrops: the menu sheet and the playback controls, which sit over the picture
 #define FROST_PANELS 2
 #define FADE_SLOT_FROST (FADE_SLOT_POINTER + 1)
@@ -773,6 +776,13 @@ typedef struct {
     unsigned pinchSrcSaid;
     // Pinch position, which a gaze-started drag follows.
     Vec3 pinchPoint[HAND_COUNT];
+    // Index fingertip and its radius, for direct touch; touch state per hand, whose
+    // targets are the panels and POKE_SCREEN.
+    XrVector3f indexTip[HAND_COUNT];
+    float indexTipRadius[HAND_COUNT];
+    int indexTipValid[HAND_COUNT];
+    Poke poke[HAND_COUNT];
+    int pokeSaid[HAND_COUNT];
     int pinchPointValid[HAND_COUNT];
     // Ray built from the joints, for runtimes without a pointer pose.
     XrPosef handRay[HAND_COUNT];

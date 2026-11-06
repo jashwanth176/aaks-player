@@ -562,6 +562,7 @@ static int intoFrame(const FrameXform* x, XrPosef* p) {
 static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPosef* head,
                        int headValid) {
     ctx->tipsValid[hand] = 0;
+    ctx->indexTipValid[hand] = 0;
     ctx->aimPinch[hand] = 0;
     ctx->handTrust[hand] = 0.0f;
     ctx->palmShown[hand] = 0;
@@ -663,6 +664,11 @@ static void readJoints(XrCtx* ctx, int hand, const FrameXform* xform, const XrPo
         ctx->handRayValid[hand] = 0;
         return;
     }
+
+    const XrHandJointLocationEXT* fingertip = &joints[XR_HAND_JOINT_INDEX_TIP_EXT];
+    ctx->indexTipValid[hand] = (fingertip->locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
+    ctx->indexTip[hand] = fingertip->pose.position;
+    ctx->indexTipRadius[hand] = fingertip->radius;
 
     if (headValid) {
         buildHandRay(ctx, hand, head, joints);
@@ -1184,6 +1190,8 @@ typedef struct {
     // Pointing source (-1 if none) and its hover.
     int hand;
     int hover;
+    // A fingertip is touching or about to touch something.
+    int poking;
 } InputFrame;
 
 // Gaze points unless a controller is awake or the hands are bridging for lost eyes.
@@ -1323,6 +1331,115 @@ static void hoverSource(XrCtx* ctx, InputFrame* f, int h) {
     }
 }
 
+typedef struct {
+    int target;
+    float depth;
+    int over;
+    XrPosef ray;
+} PokeHit;
+
+// A fingertip measured against one surface, and the touch ray: from just in front
+// of the surface under the fingertip, straight into it.
+static int pokeSurface(XrCtx* ctx, const InputFrame* f, int id, int h, Vec3 tip,
+                       PokeHit* hit) {
+    XrPosef pose;
+    float w, ht;
+    float radius = 0.0f;
+    int curved = 0;
+    if (id == POKE_SCREEN) {
+        // Without a film the library is a panel in the screen's place
+        if (ctx->playerScreenHidden) {
+            return 0;
+        }
+        pose = f->screenPose;
+        w = ctx->screenWidth;
+        ht = f->height;
+        radius = f->radius;
+        curved = f->curved;
+    }
+    else {
+        if (id == UI_PANEL_SUBS || id == UI_PANEL_LOADING || !ctx->ui[id].ready
+                || !ctx->ui[id].visible || ctx->ui[id].level < 0.5f) {
+            return 0;
+        }
+        pose = uiPanelPose(ctx, id, &w, &ht);
+    }
+    Vec3 at = { pose.position.x, pose.position.y, pose.position.z };
+    Vec3 local = quatRotate(quatConj(pose.orientation), vecSub(tip, at));
+    PokeLocal pl;
+    pokeLocal(local, w, ht, radius, curved, &pl);
+    hit->target = id;
+    hit->depth = pl.depth - ctx->indexTipRadius[h];
+    hit->over = pl.over;
+
+    Vec3 normal = { -sinf(pl.yaw), 0.0f, cosf(pl.yaw) };
+    float back = POKE_RAY_BACK_M - pl.depth;
+    Vec3 start = { local.x + normal.x * back, local.y, local.z + normal.z * back };
+    Vec3 offset = quatRotate(pose.orientation, start);
+    Vec3 up = { 0.0f, 1.0f, 0.0f };
+    hit->ray.orientation = quatMul(pose.orientation, axisAngleQuat(up, -pl.yaw));
+    hit->ray.position.x = at.x + offset.x;
+    hit->ray.position.y = at.y + offset.y;
+    hit->ray.position.z = at.z + offset.z;
+    return 1;
+}
+
+// Direct touch: a fingertip near a menu or the picture points straight into it and
+// presses by touching it, in place of the far ray and the pinch. Returns whether the
+// hand is touching or about to.
+static int pokeHand(XrCtx* ctx, InputFrame* f, int h, int wasDown) {
+    Poke* p = &ctx->poke[h];
+    PokeHit best;
+    best.target = -1;
+    best.depth = 0.0f;
+    best.over = 0;
+    if (ctx->indexTipValid[h] && ctx->grabMode == GRAB_NONE) {
+        Vec3 tip = { ctx->indexTip[h].x, ctx->indexTip[h].y, ctx->indexTip[h].z };
+        int held = p->state == POKE_PRESSED ? p->target : -1;
+        for (int id = 0; id <= POKE_SCREEN; id++) {
+            PokeHit hit;
+            if (!pokeSurface(ctx, f, id, h, tip, &hit)) {
+                continue;
+            }
+            if (held >= 0) {
+                if (id == held) {
+                    best = hit;
+                }
+                continue;
+            }
+            // The front-most surface under the fingertip
+            if (!hit.over || hit.depth >= POKE_HOVER_M || hit.depth <= -POKE_THROUGH_M) {
+                continue;
+            }
+            if (best.target < 0 || hit.depth < best.depth) {
+                best = hit;
+            }
+        }
+    }
+    int state = pokeStep(p, best.target, best.depth, best.over);
+    if (state != ctx->pokeSaid[h]) {
+        LOGI("touch: hand %d %s %s %d", h,
+             state == POKE_PRESSED ? "pressing" : state == POKE_HOVER ? "near" : "away from",
+             best.target == POKE_SCREEN ? "picture" : "panel", best.target);
+        ctx->pokeSaid[h] = state;
+    }
+    if (state == POKE_IDLE) {
+        return 0;
+    }
+    f->aimPoses[h] = best.ray;
+    f->aimValid[h] = 1;
+    f->poking = 1;
+    ctx->triggerDown[h] = state == POKE_PRESSED;
+    ctx->triggerEdge[h] = ctx->triggerDown[h] && !wasDown;
+    ctx->pointerAwake = 1;
+    hoverSource(ctx, f, h);
+    // A touch on the picture is a click, never a resize from its corner
+    if (f->hovers[h] == HOVER_CORNER) {
+        f->hovers[h] = HOVER_SCREEN;
+    }
+    return 1;
+}
+
 // World-space head turn rate, for the gaze drag guard. World frame even when
 // head locked.
 static void updateHeadTurn(XrCtx* ctx, InputFrame* f) {
@@ -1442,6 +1559,9 @@ static void readSources(XrCtx* ctx, InputFrame* f) {
                     ctx->triggerRetaps[h]++;
                     ctx->triggerDipping[h] = 0;
                 }
+            }
+            if (ctx->profileKind[h] != PROFILE_CONTROLLER && pokeHand(ctx, f, h, wasDown)) {
+                continue;
             }
         }
         else if (!gazeWatch) {
@@ -1698,7 +1818,7 @@ static void updatePointerWake(XrCtx* ctx, InputFrame* f) {
     // Hands: the pointer sleeps once a hand stops pinching or resting on a
     // control, and wakes on an open palm, which also grants extra time to aim.
     int handsPoint = ctx->usingHands[HAND_LEFT] || ctx->usingHands[HAND_RIGHT];
-    int handBusy = f->pinching;
+    int handBusy = f->pinching || f->poking;
     for (int h = 0; h < HAND_COUNT; h++) {
         if (!ctx->usingHands[h]) {
             palmHoldStep(&ctx->palmHold[h], 0, f->dt);
