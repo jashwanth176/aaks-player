@@ -89,8 +89,9 @@ void loadHandMeshes(XrCtx* ctx) {
     }
 }
 
-// Which hands to draw this frame, and how strongly: tracked well, or just lost and
-// held at their last good pose while fading
+// Which hands to draw this frame, and how strongly: tracked, or just lost and held at
+// their last good pose while fading. Like the pointer, they fade out once the hands are
+// idle and come back with it (an open palm, a touch, or Hand pointer set to Always on).
 void updateHands(XrCtx* ctx) {
     int64_t now = nowNs();
     float dt = ctx->handStepNs > 0 ? (float)(now - ctx->handStepNs) / 1e9f : 0.0f;
@@ -105,6 +106,8 @@ void updateHands(XrCtx* ctx) {
     for (int h = 0; h < HAND_COUNT; h++) {
         int tracked = ctx->handMesh[h].vertexCount > 0 && ctx->handJointsOk[h]
                 && ctx->profileKind[h] != PROFILE_CONTROLLER;
+        // Still followed while asleep, so the hand wakes where it is
+        int wanted = tracked && ctx->pointerAwake;
         if (tracked) {
             memcpy(ctx->handJointsLast[h], ctx->handJoints[h], sizeof(ctx->handJointsLast[h]));
             for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++) {
@@ -122,7 +125,10 @@ void updateHands(XrCtx* ctx) {
         if (ctx->profileKind[h] == PROFILE_CONTROLLER) {
             ctx->handLevel[h] = 0.0f;
         }
-        ctx->handLevel[h] = handFadeStep(ctx->handLevel[h], tracked, ctx->handLostFor[h], dt);
+        if (!ctx->pointerAwake) {
+            ctx->handLostFor[h] = HAND_HOLD_SEC;
+        }
+        ctx->handLevel[h] = handFadeStep(ctx->handLevel[h], wanted, ctx->handLostFor[h], dt);
         ctx->handShown[h] = live && ctx->handLastValid[h] && ctx->handLevel[h] > 0.0f;
         ctx->handsShowing |= ctx->handShown[h];
         said |= ctx->handShown[h] << h;
