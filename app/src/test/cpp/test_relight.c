@@ -43,17 +43,22 @@ static void testHouseLights(void) {
     CHECK_NEAR(relightHouseDark(0.0f), 0.0f, 1e-5f);
     CHECK_NEAR(relightHouseDark(1.0f), RELIGHT_HOUSE_DARK, 1e-5f);
     CHECK_NEAR(relightHouseDark(3.0f), RELIGHT_HOUSE_DARK, 1e-5f);
-    // The fade is slower than the ambient light's and settles within a few seconds.
+    // A steady fade: half way after half the time, down after all of it, never past.
     float level = 1.0f;
-    for (int i = 0; i < 30; i++) {
+    for (int i = 0; i < 90; i++) {
         level = relightEaseHouse(level, 0.0f, 1.0f / 60.0f);
     }
-    CHECK(level > 0.3f && level < 0.7f);
+    CHECK_NEAR(level, 1.0f - 1.5f / RELIGHT_HOUSE_SECONDS, 1e-3f);
     for (int i = 0; i < 300; i++) {
         level = relightEaseHouse(level, 0.0f, 1.0f / 60.0f);
     }
-    CHECK(level < 0.01f);
-    CHECK_NEAR(relightEaseHouse(0.0f, 1.0f, 100.0f), 1.0f, 1e-5f);
+    CHECK_NEAR(level, 0.0f, 1e-6f);
+    CHECK_NEAR(relightEaseHouse(0.0f, 0.6f, 100.0f), 0.6f, 1e-6f);
+    CHECK_NEAR(relightEaseHouse(0.5f, 0.5f, 1.0f), 0.5f, 1e-6f);
+    // Eased ends: a small step from down barely lifts the room
+    float start[3] = { 0.0f, 0.0f, 0.0f };
+    relightHouseMix(start, 0.1f);
+    CHECK(start[0] > 0.0f && start[0] < 0.05f);
 }
 
 int main(void) {

@@ -13,8 +13,8 @@
 #define RELIGHT_NEUTRAL_RETURN 0.01f
 // Ambient light fade rate, per second
 #define RELIGHT_AMBIENT_RATE 3.0f
-// House lights fade rate, per second: a cinema's slow dim
-#define RELIGHT_HOUSE_RATE 1.5f
+// House lights: seconds for a full fade, a cinema's slow dim
+#define RELIGHT_HOUSE_SECONDS 3.0f
 // How much of the room shows when the house lights come up in the dark
 #define RELIGHT_HOUSE_DARK 0.35f
 // Glow size relative to the screen, per axis, with no immersion and at full
@@ -44,7 +44,8 @@ void relightFollow(float current[3], const float target[3], float keep);
 // Eases the ambient light toward its target over dt seconds
 float relightEaseAmbient(float current, float target, float dt);
 
-// Eases the house lights (0 film lighting, 1 lights up) over dt seconds
+// Moves the house lights (0 film lighting, 1 lights up) toward the target at a steady
+// pace over dt seconds; the mix below eases the ends
 float relightEaseHouse(float current, float target, float dt);
 
 // Lifts the room colour multiplier toward plain, full passthrough as the house

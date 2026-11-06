@@ -551,6 +551,11 @@ final class PlayerUi implements XrRenderer.UiListener {
         return sheet != SHEET_NONE;
     }
 
+    /** Whether the Light sheet is open. Main thread. */
+    boolean lightSheetOpen() {
+        return sheet == SHEET_LIGHT;
+    }
+
     /** Shows the controls briefly, e.g. after a play/pause from the gamepad. Main thread. */
     void nudge() {
         if (browse) {
@@ -1413,7 +1418,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         box.addView(ambientLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 72));
 
         LinearLayout brightRow = row(com.limelight.R.drawable.player_ic_brightness, "Brightness",
-                "Lower is a darker room");
+                "How dark the room gets while the film plays");
         brightnessValue = UiKit.text(context, "", 34, false, TEXT_SOFT);
         brightnessValue.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         brightRow.addView(brightnessValue, new LinearLayout.LayoutParams(140, ViewGroup.LayoutParams.MATCH_PARENT));

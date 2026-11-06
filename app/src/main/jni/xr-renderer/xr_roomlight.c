@@ -228,6 +228,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetHouseLights(JNIEnv* env, jo
     if (now) {
         ctx->houseLevel = ctx->houseTarget;
     }
+    LOGI("house lights %.2f%s", ctx->houseTarget, now ? " now" : "");
 }
 
 // Stereo crop: outward eye shift as a fraction of width, 0..0.05

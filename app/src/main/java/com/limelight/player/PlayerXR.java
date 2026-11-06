@@ -79,7 +79,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     private boolean houseLights;
     private static final float HOUSE_PAUSED = 0.6f;
     private static final long HOUSE_EVERY_MS = 250;
-    private float houseLevel = -1.0f;
+    private float houseLevel;
     // Not persisted; a new file starts at 1x
     private float speed = 1.0f;
     private long subtitleDelayMs;
@@ -172,9 +172,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         // Must precede start() so the library window placement is restored
         renderer.setPlayerScreenHidden(browse);
         renderer.setPlayerLighting(immersion, brightness);
-        // A film opens with the lights up, then they dim as it starts
-        houseLevel = houseLights && !browse ? 1.0f : 0.0f;
-        renderer.setHouseLights(houseLevel, true);
+        renderer.setHouseLights(0.0f, true);
         renderer.setPlayerCurve(curve);
         renderer.setColourMode(colourMode);
         renderer.setHandAutoHide(handAutoHide);
@@ -228,6 +226,11 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
 
     // Starts the planned film (or the library) on the running session
     private void beginFilm(Film f, boolean first) {
+        // Each film opens with the lights up; they dim as it starts
+        if (houseLights && !browse) {
+            houseLevel = 1.0f;
+            renderer.setHouseLights(1.0f, true);
+        }
         engine = browse ? new NullEngine()
                 : disc ? new DiscEngine(this, new File(f.uri.getPath()), engineListener)
                 : new ExoEngine(this, f.uri, engineListener);
@@ -723,7 +726,10 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             PlaybackEngine e = engine;
             float level = 0.0f;
             if (houseLights && e != null && !browse) {
-                level = e.isEnded() ? 1.0f : e.isPlaying() ? 0.0f : HOUSE_PAUSED;
+                // Held down while the Light sheet is open, so Brightness shows the film's room
+                boolean adjusting = ui != null && ui.lightSheetOpen();
+                level = adjusting || e.isPlaying() && !e.isEnded() ? 0.0f
+                        : e.isEnded() ? 1.0f : HOUSE_PAUSED;
             }
             if (level != houseLevel && renderer != null) {
                 houseLevel = level;
