@@ -784,6 +784,13 @@ typedef struct {
     int indexTipValid[HAND_COUNT];
     Poke poke[HAND_COUNT];
     int pokeSaid[HAND_COUNT];
+    // Fingers at the white bar: the ray aimed into it from just in front, fixed to the
+    // pinch point while held so the window moves with the hand; and whether the move
+    // grab running started that way
+    int nearBar[HAND_COUNT];
+    XrQuaternionf nearRayTurn[HAND_COUNT];
+    Vec3 nearOffset[HAND_COUNT];
+    int grabNear;
     int pinchPointValid[HAND_COUNT];
     // Ray built from the joints, for runtimes without a pointer pose.
     XrPosef handRay[HAND_COUNT];

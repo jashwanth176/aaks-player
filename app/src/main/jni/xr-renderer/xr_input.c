@@ -951,6 +951,7 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
             LOGI("grab ended: %s", stillHeld ? "the hand was lost" : "let go");
             ctx->grabMode = GRAB_NONE;
             ctx->grabByGaze = 0;
+            ctx->grabNear = 0;
             ctx->poseDirty = 1;
             startSpringIfOut(ctx);
             return;
@@ -1013,8 +1014,10 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
         if (hover == HOVER_BAR || gripPicture) {
             ctx->grabMode = GRAB_MOVE;
             ctx->grabReel = 1.0f;
-            LOGI("move grab by %s %d, %s", ctx->grabByTrigger ? "trigger or pinch" : "grip", mover,
-                 hover == HOVER_BAR ? "on the bar" : "on the picture");
+            ctx->grabNear = mover < HAND_COUNT && ctx->nearBar[mover];
+            LOGI("move grab by %s %d, %s%s", ctx->grabByTrigger ? "trigger or pinch" : "grip", mover,
+                 hover == HOVER_BAR ? "on the bar" : "on the picture",
+                 ctx->grabNear ? ", in hand" : "");
             ctx->grabHandDist = distFromHead(ctx, aims[mover].position);
             ctx->grabScreenDist = distFromHead(ctx, ctx->screenPose.position);
             ctx->grabSizeRatio = handleSizeRatio(ctx->grabScreenDist, ctx->screenWidth);
@@ -1073,8 +1076,11 @@ static void applyGrab(XrCtx* ctx, XrPosef* aims, const int* valid, const float* 
                 float past = (fabsf(push) - SCROLL_DEADZONE) / (1.0f - SCROLL_DEADZONE);
                 ctx->grabReel *= expf(copysignf(past * STICK_REEL_RATE * dt, push));
             }
-            float reel = handleReelDistance(ctx->grabScreenDist, ctx->grabHandDist,
-                                            distFromHead(ctx, aims[h].position));
+            // Held in the hand it stays where the hand puts it; from afar the pull is
+            // amplified, so a far window comes within reach in one move
+            float reel = ctx->grabNear ? distFromHead(ctx, ctx->screenPose.position)
+                    : handleReelDistance(ctx->grabScreenDist, ctx->grabHandDist,
+                                         distFromHead(ctx, aims[h].position));
             float want = ctx->grabReel * reel;
             // The stick stops at the limits rather than winding past them
             if (want > HANDLE_DIST_MAX) {
@@ -1416,6 +1422,53 @@ static int pokeSurface(XrCtx* ctx, const InputFrame* f, int id, int h, Vec3 tip,
     return 1;
 }
 
+// Fingers at the white bar take hold of it there: the hand's ray becomes a short one
+// into the bar under the pinch, and while held it keeps its turn and its offset from the
+// pinch point, so the window follows the hand one to one. Returns whether it applies.
+static int nearBarHand(XrCtx* ctx, InputFrame* f, int h) {
+    int holding = ctx->grabMode == GRAB_MOVE && ctx->grabHand == h && ctx->grabNear;
+    ctx->nearBar[h] = 0;
+    if (!ctx->pinchPointValid[h] || (!holding && ctx->grabMode != GRAB_NONE)) {
+        return 0;
+    }
+    Vec3 pinch = ctx->pinchPoint[h];
+    XrPosef ray;
+    if (holding) {
+        ray.orientation = ctx->nearRayTurn[h];
+    }
+    else {
+        // The bar hangs centred under the frame, where the curve is flat
+        const BarFrame* frame = &f->bar;
+        Vec3 below = { 0.0f, -(frame->height * 0.5f + BAR_DROP_FRAC * frame->width), 0.0f };
+        Vec3 drop = quatRotate(frame->pose.orientation, below);
+        Vec3 at = { frame->pose.position.x + drop.x, frame->pose.position.y + drop.y,
+                    frame->pose.position.z + drop.z };
+        Vec3 local = quatRotate(quatConj(frame->pose.orientation), vecSub(pinch, at));
+        float halfW = 0.5f * BAR_WIDTH_FRAC * frame->width;
+        float halfH = 0.5f * BAR_HEIGHT_FRAC * frame->width;
+        if (fabsf(local.x) > halfW + NEAR_BAR_REACH_M || fabsf(local.y) > halfH + NEAR_BAR_REACH_M
+                || fabsf(local.z) > NEAR_BAR_REACH_M) {
+            return 0;
+        }
+        float x = fmaxf(-0.9f * halfW, fminf(0.9f * halfW, local.x));
+        Vec3 start = { x, 0.0f, POKE_RAY_BACK_M };
+        Vec3 offset = quatRotate(frame->pose.orientation, start);
+        ctx->nearRayTurn[h] = frame->pose.orientation;
+        ctx->nearOffset[h].x = at.x + offset.x - pinch.x;
+        ctx->nearOffset[h].y = at.y + offset.y - pinch.y;
+        ctx->nearOffset[h].z = at.z + offset.z - pinch.z;
+        ray.orientation = frame->pose.orientation;
+    }
+    ray.position.x = pinch.x + ctx->nearOffset[h].x;
+    ray.position.y = pinch.y + ctx->nearOffset[h].y;
+    ray.position.z = pinch.z + ctx->nearOffset[h].z;
+    ctx->nearBar[h] = 1;
+    f->aimPoses[h] = ray;
+    f->aimValid[h] = 1;
+    hoverSource(ctx, f, h);
+    return 1;
+}
+
 // Direct touch: a fingertip near a menu or the picture points straight into it and
 // presses by touching it, in place of the far ray and the pinch. Returns whether the
 // hand is touching or about to.
@@ -1610,7 +1663,8 @@ static void readSources(XrCtx* ctx, InputFrame* f) {
                     ctx->triggerDipping[h] = 0;
                 }
             }
-            if (ctx->profileKind[h] != PROFILE_CONTROLLER && pokeHand(ctx, f, h, wasDown)) {
+            if (ctx->profileKind[h] != PROFILE_CONTROLLER
+                    && (nearBarHand(ctx, f, h) || pokeHand(ctx, f, h, wasDown))) {
                 continue;
             }
         }

@@ -18,6 +18,8 @@
 #define POKE_THROUGH_M 0.15f
 // The touch ray starts this far in front of the surface, too short to draw a beam
 #define POKE_RAY_BACK_M 0.06f
+// Fingers pinching this close to the white bar take hold of it where they are
+#define NEAR_BAR_REACH_M 0.06f
 
 enum { POKE_IDLE = TOUCH_NONE, POKE_HOVER = TOUCH_NEAR, POKE_PRESSED = TOUCH_PRESSING };
 

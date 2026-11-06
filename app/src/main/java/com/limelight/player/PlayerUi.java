@@ -167,6 +167,8 @@ final class PlayerUi implements XrRenderer.UiListener {
     private static final int CTRL_GAP = -(CTRL_H + 72);
     // Sheets float toward the viewer, except in browse mode where they take the library's place
     private static final int SHEET_GAP = 190;
+    // A menu opened from the library takes this share of its window's width
+    private static final float BROWSE_SHEET_FRAC = 0.8f;
     private static final int LOADING_SIZE = 160;
     private static final int DIALOG_W = 640, DIALOG_H = 600, DIALOG_GAP = 60;
     // Back button to the right of the move bar, scaling with the screen like the bar does:
@@ -1000,7 +1002,7 @@ final class PlayerUi implements XrRenderer.UiListener {
             // In browse mode the library is the window, which the viewer sizes; other sheets
             // take its place at the menus' own size
             p.fixed = !browse;
-            p.widthFrac = 1.0f;
+            p.widthFrac = browse && which != SHEET_LIBRARY ? BROWSE_SHEET_FRAC : 1.0f;
             p.gap = browse ? 0.0f : SHEET_GAP;
             p.dirty = true;
             p.dumpNext = true;
