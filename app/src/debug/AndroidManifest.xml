@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: the film receiver for testing (debugtools/TransferService) -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <application>
+        <!-- Exported so adb can start it -->
+        <service
+            android:name="com.limelight.debugtools.TransferService"
+            android:exported="true"
+            android:foregroundServiceType="dataSync" />
+    </application>
+</manifest>
