@@ -22,6 +22,25 @@ int linkDownscaleProgram(XrCtx* ctx) {
 
 // Downscale target, shared contexts for the depth and stage threads, and
 // staging buffers
+// A context in the render context's share group, with a 1x1 pbuffer to bind it to
+static int makeContext(XrCtx* ctx, EGLContext* context, EGLSurface* surface, const char* who) {
+    const EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
+    const EGLint pbufferAttribs[] = { EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE };
+    *context = eglCreateContext(ctx->eglDisplay, ctx->eglConfig, ctx->eglContext, contextAttribs);
+    if (*context == EGL_NO_CONTEXT) {
+        LOGE("%s context creation failed: %d", who, eglGetError());
+        return 0;
+    }
+    *surface = eglCreatePbufferSurface(ctx->eglDisplay, ctx->eglConfig, pbufferAttribs);
+    if (*surface == EGL_NO_SURFACE) {
+        LOGE("%s pbuffer creation failed: %d", who, eglGetError());
+        eglDestroyContext(ctx->eglDisplay, *context);
+        *context = EGL_NO_CONTEXT;
+        return 0;
+    }
+    return 1;
+}
+
 int initDepthModel(XrCtx* ctx) {
     // nativeInit sets the size before GL init
     if (ctx->depthTexW <= 0 || ctx->depthTexH <= 0) {
@@ -55,29 +74,8 @@ int initDepthModel(XrCtx* ctx) {
 
     // Separate contexts in the same share group for the depth thread (model)
     // and the stage thread (readback mapping and depth upload)
-    const EGLint contextAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
-    const EGLint pbufferAttribs[] = { EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE };
-    ctx->depthContext = eglCreateContext(ctx->eglDisplay, ctx->eglConfig, ctx->eglContext,
-                                         contextAttribs);
-    if (ctx->depthContext == EGL_NO_CONTEXT) {
-        LOGE("depth thread context creation failed: %d", eglGetError());
-        return 0;
-    }
-    ctx->depthPbuffer = eglCreatePbufferSurface(ctx->eglDisplay, ctx->eglConfig, pbufferAttribs);
-    if (ctx->depthPbuffer == EGL_NO_SURFACE) {
-        LOGE("depth thread pbuffer creation failed: %d", eglGetError());
-        return 0;
-    }
-    ctx->depthStageContext = eglCreateContext(ctx->eglDisplay, ctx->eglConfig, ctx->eglContext,
-                                              contextAttribs);
-    if (ctx->depthStageContext == EGL_NO_CONTEXT) {
-        LOGE("depth stage context creation failed: %d", eglGetError());
-        return 0;
-    }
-    ctx->depthStagePbuffer = eglCreatePbufferSurface(ctx->eglDisplay, ctx->eglConfig,
-                                                     pbufferAttribs);
-    if (ctx->depthStagePbuffer == EGL_NO_SURFACE) {
-        LOGE("depth stage pbuffer creation failed: %d", eglGetError());
+    if (!makeContext(ctx, &ctx->depthContext, &ctx->depthPbuffer, "depth thread")
+            || !makeContext(ctx, &ctx->depthStageContext, &ctx->depthStagePbuffer, "depth stage")) {
         return 0;
     }
 
@@ -317,7 +315,17 @@ static void destroyContext(XrCtx* ctx, EGLContext* context, EGLSurface* surface)
 
 static jboolean bindContext(XrCtx* ctx, EGLContext* context, EGLSurface* surface,
                             const char* who) {
-    if (!eglMakeCurrent(ctx->eglDisplay, *surface, *surface, *context)) {
+    // The thread before this one (the last film's) destroyed its context on the way out.
+    // Binding the empty handle would succeed and leave this thread with no context, every
+    // GL call a silent no-op, so a new one is made instead.
+    if (*context == EGL_NO_CONTEXT || *surface == EGL_NO_SURFACE) {
+        if (!makeContext(ctx, context, surface, who)) {
+            return JNI_FALSE;
+        }
+        LOGI("%s: a new context for this film", who);
+    }
+    if (!eglMakeCurrent(ctx->eglDisplay, *surface, *surface, *context)
+            || eglGetCurrentContext() != *context) {
         LOGE("%s eglMakeCurrent failed: %d", who, eglGetError());
         // The thread exits without unbinding, so free them here
         destroyContext(ctx, context, surface);
