@@ -446,8 +446,25 @@ final class PlayerUi implements XrRenderer.UiListener {
     private String notice;
     private long noticeUntil;
 
+    private boolean noticeIconShown;
+    private android.graphics.drawable.Drawable noticeDrawable;
+
+    private android.graphics.drawable.Drawable noticeIcon() {
+        if (noticeDrawable == null) {
+            noticeDrawable = context.getDrawable(com.limelight.R.drawable.player_ic_hand).mutate();
+            noticeDrawable.setTint(UiKit.AIM);
+            int size = UiKit.TYPE_HEADING + 12;
+            noticeDrawable.setBounds(0, 0, size, size);
+        }
+        return noticeDrawable;
+    }
+
     /** Tells the viewer something while the film plays on. Main thread. */
     void notice(String text) {
+        com.limelight.LimeLog.info("PlayerUi: notice: " + text);
+        if (com.limelight.BuildConfig.DEBUG) {
+            panels[UI_PANEL_TOP].dumpNext = true;
+        }
         notice = text;
         noticeUntil = SystemClock.uptimeMillis() + NOTICE_MS;
         nudge();
@@ -972,7 +989,16 @@ final class PlayerUi implements XrRenderer.UiListener {
         for (java.util.Map.Entry<Float, TextView> option : speedOptions.entrySet()) {
             setSelected(option.getValue(), Math.abs(option.getKey() - speed) < 0.001f, UI_PANEL_SHEET);
         }
-        setText(titleText, SystemClock.uptimeMillis() < noticeUntil ? notice : title, UI_PANEL_TOP);
+        // A notice reads as one, not as the film's title: in the accent colour, by a hand
+        boolean noticing = SystemClock.uptimeMillis() < noticeUntil;
+        setText(titleText, noticing ? notice : title, UI_PANEL_TOP);
+        setColour(titleText, noticing ? UiKit.AIM : TEXT, UI_PANEL_TOP);
+        if (noticing != noticeIconShown) {
+            noticeIconShown = noticing;
+            titleText.setCompoundDrawablesRelative(noticing ? noticeIcon() : null,
+                    null, null, null);
+            markDirty(UI_PANEL_TOP);
+        }
 
         boolean pass = actions.isPassthroughOn();
         setSelected(passthroughOn, pass, UI_PANEL_SHEET);
@@ -1254,6 +1280,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         titleText.setMaxLines(1);
         titleText.setEllipsize(TextUtils.TruncateAt.END);
         titleText.setPadding(24, 0, 24, 0);
+        titleText.setCompoundDrawablePadding(16);
         pill.addView(titleText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
         pill.addView(UiKit.iconButton(context, com.limelight.R.drawable.player_ic_more, ICON,
                 v -> toggleSheet(SHEET_LIGHT)));
