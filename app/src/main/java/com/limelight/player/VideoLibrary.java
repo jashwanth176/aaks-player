@@ -1,7 +1,11 @@
 package com.limelight.player;
 
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.media.MediaScannerConnection;
+import android.os.Build;
 import android.os.Environment;
 
 import java.io.BufferedReader;
@@ -21,9 +25,8 @@ import java.util.Set;
 
 /**
  * Finds video files and disc images in shared storage (newest first) and lists folders for the
- * file browser. Shared folders need all-files access; for a sideloaded build:
- *   adb shell appops set --uid <package> MANAGE_EXTERNAL_STORAGE allow
- * Without it only the app's own folders are listed.
+ * file browser. What it can see depends on access(): nothing but the app's own folders, the
+ * headset's videos, or every file (which disc images, and deleting, need).
  */
 final class VideoLibrary {
 
@@ -60,6 +63,45 @@ final class VideoLibrary {
         return DISC.contains(extension(f.getName()));
     }
 
+    /** What of shared storage the app may read. */
+    static final int ACCESS_NONE = 0, ACCESS_VIDEOS = 1, ACCESS_ALL = 2;
+
+    static int access(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
+            return ACCESS_ALL;
+        }
+        return context.checkSelfPermission(videoPermission()) == PackageManager.PERMISSION_GRANTED
+                ? ACCESS_VIDEOS : ACCESS_NONE;
+    }
+
+    /** The runtime permission that shows the headset's videos. */
+    static String videoPermission() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                ? Manifest.permission.READ_MEDIA_VIDEO : Manifest.permission.READ_EXTERNAL_STORAGE;
+    }
+
+    /** Whether this build may ask for every file (the manifest says so; a store build may not). */
+    static boolean allFilesOffered(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            return false;
+        }
+        try {
+            PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(),
+                    PackageManager.GET_PERMISSIONS);
+            if (info.requestedPermissions != null) {
+                for (String p : info.requestedPermissions) {
+                    if (Manifest.permission.MANAGE_EXTERNAL_STORAGE.equals(p)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch (PackageManager.NameNotFoundException e) {
+            // Its own package: cannot happen
+        }
+        return false;
+    }
+
     /** Root folder of the file browser. */
     static File storageRoot() {
         return Environment.getExternalStorageDirectory();
@@ -67,6 +109,7 @@ final class VideoLibrary {
 
     /** Walks the storage roots. Call off the main thread. */
     static List<Film> scan(Context context) {
+        DemoFilms.install(context);
         List<File> roots = new ArrayList<>();
         roots.add(storageRoot());
         roots.add(new File(context.getFilesDir(), "Movies"));
@@ -81,6 +124,7 @@ final class VideoLibrary {
             walk(root, 0, found, seen);
         }
         Collections.sort(found, (a, b) -> Long.compare(b.file.lastModified(), a.file.lastModified()));
+        com.limelight.LimeLog.info("Library: " + found.size() + " films found, access " + access(context));
         return found;
     }
 

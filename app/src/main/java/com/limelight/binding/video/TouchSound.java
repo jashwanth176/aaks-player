@@ -97,7 +97,11 @@ final class TouchSound {
         });
     }
 
-    void close() {
+    // A failed start cleans up twice
+    synchronized void close() {
+        if (player.isShutdown()) {
+            return;
+        }
         player.execute(() -> {
             if (press != null) {
                 press.release();

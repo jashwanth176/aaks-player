@@ -96,7 +96,8 @@ final class DiscEngine implements PlaybackEngine, DiscNative.Sink, DiscAudio.Cal
     private void open(Surface surface, long startMs) {
         long h = DiscNative.open(iso.getAbsolutePath(), DECODER_THREADS);
         if (h == 0) {
-            listener.onError("Can't open this disc", "It isn't a Blu-ray image, or it needs a key");
+            LimeLog.warning("DiscEngine: the image would not open");
+            listener.onFailed("It isn't a Blu-ray image, or it needs a key.");
             return;
         }
         parse(DiscNative.describe(h));
@@ -113,7 +114,8 @@ final class DiscEngine implements PlaybackEngine, DiscNative.Sink, DiscAudio.Cal
         handle = h;
         opened = DiscNative.start(h, surface, start90, this, false);
         if (!opened) {
-            listener.onError("Can't play this disc", "The picture could not start");
+            LimeLog.warning("DiscEngine: the picture would not start");
+            listener.onFailed("The disc's picture could not start.");
             return;
         }
         main.postDelayed(subtitleTick, SUBTITLE_TICK_MS);
@@ -238,7 +240,18 @@ final class DiscEngine implements PlaybackEngine, DiscNative.Sink, DiscAudio.Cal
 
     @Override
     public void onEnded() {
-        main.post(() -> wantPlaying = false);
+        main.post(() -> {
+            wantPlaying = false;
+            ended = true;
+        });
+    }
+
+    // Played to the end; a seek or Play clears it. Main thread.
+    private boolean ended;
+
+    @Override
+    public boolean isEnded() {
+        return ended;
     }
 
     @Override
@@ -316,6 +329,11 @@ final class DiscEngine implements PlaybackEngine, DiscNative.Sink, DiscAudio.Cal
         wantPlaying = on;
         if (on) {
             takeFocus();
+            if (ended) {
+                // Play at the end starts the film again
+                seekToMs(0);
+                return;
+            }
         }
         else {
             pausedByFocus = false;
@@ -359,6 +377,7 @@ final class DiscEngine implements PlaybackEngine, DiscNative.Sink, DiscAudio.Cal
     @Override
     public void seekToMs(long ms) {
         final long t90 = Math.max(0, ms) * 90L;
+        ended = false;
         placeRetries = 0;
         worker.execute(() -> seekTo(t90));
     }

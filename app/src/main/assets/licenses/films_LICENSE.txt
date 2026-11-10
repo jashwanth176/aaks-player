@@ -1,0 +1,10 @@
+The two short films in assets/films are open movies from the Blender Foundation, used under
+the Creative Commons Attribution 3.0 licence (https://creativecommons.org/licenses/by/3.0/).
+
+Big Buck Bunny 3D OU.mp4
+  An excerpt (the first 90 seconds, re-encoded, with a fade-out added) of the stereoscopic
+  "Big Buck Bunny" (c) copyright 2008, Blender Foundation / www.bigbuckbunny.org; stereoscopic
+  version by Janus B. Kristensen, 2013 (bbb3d.renderfarming.net).
+
+Sintel Trailer.mp4
+  The trailer of "Sintel" (c) copyright Blender Foundation | durian.blender.org, unmodified.

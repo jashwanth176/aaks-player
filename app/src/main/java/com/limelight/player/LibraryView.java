@@ -45,6 +45,8 @@ final class LibraryView {
     interface Host {
         void onPlay(File file);
         void onClose();
+        /** The viewer asked to let the app see the headset's films. */
+        void onAskAccess();
         /** The panel needs redrawing. */
         void onChanged();
         /** Whether this file is the film open in the player now. */
@@ -74,6 +76,12 @@ final class LibraryView {
     private final TextView note;
     private TextView doneButton;
     private final TextView empty;
+    // Shown while the app may not see the headset's films, or (in Folders) not every file
+    private final LinearLayout accessBar;
+    private final TextView accessText;
+    private final boolean allFilesOffered;
+    private int access;
+    private boolean scanAgain;
     private final Pane gridPane, listPane;
     private final LinearLayout gridBox;
     private final LinearLayout listBox;
@@ -144,6 +152,25 @@ final class LibraryView {
         note.setEllipsize(TextUtils.TruncateAt.END);
         note.setPadding(6, 0, 0, 0);
         sheet.addView(note, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 48));
+
+        accessBar = new LinearLayout(context);
+        accessBar.setOrientation(LinearLayout.HORIZONTAL);
+        accessBar.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable strip = new GradientDrawable();
+        strip.setCornerRadius(46);
+        strip.setColor(BUTTON);
+        accessBar.setBackground(strip);
+        accessBar.setPadding(36, 0, 12, 0);
+        accessText = UiKit.text(context, "", UiKit.TYPE_SMALL, false, TEXT);
+        accessText.setMaxLines(2);
+        accessBar.addView(accessText, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        accessBar.addView(UiKit.segment(context, "Allow", v -> host.onAskAccess()),
+                new LinearLayout.LayoutParams(200, 68));
+        LinearLayout.LayoutParams accessLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 92);
+        accessLp.bottomMargin = 14;
+        sheet.addView(accessBar, accessLp);
+        allFilesOffered = VideoLibrary.allFilesOffered(context);
+        access = VideoLibrary.access(context);
 
         FrameLayout body = new FrameLayout(context);
 
@@ -280,7 +307,9 @@ final class LibraryView {
                         new Thread(() -> VideoLibrary.saveCache(context, left), "LibraryView cache").start();
                     }
                 }
-                note.setText(ok ? "Deleted “" + title + "”." : "Couldn't delete “" + title + "”.");
+                note.setText(ok ? "Deleted “" + title + "”."
+                        : access != VideoLibrary.ACCESS_ALL ? "Deleting “" + title + "” needs access to all files."
+                        : "Couldn't delete “" + title + "”.");
                 refresh();
                 host.onChanged();
             });
@@ -303,6 +332,24 @@ final class LibraryView {
 
     ViewGroup root() {
         return root;
+    }
+
+    /** A line under the heading, until the next tab or reopening. Main thread. */
+    void setNote(String text) {
+        note.setText(text);
+        host.onChanged();
+    }
+
+    /** Access may have been given or taken while the app was out of view. Main thread. */
+    void accessChanged() {
+        int now = VideoLibrary.access(context);
+        if (now == access) {
+            return;
+        }
+        access = now;
+        scan();
+        refresh();
+        host.onChanged();
     }
 
     void stop() {
@@ -509,6 +556,7 @@ final class LibraryView {
 
     private void scan() {
         if (scanning) {
+            scanAgain = true;
             return;
         }
         scanning = true;
@@ -520,6 +568,10 @@ final class LibraryView {
                 films = found;
                 refresh();
                 host.onChanged();
+                if (scanAgain) {
+                    scanAgain = false;
+                    scan();
+                }
             });
         }, "LibraryView scan").start();
     }
@@ -701,6 +753,16 @@ final class LibraryView {
         upButton.setEnabled(!dir.equals(VideoLibrary.storageRoot()));
         upButton.setAlpha(upButton.isEnabled() ? 1.0f : 0.3f);
 
+        boolean none = access == VideoLibrary.ACCESS_NONE;
+        boolean partial = access == VideoLibrary.ACCESS_VIDEOS && folders && allFilesOffered;
+        accessBar.setVisibility(none || partial ? View.VISIBLE : View.GONE);
+        accessText.setText(none ? "Films on this headset show here once AaksVR may see them."
+                : "Disc images and deleting films need access to all files.");
+
+        if (note.getText().length() == 0 && tab == Tab.FILMS && onlyStarters()) {
+            note.setText("Big Buck Bunny is a 3D film. Sintel is 2D, turned into 3D as it plays.");
+        }
+
         String message = "";
         if (items.isEmpty()) {
             if (tab == Tab.CONTINUE) {
@@ -708,13 +770,28 @@ final class LibraryView {
             }
             else if (tab == Tab.FILMS) {
                 message = films == null ? "Looking for films…"
+                        : none ? "No films yet."
                         : "No films found.\nCopy them to Movies or Download on the headset.";
             }
             else {
-                message = "Nothing here.";
+                message = none ? "Folders show here once AaksVR may see them." : "Nothing here.";
             }
         }
         empty.setText(message);
+    }
+
+    // Whether the list is just the two films that came with the app
+    private boolean onlyStarters() {
+        if (films == null || films.size() != 2) {
+            return false;
+        }
+        File own = new File(context.getFilesDir(), "Movies");
+        for (VideoLibrary.Film film : films) {
+            if (!own.equals(film.file.getParentFile())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Enough grid rows and cells for `count` films

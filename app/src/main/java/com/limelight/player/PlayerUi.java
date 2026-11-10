@@ -112,6 +112,8 @@ final class PlayerUi implements XrRenderer.UiListener {
         void onSubtitleDelay(long ms);
         long subtitleDelayMs();
         void onOpen(File file);
+        /** Let the app see the headset's films. */
+        void onAskAccess();
         /** Stereo depth preset name. */
         void onDepth(String name);
         /** 2D-to-3D conversion. */
@@ -229,6 +231,11 @@ final class PlayerUi implements XrRenderer.UiListener {
     private View pressView;
     // Clicked on contact by a fingertip, so the release does not click again
     private boolean pressClicked;
+    // A press that is not for what it landed on: nothing follows from it or its release
+    private boolean pressIgnored;
+    // A panel takes no press this soon after appearing; whatever is pressing was aimed at
+    // what was there before
+    private static final long APPEAR_GUARD_MS = 350;
     private SeekLine dragLine;
     private int dragPanel = -1;
     // Vertical drag on the library scrolls it, once it has moved DRAG_START_PX. A release
@@ -301,6 +308,9 @@ final class PlayerUi implements XrRenderer.UiListener {
         boolean wrap;
         int drawn;
         boolean dirty = true;
+        // Whether it is showing, and when it last appeared
+        boolean shown;
+        long appearedMs;
         // Debug builds save the next render as PNG
         boolean dumpNext = true;
         Bitmap bitmap;
@@ -364,6 +374,11 @@ final class PlayerUi implements XrRenderer.UiListener {
             }
 
             @Override
+            public void onAskAccess() {
+                actions.onAskAccess();
+            }
+
+            @Override
             public boolean isPlaying(File file) {
                 String playing = actions.filmPath();
                 return playing != null
@@ -413,6 +428,29 @@ final class PlayerUi implements XrRenderer.UiListener {
         library.restore(place);
     }
 
+    /** File access may have changed while the app was out of view. Main thread. */
+    void accessChanged() {
+        library.accessChanged();
+    }
+
+    /** A line in the library, for a film that would not play. Main thread. */
+    void libraryNote(String text) {
+        panels[UI_PANEL_SHEET].dumpNext = true;
+        library.setNote(text);
+    }
+
+    // A message in place of the film's title for a few seconds
+    private static final long NOTICE_MS = 6000;
+    private String notice;
+    private long noticeUntil;
+
+    /** Tells the viewer something while the film plays on. Main thread. */
+    void notice(String text) {
+        notice = text;
+        noticeUntil = SystemClock.uptimeMillis() + NOTICE_MS;
+        nudge();
+    }
+
     /** Browse mode (no file): shows the library in place of the screen. Main thread. */
     void startBrowsing() {
         browse = true;
@@ -438,6 +476,11 @@ final class PlayerUi implements XrRenderer.UiListener {
     /** A film opened in the running session: back from browse mode to the film's panels. Main thread. */
     void startFilm(String title) {
         this.title = title;
+        noticeUntil = 0;
+        if (exitAsking) {
+            exitAsking = false;
+            panels[UI_PANEL_DIALOG].root = library.dialog();
+        }
         if (browse) {
             browse = false;
             library.setCloseable(true);
@@ -714,10 +757,18 @@ final class PlayerUi implements XrRenderer.UiListener {
             }
         }
         else if (pressed && !wasPressed) {
-            pressView = target;
+            boolean early = panel != null
+                    && SystemClock.uptimeMillis() - panel.appearedMs < APPEAR_GUARD_MS;
+            // While it asks about leaving, a press anywhere else means stay
+            boolean aside = exitAsking && panelId != UI_PANEL_DIALOG;
+            if (aside) {
+                cancelExit();
+            }
+            pressIgnored = early || aside;
+            pressView = pressIgnored ? null : target;
             pressX = x;
             pressY = y;
-            pressV = panelId == UI_PANEL_SHEET && sheet == SHEET_LIBRARY ? v : -1;
+            pressV = !pressIgnored && panelId == UI_PANEL_SHEET && sheet == SHEET_LIBRARY ? v : -1;
             lastV = v;
             lastMoveMs = SystemClock.uptimeMillis();
             dragVelocity = 0.0f;
@@ -725,7 +776,10 @@ final class PlayerUi implements XrRenderer.UiListener {
             if (pressV >= 0) {
                 library.dragBegin();
             }
-            if (target instanceof SeekLine) {
+            if (pressIgnored) {
+                // Nothing to do until it lets go
+            }
+            else if (target instanceof SeekLine) {
                 dragLine = (SeekLine) target;
                 dragPanel = panelId;
                 dragTo(x);
@@ -736,6 +790,8 @@ final class PlayerUi implements XrRenderer.UiListener {
                 target.performClick();
                 pressView = null;
                 pressClicked = true;
+                // The click may have changed what is under the finger, so it scrolls nothing
+                pressV = -1;
             }
         }
         else if (pressed && pressV >= 0 && panelId == UI_PANEL_SHEET) {
@@ -759,10 +815,12 @@ final class PlayerUi implements XrRenderer.UiListener {
         else if (!pressed && wasPressed) {
             boolean near = panel != null && Math.hypot(x - pressX, y - pressY) <= CLICK_SLOP_PX;
             View clicked = pressView != null ? pressView : (near ? target : null);
-            if (clicked != null && (clicked == target || near) && !dragScrolled && !pressClicked) {
+            if (clicked != null && (clicked == target || near) && !dragScrolled && !pressClicked
+                    && !pressIgnored) {
                 clicked.performClick();
             }
             pressClicked = false;
+            pressIgnored = false;
             if (dragScrolled) {
                 library.release(dragVelocity);
             }
@@ -875,7 +933,7 @@ final class PlayerUi implements XrRenderer.UiListener {
         for (java.util.Map.Entry<Float, TextView> option : speedOptions.entrySet()) {
             setSelected(option.getValue(), Math.abs(option.getKey() - speed) < 0.001f, UI_PANEL_SHEET);
         }
-        setText(titleText, title, UI_PANEL_TOP);
+        setText(titleText, SystemClock.uptimeMillis() < noticeUntil ? notice : title, UI_PANEL_TOP);
 
         boolean pass = actions.isPassthroughOn();
         setSelected(passthroughOn, pass, UI_PANEL_SHEET);
@@ -964,6 +1022,10 @@ final class PlayerUi implements XrRenderer.UiListener {
                     visible = show;
                     break;
             }
+            if (visible && !p.shown) {
+                p.appearedMs = SystemClock.uptimeMillis();
+            }
+            p.shown = visible;
             renderer.setUiPanel(p.id, visible, p.anchor, p.fixed, p.widthFrac, p.gap, p.xOff);
         }
     }

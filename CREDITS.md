@@ -27,6 +27,12 @@ AaksVR is built on [Moonlight for Android](https://github.com/moonlight-stream/m
 Cameron Gutman, Diego Waxemberg, Aaron Neyer and Andrew Hennessy, through the OpenXR fork of it by
 Sean Gilleece, both GPLv3; their copyright notices stay in the source.
 
+Two short films ship in the app (`app/src/main/assets/films`) so that a new install has something
+to play: the trailer of [Sintel](https://durian.blender.org), and the first 90 seconds of the
+stereoscopic [Big Buck Bunny](https://www.bigbuckbunny.org) (re-encoded, with a fade-out added;
+stereoscopic version by Janus B. Kristensen). Both are © Blender Foundation, CC BY 3.0; the notice
+ships in the APK as `assets/licenses/films_LICENSE.txt`.
+
 The screenshots show frames from [Sintel](https://durian.blender.org) and
 [Tears of Steel](https://mango.blender.org), © Blender Foundation, CC BY 3.0, and NASA
 photographs from the International Space Station (public domain). The rooms are

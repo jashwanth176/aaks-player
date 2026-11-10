@@ -1,7 +1,10 @@
 package com.limelight.player;
 
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.media.Image;
@@ -15,6 +18,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
+import android.provider.Settings;
 
 import com.limelight.LimeLog;
 import com.limelight.binding.video.XrRenderer;
@@ -157,7 +161,7 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             // Legacy value
             depth = DEPTH_FULL;
         }
-        convert2d = saved.getBoolean(PREF_CONVERT, false);
+        convert2d = saved.getBoolean(PREF_CONVERT, true);
         if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugConvert")) {
             convert2d = true;
         }
@@ -195,12 +199,14 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         }, "PlayerXR start").start();
     }
 
-    private final PlaybackEngine.Listener engineListener = new PlaybackEngine.Listener() {
+    // An engine's callbacks, dropped once another film (a later `token`) has been opened
+    private PlaybackEngine.Listener listenerFor(final int token) {
+        return new PlaybackEngine.Listener() {
             @Override
             public void onSubtitle(CharSequence text, Bitmap image, float widthShare) {
                 main.post(() -> {
                     PlayerUi current = ui;
-                    if (current != null) {
+                    if (current != null && token == openToken) {
                         current.setSubtitle(text, image, widthShare);
                     }
                 });
@@ -209,6 +215,21 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             @Override
             public void onError(String title, String detail) {
                 LimeLog.warning("PlayerXR: " + title + (detail != null ? ": " + detail : ""));
+                main.post(() -> {
+                    PlayerUi current = ui;
+                    if (current != null && token == openToken && !browse) {
+                        current.notice(title);
+                    }
+                });
+            }
+
+            @Override
+            public void onFailed(String reason) {
+                main.post(() -> {
+                    if (token == openToken) {
+                        filmFailed(reason);
+                    }
+                });
             }
 
             @Override
@@ -222,7 +243,19 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
                     r.setVideoColour(transfer, maxCll, masteringNits);
                 }
             }
-    };
+        };
+    }
+
+    // A film that will not play goes back to the library, which says why
+    private void filmFailed(String reason) {
+        if (finishing || browse || ui == null) {
+            return;
+        }
+        String title = titleFor(getIntent().getData());
+        LimeLog.warning("PlayerXR: back to the library: " + reason);
+        backToLibrary();
+        ui.libraryNote("Couldn't play “" + title + "”. " + reason);
+    }
 
     // Starts the planned film (or the library) on the running session
     private void beginFilm(Film f, boolean first) {
@@ -231,9 +264,10 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             houseLevel = 1.0f;
             renderer.setHouseLights(1.0f, true);
         }
+        PlaybackEngine.Listener listener = listenerFor(openToken);
         engine = browse ? new NullEngine()
-                : disc ? new DiscEngine(this, new File(f.uri.getPath()), engineListener)
-                : new ExoEngine(this, f.uri, engineListener);
+                : disc ? new DiscEngine(this, new File(f.uri.getPath()), listener)
+                : new ExoEngine(this, f.uri, listener);
         subtitleDelayMs = filmKey != null ? saved.getLong(PREF_SUB_DELAY + filmKey, 0L) : 0L;
         engine.setSubtitleDelayMs(subtitleDelayMs);
         speed = 1.0f;
@@ -247,9 +281,8 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             createUi();
         }
         if (browse) {
-            if (first) {
-                showIdleFrame(target);
-            }
+            // Each time: a film that never showed a frame leaves nothing drawn behind it
+            showIdleFrame(target);
             ui.startBrowsing();
         }
         else {
@@ -282,6 +315,10 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             show(plan());
             return;
         }
+        // A film from here on, though plan() has yet to run: Back returns to the library
+        browse = false;
+        probe = null;
+        filmKey = "file".equals(uri.getScheme()) && uri.getPath() != null ? uri.getPath() : uri.toString();
         renderer.setVideoColour(XrShared.VIDEO_TRANSFER_CODE_SDR, 0.0f, 0.0f);
         renderer.setPlayerContent(0.0f, 0.0f);
         renderer.reconfigure(eyeW, eyeH, 24, XrShared.DEPTH_MODE_OFF, false, false, true);
@@ -460,6 +497,11 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             }
 
             @Override
+            public void onAskAccess() {
+                askAccess();
+            }
+
+            @Override
             public String filmPath() {
                 return browse ? null : filmKey;
             }
@@ -554,6 +596,9 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         }
         if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugSheet")) {
             ui.debugOpen(getIntent().getIntExtra("debugSheet", 0));
+        }
+        if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugAskAccess")) {
+            main.postDelayed(this::askAccess, 5000);
         }
 
         main.postDelayed(saver, SAVE_EVERY_MS);
@@ -725,7 +770,8 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
             main.removeCallbacks(this);
             PlaybackEngine e = engine;
             float level = 0.0f;
-            if (houseLights && e != null && !browse) {
+            // Not while a film is still being opened, which has its own stand-in engine
+            if (houseLights && e != null && !browse && !(e instanceof NullEngine)) {
                 // Held down while the Light sheet is open, so Brightness shows the film's room
                 boolean adjusting = ui != null && ui.lightSheetOpen();
                 level = adjusting || e.isPlaying() && !e.isEnded() ? 0.0f
@@ -735,11 +781,19 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
                 houseLevel = level;
                 renderer.setHouseLights(level, false);
             }
+            // The controls come back at the end, with Play to start again
+            boolean ended = e != null && !browse && e.isEnded();
+            if (ended && !wasEnded && ui != null) {
+                ui.nudge();
+            }
+            wasEnded = ended;
             if (!finishing) {
                 main.postDelayed(this, HOUSE_EVERY_MS);
             }
         }
     };
+
+    private boolean wasEnded;
 
     private void saveProgress() {
         // Debug scripts don't overwrite the real resume point
@@ -836,6 +890,84 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
                 .replaceAll("(?i)\\b(h-?sbs|f-?sbs|sbs|h-?ou|f-?ou|ou|tab|3d|mvc)\\b", " ")
                 .replaceAll("\\s+", " ").trim();
         return name;
+    }
+
+    // ---- file access ----------------------------------------------------------------------
+
+    private static final int REQUEST_VIDEOS = 1;
+    // The system no longer shows its question (it was refused twice), so its settings are next
+    private boolean videosRefused;
+
+    // The headset's own question first, which shows the videos. Every file (disc images,
+    // deleting) is a switch in the system's settings, offered once videos are allowed or
+    // when the question can no longer be asked.
+    private void askAccess() {
+        int access = VideoLibrary.access(this);
+        if (access == VideoLibrary.ACCESS_ALL) {
+            accessChanged();
+        }
+        else if (access == VideoLibrary.ACCESS_NONE && !videosRefused) {
+            requestPermissions(new String[] { VideoLibrary.videoPermission() }, REQUEST_VIDEOS);
+        }
+        else {
+            openAccessSettings();
+        }
+    }
+
+    private void openAccessSettings() {
+        Uri app = Uri.parse("package:" + getPackageName());
+        if (VideoLibrary.allFilesOffered(this)) {
+            try {
+                startActivity(new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, app));
+                return;
+            }
+            catch (ActivityNotFoundException | SecurityException e) {
+                LimeLog.warning("PlayerXR: no all-files page: " + e);
+            }
+        }
+        try {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, app));
+        }
+        catch (ActivityNotFoundException | SecurityException e) {
+            LimeLog.warning("PlayerXR: no app settings page: " + e);
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
+        if (request != REQUEST_VIDEOS) {
+            return;
+        }
+        boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+        LimeLog.info("PlayerXR: access to videos " + (granted ? "allowed" : "refused"));
+        if (!granted && !shouldShowRequestPermissionRationale(VideoLibrary.videoPermission())) {
+            videosRefused = true;
+        }
+        accessChanged();
+    }
+
+    private void accessChanged() {
+        PlayerUi current = ui;
+        if (current != null) {
+            current.accessChanged();
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        accessChanged();
+    }
+
+    // Opened again with a film while running (from a file manager)
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        Uri uri = intent.getData();
+        if (uri != null && ui != null && !finishing) {
+            lastOpenMs = 0;
+            openFile(uri);
+        }
     }
 
     // Resume on onStart if it was playing at onStop
@@ -1087,6 +1219,8 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
                 e.setPlaying(true);
                 LimeLog.info("PlayerXR: playing again, the session has its focus back");
             }
+            // The system's own panels take the focus, the access settings among them
+            accessChanged();
         });
     }
 

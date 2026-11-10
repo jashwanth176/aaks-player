@@ -66,7 +66,8 @@ final class ExoEngine implements PlaybackEngine {
             @Override
             public void onPlayerError(PlaybackException error) {
                 LimeLog.severe("PlayerXR: " + error.getErrorCodeName() + " " + error.getMessage());
-                listener.onError("Can't play this file", error.getErrorCodeName());
+                failed = true;
+                listener.onFailed(reasonFor(error.errorCode));
             }
 
             @Override
@@ -178,9 +179,36 @@ final class ExoEngine implements PlaybackEngine {
         return d > 0 ? d : 0;
     }
 
+    // Set by a playback error, after which the player sits idle
+    private boolean failed;
+
+    // Media3's error codes run in blocks of a thousand: 2xxx reading, 3xxx the file's
+    // contents, 4xxx decoding, 5xxx the audio output
+    static String reasonFor(int code) {
+        if (code == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND) {
+            return "The file is no longer there.";
+        }
+        if (code == PlaybackException.ERROR_CODE_IO_NO_PERMISSION) {
+            return "AaksVR isn't allowed to read it.";
+        }
+        switch (code / 1000) {
+            case 2:
+                return "The file could not be read.";
+            case 3:
+                return "The file is damaged or incomplete.";
+            case 4:
+                return "This headset can't decode its format.";
+            case 5:
+                return "The sound could not start.";
+            default:
+                return "Playback stopped unexpectedly.";
+        }
+    }
+
     @Override
     public boolean isPlaying() {
-        return player != null && player.getPlayWhenReady();
+        return player != null && !failed && player.getPlayWhenReady()
+                && player.getPlaybackState() != Player.STATE_ENDED;
     }
 
     @Override
@@ -191,6 +219,10 @@ final class ExoEngine implements PlaybackEngine {
     @Override
     public void setPlaying(boolean playing) {
         if (player != null) {
+            // Play at the end starts the film again
+            if (playing && player.getPlaybackState() == Player.STATE_ENDED) {
+                player.seekTo(0);
+            }
             player.setPlayWhenReady(playing);
         }
     }

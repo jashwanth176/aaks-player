@@ -140,13 +140,35 @@ final class ThumbnailLoader {
             if (w <= 0 || h <= 0) {
                 return null;
             }
-            // 20% in: past opening logos, before credits
-            long us = Math.max(1, durationMs) * 1000L / 5;
             int dstW = Math.min(1280, w);
             int dstH = Math.max(8, Math.round(dstW * (float) h / (float) w));
-            Bitmap frame = Build.VERSION.SDK_INT >= 27
-                    ? r.getScaledFrameAtTime(us, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dstW, dstH)
-                    : r.getFrameAtTime(us, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+            // 20% in: past opening logos, before credits. A frame that dark it shows nothing
+            // (a fade, a title card) gives way to a later one, the brightest of them if all are.
+            Bitmap frame = null;
+            float best = -1.0f;
+            for (float share : SHARES) {
+                long us = (long) (Math.max(1, durationMs) * 1000L * share);
+                Bitmap got = Build.VERSION.SDK_INT >= 27
+                        ? r.getScaledFrameAtTime(us, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, dstW, dstH)
+                        : r.getFrameAtTime(us, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                if (got == null) {
+                    continue;
+                }
+                float light = brightness(got);
+                if (light > best) {
+                    if (frame != null) {
+                        frame.recycle();
+                    }
+                    frame = got;
+                    best = light;
+                }
+                else {
+                    got.recycle();
+                }
+                if (best >= DARK) {
+                    break;
+                }
+            }
             if (frame == null) {
                 return null;
             }
@@ -170,6 +192,25 @@ final class ThumbnailLoader {
             catch (Exception ignored) {
             }
         }
+    }
+
+    private static final float[] SHARES = { 0.2f, 0.45f, 0.7f };
+    // Mean brightness, 0 to 1, under which a frame is too dark to tell a film by
+    private static final float DARK = 0.06f;
+
+    // Mean of the brightest channel over a coarse grid, 0 to 1
+    static float brightness(Bitmap frame) {
+        int w = frame.getWidth(), h = frame.getHeight();
+        long sum = 0;
+        int n = 0;
+        for (int y = h / 18; y < h; y += Math.max(1, h / 9)) {
+            for (int x = w / 32; x < w; x += Math.max(1, w / 16)) {
+                int c = frame.getPixel(x, y);
+                sum += Math.max((c >> 16) & 0xFF, Math.max((c >> 8) & 0xFF, c & 0xFF));
+                n++;
+            }
+        }
+        return n == 0 ? 0.0f : sum / (255.0f * n);
     }
 
     // The region of the frame scaled to the thumbnail size; the frame is recycled

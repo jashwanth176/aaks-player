@@ -16,7 +16,12 @@ interface PlaybackEngine {
         /** Current subtitle: text, or a bitmap and its width as a fraction of the video width; nulls clear. */
         void onSubtitle(CharSequence text, Bitmap image, float widthShare);
 
+        /** Something the viewer should know, while the film plays on. */
         void onError(String title, String detail);
+
+        /** The film cannot play, or cannot go on; reason is a sentence for the viewer. */
+        default void onFailed(String reason) {
+        }
 
         void onVideoSize(int width, int height);
 

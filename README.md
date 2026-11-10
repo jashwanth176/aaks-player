@@ -4,9 +4,9 @@
 
 # AaksVR
 
-A 3D movie player for the Meta Quest 3, running as a native OpenXR app. It plays side by side and
-over under 3D files, 3D Blu-ray disc images, and ordinary 2D films, which it can turn into 3D as
-they play.
+A 3D movie player for the Meta Quest 3 and 3S, running as a native OpenXR app. It plays side by
+side and over under 3D files, 3D Blu-ray disc images, and ordinary 2D films, which it turns into 3D
+as they play. Everything works with your hands alone, or with controllers.
 
 ![AaksVR playing a film on a giant screen in a living room](docs/screenshots/1_hero.jpg)
 
@@ -14,9 +14,12 @@ they play.
 
 1. Download the latest `AaksVR-*.apk` from [Releases](https://github.com/jashwanth176/aaks-player/releases).
 2. Turn on Developer Mode for your Quest in the Meta Horizon phone app.
-3. Install the APK with [SideQuest](https://sidequestvr.com) or `adb install AaksVR-0.9.0.apk`.
-4. On the headset, open AaksVR from **Library > Unknown Sources**, and allow file access so it can
-   find your films.
+3. Install the APK with [SideQuest](https://sidequestvr.com) or `adb install AaksVR-*.apk`.
+4. On the headset, open AaksVR from **Library > Unknown Sources**.
+
+Two short films come with it, one in 3D and one in 2D, so there is something to watch straight
+away. To see your own, press **Allow** in the library and let AaksVR see the videos on the headset.
+Copy films to the headset's `Movies` or `Download` folder.
 
 ## Watch any 2D film in 3D, live
 
@@ -27,9 +30,9 @@ and shows each frame in 3D.
 
 *Click for the full-quality video.*
 
-1. Open a regular 2D film from the library.
-2. Open **Settings** on the control bar.
-3. Set **2D films in 3D** to **On**. The setting is remembered for every 2D film after that.
+It is on from the start: open any 2D film from the library and it plays in 3D. To watch a film
+flat, open **Settings** on the rail beside the screen and set **2D films in 3D** to **Off**; the
+setting is remembered.
 
 ## Screenshots
 
@@ -78,7 +81,9 @@ and shows each frame in 3D.
 
 ### Library
 - Finds your films anywhere on the headset's storage: `mp4`, `m4v`, `mkv`, `mov`, `webm`, `ts`,
-  `m2ts`, `mts`, `avi` and `iso`.
+  `m2ts`, `mts`, `avi` and `iso`. Disc images, and deleting films, need access to all files, which
+  the **Folders** tab offers.
+- A film that can't be played says why, back in the library.
 - **Continue** for films you're part way through, **Films** for everything (newest first), and
   **Folders** to browse.
 - Thumbnails (discs included), a 3D badge and a progress bar on each film, and every film resumes
@@ -94,10 +99,16 @@ and shows each frame in 3D.
   screen. While holding, the thumbstick brings it closer or sends it further away. With hands,
   pinch the white bar and move your hand. The back button
   beside the bar returns to the library, and from there leaves the app.
-- **Hands:** pinch to click. **Double tap** the left or right of the picture to skip 10 seconds, and
-  keep tapping to skip further.
-- **Hand pointer:** hides when your hand is idle; show an open palm to bring it back. Prefer it
-  always visible? Set **Hand pointer** to **Always on** in Settings.
+- **Hands:** point and pinch to click. **Double tap** the left or right of the picture to skip 10
+  seconds, and keep tapping to skip further.
+- **Touch:** bring the screen or the library within reach (take hold of the white bar and pull it
+  in) and press the menus with a fingertip, like a touchscreen: buttons click as you touch them,
+  with a soft sound, and lists scroll under your finger. Your hands are outlined so you can see
+  them against the film, and in the dark.
+- **Hand pointer:** the pointer and the outlines hide when your hands are idle during a film; pinch,
+  or show an open palm, to bring them back. Prefer them always visible? Set **Hand pointer** to
+  **Always on** in Settings.
+- **Menus** are frosted glass: the film shows through them, blurred.
 - Pauses when you take the headset off or open the Quest menu, and carries on when you're back.
 
 ## Licence
