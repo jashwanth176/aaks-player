@@ -817,6 +817,8 @@ typedef struct {
     // Whether each source's press went down with its ray on something; a hand resting
     // curled, aimed at nothing, then holds no press that could keep the pointer
     int pressOwned[SRC_COUNT];
+    // Said once each time a hand out of sight has its pinch let go
+    int pinchStaleSaid[HAND_COUNT];
     int pinchPointValid[HAND_COUNT];
     // Ray built from the joints, for runtimes without a pointer pose.
     XrPosef handRay[HAND_COUNT];

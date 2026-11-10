@@ -1696,6 +1696,19 @@ static void readSources(XrCtx* ctx, InputFrame* f) {
                 if (wasDown && !pinch && !seen && f->now - ctx->pinchGoodNs[h] < PINCH_HOLD_NS) {
                     pinch = 1;
                 }
+                // Past that, a hand out of sight pinches nothing: the runtime can go on
+                // reporting a pinch for a hand it no longer tracks, which held the click
+                // down for good and left the other hand's taps with nothing to change
+                if (pinch && !seen && f->now - ctx->pinchGoodNs[h] >= PINCH_HOLD_NS) {
+                    if (!ctx->pinchStaleSaid[h]) {
+                        LOGI("hand %d is out of sight, its pinch is let go", h);
+                        ctx->pinchStaleSaid[h] = 1;
+                    }
+                    pinch = 0;
+                }
+                else if (seen) {
+                    ctx->pinchStaleSaid[h] = 0;
+                }
                 if (pinch && seen) {
                     ctx->pinchGoodNs[h] = f->now;
                 }
@@ -2238,8 +2251,9 @@ static void sendPointer(XrCtx* ctx, InputFrame* f, int hit) {
 static void updateButtons(XrCtx* ctx, InputFrame* f, int hit) {
     int mask = 0;
     for (int h = 0; h < HAND_COUNT; h++) {
-        // Per hand, so one hand's swallowed press does not block the other.
-        if (ctx->triggerDown[h] && !ctx->triggerSwallowed[h]) {
+        // Per hand, so one hand's swallowed press does not block the other, and only a
+        // press that began aimed at something, so a hand resting curled holds nothing down
+        if (ctx->triggerDown[h] && !ctx->triggerSwallowed[h] && ctx->pressOwned[h]) {
             mask |= VR_BUTTON_LEFT;
         }
     }
