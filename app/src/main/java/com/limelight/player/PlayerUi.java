@@ -233,6 +233,8 @@ final class PlayerUi implements XrRenderer.UiListener {
     private boolean pressClicked;
     // A press that is not for what it landed on: nothing follows from it or its release
     private boolean pressIgnored;
+    // A pinch on a control clicked audibly, so its release ticks
+    private boolean rayPressHeard;
     // A panel takes no press this soon after appearing; whatever is pressing was aimed at
     // what was there before
     private static final long APPEAR_GUARD_MS = 350;
@@ -451,6 +453,26 @@ final class PlayerUi implements XrRenderer.UiListener {
         nudge();
     }
 
+    /** Notices one after another, each for its own few seconds. Main thread. */
+    void teach(String... lines) {
+        main.removeCallbacks(nextLesson);
+        lessons.clear();
+        java.util.Collections.addAll(lessons, lines);
+        nextLesson.run();
+    }
+
+    private final java.util.ArrayDeque<String> lessons = new java.util.ArrayDeque<>();
+    private final Runnable nextLesson = new Runnable() {
+        @Override
+        public void run() {
+            String line = lessons.poll();
+            if (line != null && !browse) {
+                notice(line);
+                main.postDelayed(this, NOTICE_MS);
+            }
+        }
+    };
+
     /** Browse mode (no file): shows the library in place of the screen. Main thread. */
     void startBrowsing() {
         browse = true;
@@ -477,6 +499,8 @@ final class PlayerUi implements XrRenderer.UiListener {
     void startFilm(String title) {
         this.title = title;
         noticeUntil = 0;
+        lessons.clear();
+        main.removeCallbacks(nextLesson);
         if (exitAsking) {
             exitAsking = false;
             panels[UI_PANEL_DIALOG].root = library.dialog();
@@ -630,6 +654,8 @@ final class PlayerUi implements XrRenderer.UiListener {
             }
             if (chromeShown) {
                 chromeWanted = false;
+                // Hidden when asked, a notice or not
+                noticeUntil = 0;
                 if (sheet != SHEET_NONE) {
                     sheet = SHEET_NONE;
                 }
@@ -766,6 +792,11 @@ final class PlayerUi implements XrRenderer.UiListener {
             }
             pressIgnored = early || aside;
             pressView = pressIgnored ? null : target;
+            // A fingertip's press is heard from the renderer; a pinch on a control here
+            if (!touch && !pressIgnored && target != null && !LibraryView.inList(target)) {
+                renderer.playClick(true);
+                rayPressHeard = true;
+            }
             pressX = x;
             pressY = y;
             pressV = !pressIgnored && panelId == UI_PANEL_SHEET && sheet == SHEET_LIBRARY ? v : -1;
@@ -817,10 +848,18 @@ final class PlayerUi implements XrRenderer.UiListener {
             View clicked = pressView != null ? pressView : (near ? target : null);
             if (clicked != null && (clicked == target || near) && !dragScrolled && !pressClicked
                     && !pressIgnored) {
+                // A film in the list is heard once it is chosen, not when a scroll may begin
+                if (!touch && LibraryView.inList(clicked)) {
+                    renderer.playClick(true);
+                }
                 clicked.performClick();
             }
             pressClicked = false;
             pressIgnored = false;
+            if (rayPressHeard) {
+                renderer.playClick(false);
+                rayPressHeard = false;
+            }
             if (dragScrolled) {
                 library.release(dragVelocity);
             }
@@ -982,8 +1021,10 @@ final class PlayerUi implements XrRenderer.UiListener {
     }
 
     private void applyVisibility(boolean force) {
-        boolean show = chromeWanted && (sheet != SHEET_NONE || !actions.isPlaying()
-                || SystemClock.uptimeMillis() - lastActivityMs < CHROME_HOLD_MS);
+        long now = SystemClock.uptimeMillis();
+        // Up while a notice is in the top bar, so it can be read
+        boolean show = (chromeWanted || now < noticeUntil) && (sheet != SHEET_NONE
+                || !actions.isPlaying() || now - lastActivityMs < CHROME_HOLD_MS || now < noticeUntil);
         // Once auto-hidden, stay hidden until the next click
         if (!show) {
             chromeWanted = false;

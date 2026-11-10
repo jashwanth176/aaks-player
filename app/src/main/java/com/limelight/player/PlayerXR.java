@@ -61,6 +61,12 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     private static final String PREF_CONVERT = "player_convert_2d";
 
     private static final long SAVE_EVERY_MS = 5000;
+    // Films started on this install, for the hints shown to someone new
+    private static final String PREF_FILMS_STARTED = "player_films_started";
+
+    static int filmsStarted(android.content.Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context).getInt(PREF_FILMS_STARTED, 0);
+    }
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private XrRenderer renderer;
@@ -287,6 +293,13 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         }
         else {
             ui.startFilm(titleFor(f.uri));
+            // The first film teaches what is not on screen
+            int started = filmsStarted(this);
+            saved.edit().putInt(PREF_FILMS_STARTED, started + 1).apply();
+            if (started == 0) {
+                ui.teach("Pinch the picture to show or hide the controls",
+                         "Pointer gone? Pinch once to bring it back");
+            }
         }
         if (!f.known.barsKnown && !disc && !browse) {
             findBars(f.uri);
@@ -1169,6 +1182,23 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         if (current != null) {
             current.onActivity();
         }
+    }
+
+    @Override
+    public void onVrHandsHardToSee() {
+        main.post(() -> {
+            PlayerUi current = ui;
+            if (current == null) {
+                return;
+            }
+            String line = "Hands are hard to see. More light in the room helps.";
+            if (browse) {
+                current.libraryNote(line);
+            }
+            else {
+                current.notice(line);
+            }
+        });
     }
 
     @Override

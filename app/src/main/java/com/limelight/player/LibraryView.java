@@ -759,8 +759,16 @@ final class LibraryView {
         accessText.setText(none ? "Films on this headset show here once AaksVR may see them."
                 : "Disc images and deleting films need access to all files.");
 
-        if (note.getText().length() == 0 && tab == Tab.FILMS && onlyStarters()) {
-            note.setText("Big Buck Bunny is a 3D film. Sintel is 2D, turned into 3D as it plays.");
+        if (note.getText().length() == 0 && tab == Tab.FILMS && items.size() > 0) {
+            boolean firstTime = PlayerXR.filmsStarted(context) == 0;
+            if (onlyStarters()) {
+                note.setText(firstTime
+                        ? "Pinch a film to play it. Big Buck Bunny is 3D; Sintel turns 2D into 3D."
+                        : "Big Buck Bunny is a 3D film. Sintel is 2D, turned into 3D as it plays.");
+            }
+            else if (firstTime) {
+                note.setText("Point at a film and pinch to play it.");
+            }
         }
 
         String message = "";

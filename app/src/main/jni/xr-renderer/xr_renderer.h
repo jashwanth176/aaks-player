@@ -819,6 +819,10 @@ typedef struct {
     int pressOwned[SRC_COUNT];
     // Said once each time a hand out of sight has its pinch let go
     int pinchStaleSaid[HAND_COUNT];
+    // Brief losses of each hand, for telling the viewer the hands are hard to see (once)
+    HandBlips handBlips[HAND_COUNT];
+    int handsPoorSaid;
+    int handsPoorPulse;
     int pinchPointValid[HAND_COUNT];
     // Ray built from the joints, for runtimes without a pointer pose.
     XrPosef handRay[HAND_COUNT];

@@ -54,6 +54,26 @@ int pickPointer(const PointerOffer* offers, const int* order, int count, int pre
     return -1;
 }
 
+int handBlipStep(HandBlips* b, int seen, int64_t nowNs) {
+    int poor = 0;
+    if (b->seen && !seen) {
+        b->lostAt = nowNs;
+    }
+    else if (!b->seen && seen && b->lostAt > 0 && nowNs - b->lostAt < HAND_BLIP_NS) {
+        if (b->count == HAND_BLIPS) {
+            memmove(b->blips, b->blips + 1, sizeof(b->blips[0]) * (HAND_BLIPS - 1));
+            b->count--;
+        }
+        b->blips[b->count++] = nowNs;
+        if (b->count == HAND_BLIPS && nowNs - b->blips[0] <= HAND_BLIP_WINDOW_NS) {
+            poor = 1;
+            b->count = 0;
+        }
+    }
+    b->seen = seen;
+    return poor;
+}
+
 int pinchWakes(int fresh, int aimed, float trust) {
     return fresh && aimed && trust >= PINCH_WAKE_TRUST;
 }

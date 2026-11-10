@@ -143,6 +143,9 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
         // thumbstick X, -1 to 1
         default void onVrPlayerInput(int buttons, float stickX) {
         }
+        // The hands keep vanishing for a moment, usually for want of light. Once a session.
+        default void onVrHandsHardToSee() {
+        }
     }
 
     public void setInputListener(InputListener listener) {
@@ -417,6 +420,19 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
                 nativeSetUiPanel(nativeCtx, i, place[0] != 0, (int) place[1], place[2] != 0,
                         place[3], place[4], place[5]);
             }
+        }
+    }
+
+    /**
+     * The touch click for a press made with the ray: hands have no buttons to feel, so a pinch
+     * on a control is heard. Any thread.
+     */
+    public void playClick(boolean press) {
+        if (press) {
+            touchSound.press();
+        }
+        else {
+            touchSound.release();
         }
     }
 
@@ -1134,6 +1150,9 @@ public class XrRenderer implements SurfaceTexture.OnFrameAvailableListener {
             touchSound.release();
         }
         touchState = touch;
+        if (inputState[IN_HANDS_POOR] != 0.0f && inputListener != null) {
+            inputListener.onVrHandsHardToSee();
+        }
         UiListener ui = uiListener;
         if (ui != null) {
             ui.onUiPointer((int)inputState[IN_UI_PANEL], inputState[IN_UI_U], inputState[IN_UI_V],

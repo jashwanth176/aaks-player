@@ -1673,6 +1673,11 @@ static void readSources(XrCtx* ctx, InputFrame* f) {
                          state == 3 && ctx->handJointsOk[h] ? ", still drawn" : "");
                     ctx->trustSaid[h] = state;
                 }
+                if (handBlipStep(&ctx->handBlips[h], state != 3, f->now) && !ctx->handsPoorSaid) {
+                    LOGI("hand %d keeps vanishing for a moment: the hands are hard to see", h);
+                    ctx->handsPoorSaid = 1;
+                    ctx->handsPoorPulse = 1;
+                }
             }
             if (ctx->profileKind[h] == PROFILE_CONTROLLER) {
                 ctx->pinchDown[h] = 0;
@@ -2446,6 +2451,8 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     f.out = out;
     out[IN_UI_PANEL] = -1.0f;
     out[IN_TOUCH] = TOUCH_NONE;
+    out[IN_HANDS_POOR] = ctx->handsPoorPulse ? 1.0f : 0.0f;
+    ctx->handsPoorPulse = 0;
     // Must match what endFrame submits
     f.xform.toHead = headLocked;
     f.height = ctx->screenWidth * screenAspect(ctx);

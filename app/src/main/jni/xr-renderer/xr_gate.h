@@ -56,6 +56,23 @@ typedef struct {
 // the margin last.
 int pickPointer(const PointerOffer* offers, const int* order, int count, int prev);
 
+// A raised hand that keeps vanishing for a moment and coming back is hard for the cameras to
+// see, usually for want of light. HAND_BLIPS such losses, each under HAND_BLIP_NS, within
+// HAND_BLIP_WINDOW_NS count as that. A hand lowered out of view stays gone longer.
+#define HAND_BLIPS 5
+#define HAND_BLIP_NS 600000000LL
+#define HAND_BLIP_WINDOW_NS 10000000000LL
+
+typedef struct {
+    int seen;
+    int64_t lostAt;
+    int64_t blips[HAND_BLIPS];
+    int count;
+} HandBlips;
+
+// One frame of a hand: whether it is seen now. 1 on the frame the losses add up.
+int handBlipStep(HandBlips* b, int seen, int64_t nowNs);
+
 // Hand tracking this good counts as a deliberate hand
 #define PINCH_WAKE_TRUST 0.7f
 

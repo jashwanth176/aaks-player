@@ -220,6 +220,37 @@ static void testWhoPoints(void) {
     CHECK(pickPointer(o, order, 3, -1) == 2);
 }
 
+static void testHandBlips(void) {
+    const int64_t ms = 1000000LL;
+    HandBlips b;
+    memset(&b, 0, sizeof(b));
+    int64_t t = 1000 * ms;
+    // Lowered and raised again, each time gone for over a second: never poor
+    CHECK(handBlipStep(&b, 1, t) == 0);
+    for (int i = 0; i < 10; i++) {
+        CHECK(handBlipStep(&b, 0, t += 100 * ms) == 0);
+        CHECK(handBlipStep(&b, 1, t += 1500 * ms) == 0);
+    }
+    // Five short losses within ten seconds: poor, once, then counting starts over
+    int poor = 0;
+    for (int i = 0; i < 5; i++) {
+        poor += handBlipStep(&b, 0, t += 1000 * ms);
+        poor += handBlipStep(&b, 1, t += 200 * ms);
+    }
+    CHECK(poor == 1);
+    CHECK(handBlipStep(&b, 0, t += 1000 * ms) == 0);
+    CHECK(handBlipStep(&b, 1, t += 200 * ms) == 0);
+    // Short losses spread over more than ten seconds: not poor
+    memset(&b, 0, sizeof(b));
+    poor = 0;
+    for (int i = 0; i < 12; i++) {
+        poor += handBlipStep(&b, 1, t += 2500 * ms);
+        poor += handBlipStep(&b, 0, t += 100 * ms);
+        poor += handBlipStep(&b, 1, t += 300 * ms);
+    }
+    CHECK(poor == 0);
+}
+
 static void testPinchWakes(void) {
     // A new pinch from a well seen hand aimed at the picture wakes the pointer
     CHECK(pinchWakes(1, 1, 0.9f));
@@ -231,6 +262,7 @@ static void testPinchWakes(void) {
 }
 
 int main(void) {
+    testHandBlips();
     testWhoCounts();
     testControllerClock();
     testGazeBridge();

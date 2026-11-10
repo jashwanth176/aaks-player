@@ -89,7 +89,9 @@
 #define IN_PLAYER_STICK_X (IN_PLAYER_BUTTONS + 1)
 // Fingertip touch of the pointing hand: a TOUCH_ value
 #define IN_TOUCH    (IN_PLAYER_STICK_X + 1)
-#define IN_SLOTS    (IN_TOUCH + 1)
+// 1 on the one frame the hands are found hard to see (once a session)
+#define IN_HANDS_POOR (IN_TOUCH + 1)
+#define IN_SLOTS    (IN_HANDS_POOR + 1)
 #define TOUCH_NONE 0
 #define TOUCH_NEAR 1
 #define TOUCH_PRESSING 2
