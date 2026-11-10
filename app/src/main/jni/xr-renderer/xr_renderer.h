@@ -157,9 +157,6 @@ static inline int64_t nowNs(void) {
 #define VR_BUTTON_RIGHT  0x2
 #define VR_BUTTON_MIDDLE 0x4
 
-// Resize limits, metres.
-#define SCREEN_MIN_WIDTH 0.8f
-
 // Hover zones and handle sizes are in xr_layout.h.
 
 #define GRAB_NONE   0

@@ -2564,7 +2564,10 @@ Java_com_limelight_binding_video_XrRenderer_nativeSetScreenPose(JNIEnv* env, job
     }
     (*env)->GetFloatArrayRegion(env, poseArr, 0, POSE_VALUES, p);
 
-    if (p[7] < SCREEN_MIN_WIDTH || p[7] > 20.0f || p[8] <= 0.0f) {
+    // The narrowest a screen can be made is at the near limit (a window pulled in to be
+    // touched); a little under it allows for the save's rounding
+    float narrowest = HANDLE_BASE_WIDTH * HANDLE_SCALE_MIN_NEAR * 0.95f;
+    if (p[7] < narrowest || p[7] > 20.0f || p[8] <= 0.0f) {
         LOGW("stored screen placement out of range, ignoring it");
         return;
     }
