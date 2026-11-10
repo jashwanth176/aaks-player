@@ -814,6 +814,9 @@ typedef struct {
     // The source that pointed last frame, and whether its press began on a menu
     int pointHand;
     int uiPress[SRC_COUNT];
+    // Whether each source's press went down with its ray on something; a hand resting
+    // curled, aimed at nothing, then holds no press that could keep the pointer
+    int pressOwned[SRC_COUNT];
     int pinchPointValid[HAND_COUNT];
     // Ray built from the joints, for runtimes without a pointer pose.
     XrPosef handRay[HAND_COUNT];

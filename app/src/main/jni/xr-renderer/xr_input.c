@@ -2093,7 +2093,14 @@ static void pickPointingSource(XrCtx* ctx, InputFrame* f) {
     for (int h = 0; h < SRC_COUNT; h++) {
         offers[h].on = f->hovers[h] != HOVER_NONE && f->hovers[h] != HOVER_HALO;
         offers[h].halo = f->hovers[h] == HOVER_HALO;
-        offers[h].pressing = ctx->triggerDown[h];
+        if (!ctx->triggerDown[h]) {
+            ctx->pressOwned[h] = 0;
+        }
+        else if (ctx->triggerEdge[h]) {
+            ctx->pressOwned[h] = offers[h].on;
+        }
+        offers[h].pressing = ctx->triggerDown[h] && ctx->pressOwned[h];
+        offers[h].fresh = ctx->triggerEdge[h];
         offers[h].touch = TOUCH_NONE;
         if (h < HAND_COUNT) {
             // Fingers at the bar count as about to touch it

@@ -42,15 +42,18 @@ typedef struct {
     int on;
     // Its ray is only in the margin around the picture
     int halo;
-    // Its trigger or pinch is down
+    // Its trigger or pinch is down, and went down while its ray was on something
     int pressing;
+    // That press began this frame
+    int fresh;
     // Its fingertip is near a surface (1) or pressing it (2)
     int touch;
 } PointerOffer;
 
-// The source that points, -1 for none. The one already holding a press keeps it; then
-// a fingertip pressing, a press on something, a fingertip about to touch, and otherwise
-// the first in order with its ray on something, the margin last.
+// The source that points, -1 for none. A press beginning on something takes it; the one
+// already holding a press keeps it; then a fingertip pressing, a press on something, a
+// fingertip about to touch, and otherwise the first in order with its ray on something,
+// the margin last.
 int pickPointer(const PointerOffer* offers, const int* order, int count, int prev);
 
 // Hand tracking this good counts as a deliberate hand

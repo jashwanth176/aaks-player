@@ -26,6 +26,12 @@ int controllerInUse(int kind, int tracked, int awake) {
 }
 
 int pickPointer(const PointerOffer* offers, const int* order, int count, int prev) {
+    for (int i = 0; i < count; i++) {
+        const PointerOffer* o = &offers[order[i]];
+        if (o->fresh && o->pressing && o->on && o->touch == 0) {
+            return order[i];
+        }
+    }
     if (prev >= 0 && prev < count && offers[prev].pressing && offers[prev].on) {
         return prev;
     }

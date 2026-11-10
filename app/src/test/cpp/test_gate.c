@@ -156,12 +156,31 @@ static void testWhoPoints(void) {
     // The left pinches on what it points at: the left acts, though the right rests there
     o[0].pressing = 1;
     CHECK(pickPointer(o, order, 3, 1) == 0);
-    // It keeps its press when the right pinches as well
+    // A new pinch by the right on what it points at takes over at once
     o[1].pressing = 1;
-    CHECK(pickPointer(o, order, 3, 0) == 0);
-    // Let go, the right's press is the one left
-    o[0].pressing = 0;
+    o[1].fresh = 1;
     CHECK(pickPointer(o, order, 3, 0) == 1);
+    // Held on, the right keeps it though the left is still pinched
+    o[1].fresh = 0;
+    CHECK(pickPointer(o, order, 3, 1) == 1);
+    // Let go, the left's press is the one left
+    o[1].pressing = 0;
+    CHECK(pickPointer(o, order, 3, 1) == 0);
+    // A left hand resting curled reads as a pinch it never aimed (pressing 0): a fresh
+    // right pinch on the picture is the right's, and so is the pointer meanwhile
+    memset(o, 0, sizeof(o));
+    o[0].on = 1;
+    o[1].on = 1;
+    CHECK(pickPointer(o, order, 3, 0) == 1);
+    o[1].pressing = 1;
+    o[1].fresh = 1;
+    CHECK(pickPointer(o, order, 3, 1) == 1);
+    // A fresh pinch aimed at nothing takes nothing
+    memset(o, 0, sizeof(o));
+    o[0].on = 1;
+    o[0].pressing = 1;
+    o[1].fresh = 1;
+    CHECK(pickPointer(o, order, 3, 0) == 0);
 
     // A left fingertip about to touch beats the right ray resting on the picture
     memset(o, 0, sizeof(o));
