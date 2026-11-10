@@ -2,9 +2,7 @@
 // settings sheet), anchored to the screen. Uploaded on the frame loop, faded
 // and hit tested here, drawn by addUiPanelLayers in xr_layers.c.
 #include "xr_renderer.h"
-
-// Full fade duration
-#define UI_FADE_NS 150000000LL
+#include "xr_notice.h"
 // The spinner shows once a film's first frame is this late, and turns once a second
 #define UI_LOADING_DELAY_NS 400000000LL
 #define UI_LOADING_TURN_NS 1000000000LL
@@ -42,6 +40,18 @@ XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
         xOff = ctx->ui[id].xOff * screenW;
     }
     float h = ctx->ui[id].texW > 0 ? w * (float)ctx->ui[id].texH / (float)ctx->ui[id].texW : 0.0f;
+    // Coming in or going: a little smaller and lower than at rest. Not subtitles, the
+    // spinner or the back button, and not the library window, which the handles frame.
+    int moves = id != UI_PANEL_SUBS && id != UI_PANEL_LOADING && id != UI_PANEL_BACK
+            && !(id == UI_PANEL_SHEET && ctx->playerScreenHidden && ctx->ui[id].depthK <= 0.0f)
+            && ctx->ui[id].level < 1.0f;
+    float drop = 0.0f;
+    if (moves) {
+        float grow = panelGrow(ctx->ui[id].level);
+        drop = panelDrop(ctx->ui[id].level) * h;
+        w *= grow;
+        h *= grow;
+    }
     *outWidth = w;
     *outHeight = h;
 
@@ -66,6 +76,7 @@ XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight) {
             break;
     }
     local.x += xOff;
+    local.y -= drop;
     Vec3 offset = quatRotate(ctx->screenPose.orientation, local);
     XrPosef pose;
     pose.orientation = ctx->screenPose.orientation;
@@ -118,12 +129,10 @@ int uiPanelAt(XrCtx* ctx, XrPosef aim, float* outU, float* outV) {
 }
 
 void stepUiPanels(XrCtx* ctx, int64_t nowNs) {
-    float step = ctx->uiStepNs > 0 ? (float)(nowNs - ctx->uiStepNs) / (float)UI_FADE_NS : 1.0f;
+    // The first step lands panels where they are wanted at once
+    int64_t stepNs = ctx->uiStepNs > 0 ? nowNs - ctx->uiStepNs : PANEL_IN_NS;
     float dt = ctx->uiStepNs > 0 ? (float)(nowNs - ctx->uiStepNs) / 1e9f : 0.0f;
     ctx->uiStepNs = nowNs;
-    if (step < 0.0f) {
-        step = 0.0f;
-    }
     // Auto subtitle depth: just in front of the picture's nearest point along the bottom,
     // from the depth map of a converted film or the matched strip of a 3D file (whose eyes
     // the crop has moved outward); on the screen for a flat one
@@ -147,13 +156,7 @@ void stepUiPanels(XrCtx* ctx, int64_t nowNs) {
             && (ctx->hoverKind == HOVER_BAR || ctx->backHover);
     ctx->ui[UI_PANEL_BACK].level = ctx->ui[UI_PANEL_BACK].visible ? 1.0f : 0.0f;
     for (int id = 0; id < UI_PANEL_COUNT; id++) {
-        float target = ctx->ui[id].visible ? 1.0f : 0.0f;
-        float level = ctx->ui[id].level;
-        level += level < target ? step : -step;
-        if ((target - ctx->ui[id].level) * (target - level) <= 0.0f) {
-            level = target;
-        }
-        ctx->ui[id].level = level;
+        ctx->ui[id].level = panelStep(ctx->ui[id].level, ctx->ui[id].visible, stepNs);
     }
 }
 

@@ -44,3 +44,29 @@ int splashWedges(const Splash* splash, int64_t now) {
     int open = (int)(((now - splash->firstNs) % round) / SPLASH_TICK_NS);
     return open > SPLASH_WEDGES ? SPLASH_WEDGES : open;
 }
+
+float panelStep(float level, int shown, int64_t dtNs) {
+    if (dtNs < 0) {
+        dtNs = 0;
+    }
+    if (shown) {
+        level += (float)dtNs / (float)PANEL_IN_NS;
+        return level > 1.0f ? 1.0f : level;
+    }
+    level -= (float)dtNs / (float)PANEL_OUT_NS;
+    return level < 0.0f ? 0.0f : level;
+}
+
+float panelEase(float level) {
+    float t = level < 0.0f ? 0.0f : (level > 1.0f ? 1.0f : level);
+    float u = 1.0f - t;
+    return 1.0f - u * u * u;
+}
+
+float panelGrow(float level) {
+    return PANEL_GROW_FROM + (1.0f - PANEL_GROW_FROM) * panelEase(level);
+}
+
+float panelDrop(float level) {
+    return PANEL_RISE * (1.0f - panelEase(level));
+}

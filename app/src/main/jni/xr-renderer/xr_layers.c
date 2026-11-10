@@ -431,10 +431,10 @@ static void addUiPanelLayers(XrCtx* ctx, const FrameView* view, FrameLayers* lay
     };
     for (int i = 0; i < UI_PANEL_COUNT; i++) {
         int id = order[i];
-        float level = ctx->ui[id].level;
-        if (level <= 0.0f || !ctx->ui[id].ready || ctx->ui[id].texW <= 0) {
+        if (ctx->ui[id].level <= 0.0f || !ctx->ui[id].ready || ctx->ui[id].texW <= 0) {
             continue;
         }
+        float level = panelEase(ctx->ui[id].level);
         float w, h;
         XrPosef pose = uiPanelPose(ctx, id, &w, &h);
         int slot = frostSlot(id);

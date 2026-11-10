@@ -17,6 +17,26 @@
 #define SPLASH_TICK_NS 250000000LL
 #define SPLASH_HOLD_NS 500000000LL
 
+// Player panels come in over PANEL_IN_NS, eased out, growing from PANEL_GROW_FROM of
+// their size and rising PANEL_RISE of their height; they leave over PANEL_OUT_NS, quicker,
+// the same way back
+#define PANEL_IN_NS 240000000LL
+#define PANEL_OUT_NS 150000000LL
+#define PANEL_GROW_FROM 0.94f
+#define PANEL_RISE 0.04f
+
+// One frame's step of a panel's level (0 gone, 1 shown) toward shown or gone
+float panelStep(float level, int shown, int64_t dtNs);
+
+// The level eased (cubic out): opacity, and how far grown and risen
+float panelEase(float level);
+
+// Size factor for a level, PANEL_GROW_FROM to 1
+float panelGrow(float level);
+
+// Drop below the resting place for a level, as a share of the panel's height
+float panelDrop(float level);
+
 // Splash wait bits
 #define SPLASH_WAIT_PANELS 1
 #define SPLASH_WAIT_DEPTH 2

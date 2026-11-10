@@ -116,7 +116,37 @@ static void testSplashWedgesTick(void) {
     CHECK(splashWedges(&splash, start + 2110 * MS + SPLASH_FADE_NS / 2) == SPLASH_WEDGES);
 }
 
+static void testPanelsComeAndGo(void) {
+    // In over 240 ms, out over 150 ms, from either end and from part way
+    float level = 0.0f;
+    level = panelStep(level, 1, 120 * MS);
+    CHECK(level > 0.49f && level < 0.51f);
+    level = panelStep(level, 1, 200 * MS);
+    CHECK(level == 1.0f);
+    level = panelStep(level, 0, 75 * MS);
+    CHECK(level > 0.49f && level < 0.51f);
+    level = panelStep(level, 0, 100 * MS);
+    CHECK(level == 0.0f);
+    CHECK(panelStep(0.3f, 1, -5 * MS) == 0.3f);
+
+    // Eased out: fast at first, settling at the end, never past either end
+    CHECK(panelEase(0.0f) == 0.0f && panelEase(1.0f) == 1.0f);
+    CHECK(panelEase(0.5f) > 0.85f);
+    CHECK(panelEase(-1.0f) == 0.0f && panelEase(2.0f) == 1.0f);
+    float last = 0.0f;
+    for (int i = 1; i <= 100; i++) {
+        float e = panelEase(i / 100.0f);
+        CHECK(e >= last);
+        last = e;
+    }
+    // Grown and risen to rest when shown, smaller and lower on the way in
+    CHECK(panelGrow(1.0f) == 1.0f && panelDrop(1.0f) == 0.0f);
+    CHECK(panelGrow(0.0f) == PANEL_GROW_FROM);
+    CHECK(panelDrop(0.0f) == PANEL_RISE);
+}
+
 int main(void) {
+    testPanelsComeAndGo();
     testSplashHoldsItsFloor();
     testSplashWaitsThenGivesUp();
     testSplashCutsWithoutAFade();
