@@ -97,8 +97,112 @@ static void testFade(void) {
     CHECK_NEAR(level, 0.0f, 1e-6f);
 }
 
+static void testReach(void) {
+    // Two joints 4 cm apart; one vertex on each, one shared a centimetre past the second
+    XrPosef bind[2] = { pose(0, 0, 0, 1, 0.0f, 0.0f, 0.0f), pose(0, 0, 0, 1, 0.04f, 0.0f, 0.0f) };
+    float vertices[3 * HAND_VERTEX_FLOATS] = { 0 };
+    float* v = vertices;
+    v[1] = 0.01f;
+    v[6] = 0.0f;
+    v[10] = 1.0f;
+    v += HAND_VERTEX_FLOATS;
+    v[0] = 0.04f;
+    v[2] = -0.02f;
+    v[6] = 1.0f;
+    v[10] = 1.0f;
+    v += HAND_VERTEX_FLOATS;
+    v[0] = 0.05f;
+    v[6] = 0.0f;
+    v[7] = 1.0f;
+    v[10] = 0.25f;
+    v[11] = 0.75f;
+    float reach[2];
+    handJointReach(reach, 2, vertices, 3, bind);
+    // Every joint that moves a vertex reaches it; unused slots (weight 0) count for nothing
+    CHECK_NEAR(reach[0], 0.05f, 1e-6f);
+    CHECK_NEAR(reach[1], 0.02f, 1e-6f);
+}
+
+static void testViewBox(void) {
+    const XrPosef eye = pose(0, 0, 0, 1, 0.0f, 1.6f, 0.0f);
+    // 1680 px over tangents -1.4..0.84, 1760 px over -1..1
+    XrFovf fov = { atanf(-1.4f), atanf(0.84f), atanf(1.0f), atanf(-1.0f) };
+    ViewBox box;
+
+    // Nothing added, or only things behind the eye: nothing in view
+    viewBoxClear(&box);
+    CHECK(!viewBoxFit(&box, fov, 1680, 1760, 1024));
+    viewBoxAdd(&box, eye, (XrVector3f){ 0.0f, 1.6f, 0.5f }, 0.05f);
+    CHECK(!viewBoxFit(&box, fov, 1680, 1760, 1024));
+
+    // A 5 cm ball half a metre ahead, a little down and right: held with room to spare
+    viewBoxClear(&box);
+    viewBoxAdd(&box, eye, (XrVector3f){ 0.1f, 1.5f, -0.5f }, 0.05f);
+    CHECK(box.left <= (0.1f - 0.05f) / 0.5f && box.right >= (0.1f + 0.05f) / 0.5f);
+    CHECK(box.down <= (-0.1f - 0.05f) / 0.5f && box.up >= (-0.1f + 0.05f) / 0.5f);
+    ViewBox raw = box;
+    CHECK(viewBoxFit(&box, fov, 1680, 1760, 1024));
+    CHECK(box.left <= raw.left && box.right >= raw.right);
+    CHECK(box.down <= raw.down && box.up >= raw.up);
+    // At the eye's own density, 750 and 880 px per unit of tangent, on a 32 px grid
+    CHECK(box.width % VIEW_BOX_SNAP_PX == 0 && box.height % VIEW_BOX_SNAP_PX == 0);
+    CHECK_NEAR(box.width, (box.right - box.left) * 750.0f, 0.5f);
+    CHECK_NEAR(box.height, (box.up - box.down) * 880.0f, 0.5f);
+    CHECK(box.width < 320 && box.height < 320);
+    CHECK_NEAR(box.left * 750.0f / VIEW_BOX_SNAP_PX, roundf(box.left * 750.0f / VIEW_BOX_SNAP_PX), 1e-3f);
+
+    // A small move inside the grid step leaves the image where it was
+    ViewBox moved;
+    viewBoxClear(&moved);
+    viewBoxAdd(&moved, eye, (XrVector3f){ 0.101f, 1.5f, -0.5f }, 0.05f);
+    CHECK(viewBoxFit(&moved, fov, 1680, 1760, 1024));
+    CHECK_NEAR(moved.left, box.left, 1e-6f);
+    CHECK(moved.width == box.width);
+
+    // The quad for it stands at the ball's distance and covers the same tangents
+    float w, h;
+    XrPosef quad = viewBoxQuad(&box, eye, &w, &h);
+    CHECK_NEAR(quad.position.z, -0.5f, 1e-5f);
+    CHECK_NEAR((quad.position.x - 0.5f * w) / 0.5f, box.left, 1e-5f);
+    CHECK_NEAR((quad.position.x + 0.5f * w) / 0.5f, box.right, 1e-5f);
+    CHECK_NEAR((quad.position.y - 1.6f + 0.5f * h) / 0.5f, box.up, 1e-5f);
+    XrFovf drawn = viewBoxFov(&box);
+    CHECK_NEAR(tanf(drawn.angleLeft), box.left, 1e-5f);
+    CHECK_NEAR(tanf(drawn.angleUp), box.up, 1e-5f);
+
+    // Off to the side past the view's edge: nothing to draw
+    viewBoxClear(&box);
+    viewBoxAdd(&box, eye, (XrVector3f){ 1.0f, 1.6f, -0.5f }, 0.05f);
+    CHECK(!viewBoxFit(&box, fov, 1680, 1760, 1024));
+
+    // Hands wide apart: the image stops at the cap, the box still holds both
+    viewBoxClear(&box);
+    viewBoxAdd(&box, eye, (XrVector3f){ -0.35f, 1.4f, -0.4f }, 0.1f);
+    viewBoxAdd(&box, eye, (XrVector3f){ 0.3f, 1.4f, -0.4f }, 0.1f);
+    CHECK(viewBoxFit(&box, fov, 1680, 1760, 1024));
+    CHECK(box.width == 1024);
+    CHECK(box.left <= -0.45f / 0.3f || box.left <= -1.4f);
+    CHECK(box.right >= 0.84f);
+
+    // At the face the tangents run away and the box is the whole view
+    viewBoxClear(&box);
+    viewBoxAdd(&box, eye, (XrVector3f){ 0.0f, 1.6f, -0.04f }, 0.08f);
+    CHECK(viewBoxFit(&box, fov, 1680, 1760, 1024));
+    CHECK(box.left <= -1.4f && box.right >= 0.84f && box.down <= -1.0f && box.up >= 1.0f);
+    CHECK(box.width == 1024 && box.height == 1024);
+
+    // Seen by a turned eye: a quarter turn left puts a ball on the left in front
+    float s = sqrtf(0.5f);
+    viewBoxClear(&box);
+    viewBoxAdd(&box, pose(0, s, 0, s, 0.0f, 1.6f, 0.0f), (XrVector3f){ -0.5f, 1.6f, 0.0f }, 0.05f);
+    CHECK_NEAR(0.5f * (box.left + box.right), 0.0f, 0.02f);
+    CHECK_NEAR(box.depthSum, 0.5f, 1e-5f);
+}
+
 int main(void) {
     testSkin();
     testFade();
+    testReach();
+    testViewBox();
     return checksDone("handmesh");
 }

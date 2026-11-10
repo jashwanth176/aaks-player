@@ -20,8 +20,13 @@ int relightWanted(XrCtx* ctx) {
 }
 
 int relightLayerReady(XrCtx* ctx) {
-    return relightWanted(ctx) && ctx->fbPassthroughState == 1;
+    return relightWanted(ctx) && ctx->fbPassthroughState == 1 && !ctx->fbPassthroughPaused;
 }
+
+// With the room dark this long the cameras are paused; back on, the layer stays
+// black this long while they start
+#define RELIGHT_PAUSE_NS 1500000000LL
+#define RELIGHT_WARM_NS 350000000LL
 
 // Double-buffered PBO readback: queue this frame's average, read last frame's
 void relightSample(XrCtx* ctx) {
@@ -77,6 +82,17 @@ static int loadPassthroughProcs(XrCtx* ctx) {
                                               (PFN_xrVoidFunction*)&ctx->pfnPassthroughLayerSetStyle));
 }
 
+// Pausing is optional: without both, the cameras just stay on
+static void loadPauseProcs(XrCtx* ctx) {
+    if (XR_FAILED(xrGetInstanceProcAddr(ctx->instance, "xrPassthroughStartFB",
+                                        (PFN_xrVoidFunction*)&ctx->pfnPassthroughStart))
+            || XR_FAILED(xrGetInstanceProcAddr(ctx->instance, "xrPassthroughPauseFB",
+                                               (PFN_xrVoidFunction*)&ctx->pfnPassthroughPause))) {
+        ctx->pfnPassthroughStart = NULL;
+        ctx->pfnPassthroughPause = NULL;
+    }
+}
+
 static void setOpacity(XrCtx* ctx, float opacity) {
     XrPassthroughStyleFB style = { XR_TYPE_PASSTHROUGH_STYLE_FB };
     style.textureOpacityFactor = opacity;
@@ -120,12 +136,64 @@ static void ensurePassthrough(XrCtx* ctx) {
         ctx->fbPassthroughLayer = XR_NULL_HANDLE;
         return;
     }
+    loadPauseProcs(ctx);
     for (int i = 0; i < 3; i++) {
         ctx->relightScale[i] = 1.0f;
     }
     setOpacity(ctx, 1.0f);
     ctx->fbPassthroughState = 1;
+    ctx->fbPassthroughPaused = 0;
     LOGI("room light: passthrough layer running");
+}
+
+// The room is not shown. The headset keeps the cameras going for a layer nobody
+// sees, so once it has been dark a while they are paused.
+static void relightRest(XrCtx* ctx, int64_t nowNs) {
+    ctx->relightPrime = 2;
+    if (ctx->relightLive) {
+        ctx->relightLive = 0;
+        ctx->relightIdleNs = nowNs;
+    }
+    if (ctx->fbPassthroughState != 1 || ctx->fbPassthroughPaused
+            || ctx->pfnPassthroughPause == NULL || nowNs - ctx->relightIdleNs < RELIGHT_PAUSE_NS) {
+        return;
+    }
+    if (XR_SUCCEEDED(ctx->pfnPassthroughPause(ctx->fbPassthrough))) {
+        ctx->fbPassthroughPaused = 1;
+        LOGI("room light: cameras paused, the room is dark");
+    }
+    else {
+        LOGW("room light: the cameras would not pause, left running");
+        ctx->pfnPassthroughPause = NULL;
+    }
+}
+
+// The room is wanted again. 0 if the cameras would not come back.
+static int relightWake(XrCtx* ctx, int64_t nowNs, int created) {
+    if (ctx->fbPassthroughPaused) {
+        if (XR_FAILED(ctx->pfnPassthroughStart(ctx->fbPassthrough))) {
+            LOGW("room light: the cameras would not start again, plain passthrough");
+            ctx->fbPassthroughState = -1;
+            return 0;
+        }
+        ctx->fbPassthroughPaused = 0;
+        created = 1;
+        LOGI("room light: cameras running again");
+    }
+    if (created) {
+        ctx->relightWarmNs = nowNs + RELIGHT_WARM_NS;
+    }
+    if (!ctx->relightLive) {
+        ctx->relightLive = 1;
+        // In the dark the room comes up from black, not from wherever it was left
+        if (!ctx->passthrough) {
+            for (int i = 0; i < 3; i++) {
+                ctx->relightScale[i] = 0.0f;
+            }
+            setOpacity(ctx, 0.0f);
+        }
+    }
+    return 1;
 }
 
 // Once per display frame: eases the ambient light and letterbox crop, and
@@ -152,10 +220,12 @@ void relightStep(XrCtx* ctx, int64_t nowNs) {
     contentRect(ctx, 0, ctx->ambiCrop);
 
     if (!relightWanted(ctx)) {
+        relightRest(ctx, nowNs);
         return;
     }
+    int created = ctx->fbPassthroughState == 0;
     ensurePassthrough(ctx);
-    if (ctx->fbPassthroughState != 1) {
+    if (ctx->fbPassthroughState != 1 || !relightWake(ctx, nowNs, created)) {
         return;
     }
 
@@ -165,11 +235,29 @@ void relightStep(XrCtx* ctx, int64_t nowNs) {
         float dark = relightHouseDark(ctx->houseLevel);
         target[0] = target[1] = target[2] = dark;
         keep = RELIGHT_KEEP;
+        // The picture's colour is not read in the dark, so it is stale by the time
+        // passthrough is back
+        ctx->relightPrime = 2;
     }
-    else if (ctx->relightAvgValid && ctx->everRendered && !ctx->playerScreenHidden) {
-        relightScaleFor(ctx->relightAvg, ctx->relightBrightness, target);
-        relightHouseMix(target, ctx->houseLevel);
-        keep = RELIGHT_KEEP;
+    else {
+        // Passthrough is back, perhaps over a paused picture that sends no frames:
+        // its colour is read here, twice since the readback runs a sample late
+        if (ctx->relightPrime > 0 && ctx->everRendered && !ctx->videoStale) {
+            relightSample(ctx);
+            ctx->relightPrime--;
+        }
+        if (ctx->relightAvgValid && ctx->everRendered && !ctx->playerScreenHidden) {
+            relightScaleFor(ctx->relightAvg, ctx->relightBrightness, target);
+            relightHouseMix(target, ctx->houseLevel);
+            keep = RELIGHT_KEEP;
+        }
+    }
+    if (!ctx->passthrough && nowNs < ctx->relightWarmNs) {
+        // Nothing to see until the cameras have a picture; then up from black
+        for (int i = 0; i < 3; i++) {
+            ctx->relightScale[i] = 0.0f;
+            target[i] = 0.0f;
+        }
     }
     relightFollow(ctx->relightScale, target, keep);
 
@@ -191,6 +279,8 @@ void relightDestroy(XrCtx* ctx) {
     ctx->fbPassthroughLayer = XR_NULL_HANDLE;
     ctx->fbPassthrough = XR_NULL_HANDLE;
     ctx->fbPassthroughState = 0;
+    ctx->fbPassthroughPaused = 0;
+    ctx->relightLive = 0;
     if (ctx->relightFbo != 0) {
         glDeleteFramebuffers(1, &ctx->relightFbo);
         glDeleteBuffers(2, ctx->relightPbo);

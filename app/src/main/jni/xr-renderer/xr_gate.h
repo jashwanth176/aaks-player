@@ -36,6 +36,31 @@ int aimFullyTracked(unsigned flags);
 // A controller profile, aim fully tracked, and awake on its own rest clock
 int controllerInUse(int kind, int tracked, int awake);
 
+// What a source offers the pointer this frame
+typedef struct {
+    // Its ray is on the picture, a handle or a panel
+    int on;
+    // Its ray is only in the margin around the picture
+    int halo;
+    // Its trigger or pinch is down
+    int pressing;
+    // Its fingertip is near a surface (1) or pressing it (2)
+    int touch;
+} PointerOffer;
+
+// The source that points, -1 for none. The one already holding a press keeps it; then
+// a fingertip pressing, a press on something, a fingertip about to touch, and otherwise
+// the first in order with its ray on something, the margin last.
+int pickPointer(const PointerOffer* offers, const int* order, int count, int prev);
+
+// Hand tracking this good counts as a deliberate hand
+#define PINCH_WAKE_TRUST 0.7f
+
+// Whether a hand's pinch wakes its sleeping pointer: a new pinch from a well tracked
+// hand aimed at the picture, a handle or a panel. Hands resting in the lap pinch too,
+// but aim at the floor.
+int pinchWakes(int fresh, int aimed, float trust);
+
 // Per-controller wake/sleep state (the shared pointer clock cannot retire one)
 typedef struct {
     float movingFor;

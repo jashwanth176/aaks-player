@@ -140,9 +140,82 @@ static void testGazeBridge(void) {
     CHECK(!b.bridged && b.missingSince == 0);
 }
 
+static void testWhoPoints(void) {
+    // Sources: left hand 0, right hand 1, gaze 2; right first, as the renderer asks
+    static const int order[3] = { 1, 0, 2 };
+    PointerOffer o[3];
+
+    // Nothing anywhere
+    memset(o, 0, sizeof(o));
+    CHECK(pickPointer(o, order, 3, -1) == -1);
+
+    // Both rays resting on something: the right hand's
+    o[0].on = 1;
+    o[1].on = 1;
+    CHECK(pickPointer(o, order, 3, -1) == 1);
+    // The left pinches on what it points at: the left acts, though the right rests there
+    o[0].pressing = 1;
+    CHECK(pickPointer(o, order, 3, 1) == 0);
+    // It keeps its press when the right pinches as well
+    o[1].pressing = 1;
+    CHECK(pickPointer(o, order, 3, 0) == 0);
+    // Let go, the right's press is the one left
+    o[0].pressing = 0;
+    CHECK(pickPointer(o, order, 3, 0) == 1);
+
+    // A left fingertip about to touch beats the right ray resting on the picture
+    memset(o, 0, sizeof(o));
+    o[1].on = 1;
+    o[0].on = 1;
+    o[0].touch = 1;
+    CHECK(pickPointer(o, order, 3, 1) == 0);
+    // and its touch is the press, even while the right hand pinches at the picture
+    o[0].touch = 2;
+    o[0].pressing = 1;
+    CHECK(pickPointer(o, order, 3, 0) == 0);
+    o[1].pressing = 1;
+    CHECK(pickPointer(o, order, 3, 0) == 0);
+    // A right-hand drag already under way is not taken by a left fingertip coming near
+    memset(o, 0, sizeof(o));
+    o[1].on = 1;
+    o[1].pressing = 1;
+    o[0].on = 1;
+    o[0].touch = 1;
+    CHECK(pickPointer(o, order, 3, 1) == 1);
+
+    // A pinch in the air, its ray on nothing, takes nothing from a resting ray
+    memset(o, 0, sizeof(o));
+    o[1].pressing = 1;
+    o[0].on = 1;
+    CHECK(pickPointer(o, order, 3, 1) == 0);
+    // The margin around the picture comes last
+    memset(o, 0, sizeof(o));
+    o[1].halo = 1;
+    CHECK(pickPointer(o, order, 3, -1) == 1);
+    o[0].on = 1;
+    CHECK(pickPointer(o, order, 3, -1) == 0);
+    // Gaze, with the hands only pinching
+    memset(o, 0, sizeof(o));
+    o[2].on = 1;
+    o[2].pressing = 1;
+    CHECK(pickPointer(o, order, 3, -1) == 2);
+}
+
+static void testPinchWakes(void) {
+    // A new pinch from a well seen hand aimed at the picture wakes the pointer
+    CHECK(pinchWakes(1, 1, 0.9f));
+    // A pinch already held when the ray wanders onto the picture does not
+    CHECK(!pinchWakes(0, 1, 0.9f));
+    // nor one aimed at the floor, as hands in the lap are, nor a half seen hand's
+    CHECK(!pinchWakes(1, 0, 0.9f));
+    CHECK(!pinchWakes(1, 1, 0.5f));
+}
+
 int main(void) {
     testWhoCounts();
     testControllerClock();
     testGazeBridge();
+    testWhoPoints();
+    testPinchWakes();
     return checksDone("xr_gate");
 }

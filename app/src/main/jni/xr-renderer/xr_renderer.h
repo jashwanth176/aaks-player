@@ -189,10 +189,16 @@ static inline int64_t nowNs(void) {
 // Ambilight: the frame is reduced to a tiny colour texture that fills
 // a glow quad behind the screen (sizes and colour maths in xr_glow.h).
 
-// Controller model pass: one side-by-side image, half per eye, at the runtime's
-// recommended eye size capped here, with these clip planes
+// Controller model and hand outline pass: one side-by-side image, a cell per eye.
+// Only the part of the view that holds them is drawn, at the eye's own pixel density
+// up to this side, with a cleared margin round it for the compositor's filter; and
+// these clip planes
 #define MODEL_EYES 2
-#define MODEL_MAX_EYE 1760
+#define MODEL_MAX_SIDE 1024
+#define MODEL_PAD 4
+#define MODEL_CELL (MODEL_MAX_SIDE + 2 * MODEL_PAD)
+// A controller's reach from its grip, for the part of the view it takes
+#define MODEL_REACH_M 0.16f
 #define MODEL_NEAR_M 0.05f
 #define MODEL_FAR_M 60.0f
 
@@ -709,6 +715,14 @@ typedef struct {
     PFN_xrCreatePassthroughLayerFB pfnCreatePassthroughLayer;
     PFN_xrDestroyPassthroughLayerFB pfnDestroyPassthroughLayer;
     PFN_xrPassthroughLayerSetStyleFB pfnPassthroughLayerSetStyle;
+    PFN_xrPassthroughStartFB pfnPassthroughStart;
+    PFN_xrPassthroughPauseFB pfnPassthroughPause;
+    // The cameras are paused once the room has been dark a while. Live: the layer
+    // was wanted last frame; idle since; and held dark until the cameras are back.
+    int fbPassthroughPaused;
+    int relightLive;
+    int64_t relightIdleNs;
+    int64_t relightWarmNs;
     // 0..1, from the player.
     float relightBrightness;
     // House lights: 0 film lighting, 1 lights up. Target from the player, eased.
@@ -730,6 +744,8 @@ typedef struct {
     float relightScale[3];
     float relightOpacitySet;
     int64_t relightStepNs;
+    // Colour samples still to take once passthrough is back, the picture paused or not
+    int relightPrime;
     // Fraction of its width each eye of a stereo film shifts outward.
     float playerCrop;
     // No film: screen hidden, panels still drawn.
@@ -791,6 +807,16 @@ typedef struct {
     XrQuaternionf nearRayTurn[HAND_COUNT];
     Vec3 nearOffset[HAND_COUNT];
     int grabNear;
+    // The pinch point last seen while holding the bar, kept through a short loss
+    Vec3 nearLast[HAND_COUNT];
+    int64_t nearLastNs[HAND_COUNT];
+    // What each hand's pinch holds with (HOLD_), and a pinch made while touching, which
+    // is ignored until let go
+    int pinchHold[HAND_COUNT];
+    int pinchIgnored[HAND_COUNT];
+    // The source that pointed last frame, and whether its press began on a menu
+    int pointHand;
+    int uiPress[SRC_COUNT];
     int pinchPointValid[HAND_COUNT];
     // Ray built from the joints, for runtimes without a pointer pose.
     XrPosef handRay[HAND_COUNT];
@@ -951,11 +977,12 @@ typedef struct {
     XrSwapchainImageOpenGLESKHR* modelImages;
     GLuint modelFbo;
     GLuint modelDepthBuffer;
-    int modelEyeWidth;
-    int modelEyeHeight;
     int modelPassReady;
     int modelPassFailed;
     XrView modelViews[MODEL_EYES];
+    // The part of each eye's view last drawn, and whether that eye has any of it
+    ViewBox modelBox[MODEL_EYES];
+    int modelBoxOn[MODEL_EYES];
     int modelRendered;
     // Own timer query pair
     GLuint modelTimerQueries[2];
@@ -981,6 +1008,8 @@ typedef struct {
         int vertexCount;
         int indexCount;
         XrPosef bind[XR_HAND_JOINT_COUNT_EXT];
+        // How far the mesh reaches from each joint
+        float reach[XR_HAND_JOINT_COUNT_EXT];
         GLuint vbo;
         GLuint ibo;
     } handMesh[HAND_COUNT];
@@ -1109,6 +1138,10 @@ typedef struct {
     GLuint frostDrawFbo;
     int frostReady;
     int frostFilmValid;
+    // The blur is taken only while a backdrop shows: a film frame went by without
+    // one, and how many have been taken
+    int frostSkipped;
+    unsigned frostSamples;
     struct {
         XrSwapchain chain;
         XrSwapchainImageOpenGLESKHR* images;
@@ -1116,6 +1149,11 @@ typedef struct {
         GLuint mask;
         int w, h;
         int ready;
+        // What the backdrop was last drawn from; redrawn only when that changes
+        int drawn;
+        float drawnRect[4];
+        int drawnFilmOn;
+        unsigned drawnSample;
     } frost[FROST_PANELS];
     // -1 for none.
     int uiHover[SRC_COUNT];
@@ -1234,9 +1272,12 @@ void redrawGlow(XrCtx* ctx, const float* texMatrix);
 // xr_model.c: the bundled controller model
 void updateControllerModels(XrCtx* ctx);
 void renderControllerModels(XrCtx* ctx);
+// Sets an eye's viewport and view-projection for the pass; 0 when the eye has none
+int modelEyeBegin(XrCtx* ctx, int eye, float* viewProj);
 // Hand outlines (xr_hands.c)
 void loadHandMeshes(XrCtx* ctx);
 void updateHands(XrCtx* ctx);
+void handsViewBox(XrCtx* ctx, XrPosef eye, ViewBox* box);
 void drawHandOutlines(XrCtx* ctx);
 void destroyHands(XrCtx* ctx);
 
@@ -1259,6 +1300,7 @@ XrPosef uiPanelPose(XrCtx* ctx, int id, float* outWidth, float* outHeight);
 int initFrost(XrCtx* ctx);
 int frostSlot(int id);
 void runFrostSample(XrCtx* ctx, const float* texMatrix);
+int frostWanted(const XrCtx* ctx);
 void frostMaskFromPanel(XrCtx* ctx, int id, const unsigned char* px, int width, int height);
 int renderFrostBackdrop(XrCtx* ctx, int slot, XrPosef pose, float width, float height);
 void destroyFrost(XrCtx* ctx);

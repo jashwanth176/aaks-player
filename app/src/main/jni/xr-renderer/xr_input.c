@@ -1228,8 +1228,9 @@ typedef struct {
     // Pointing source (-1 if none) and its hover.
     int hand;
     int hover;
-    // A fingertip is touching or about to touch something.
+    // A fingertip is touching or about to touch something, and whose.
     int poking;
+    int touch[HAND_COUNT];
 } InputFrame;
 
 // Gaze points unless a controller is awake or the hands are bridging for lost eyes.
@@ -1322,12 +1323,23 @@ static void releaseInput(XrCtx* ctx) {
     ctx->beamVisible = 0;
     ctx->aimTracked[HAND_LEFT] = 0;
     ctx->aimTracked[HAND_RIGHT] = 0;
+    // No touch, hold or press outlives it either
+    Vec3 none = { 0.0f, 0.0f, 0.0f };
+    for (int h = 0; h < HAND_COUNT; h++) {
+        ctx->poke[h].state = POKE_IDLE;
+        ctx->poke[h].target = -1;
+        ctx->pokePush[h] = none;
+        ctx->pinchHold[h] = HOLD_NONE;
+        ctx->nearBar[h] = 0;
+    }
+    memset(ctx->uiPress, 0, sizeof(ctx->uiPress));
     // Not asked for, which must not count as gaze lost.
     gazeBridgeTrack(&ctx->gazeBridge, 0, 0, 0);
     if (ctx->grabMode != 0) {
         // End the grab, or the stale anchor makes the screen jump on refocus.
         ctx->grabMode = 0;
         ctx->grabByGaze = 0;
+        ctx->grabNear = 0;
         ctx->poseDirty = 1;
     }
 }
@@ -1424,48 +1436,97 @@ static int pokeSurface(XrCtx* ctx, const InputFrame* f, int id, int h, Vec3 tip,
 
 // Fingers at the white bar take hold of it there: the hand's ray becomes a short one
 // into the bar under the pinch, and while held it keeps its turn and its offset from the
-// pinch point, so the window follows the hand one to one. Returns whether it applies.
+// pinch point, so the window follows the hand one to one. Beside the bar the ray goes
+// into the Back button instead, which a pinch there presses. Returns whether it applies.
 static int nearBarHand(XrCtx* ctx, InputFrame* f, int h) {
     int holding = ctx->grabMode == GRAB_MOVE && ctx->grabHand == h && ctx->grabNear;
     ctx->nearBar[h] = 0;
-    if (!ctx->pinchPointValid[h] || (!holding && ctx->grabMode != GRAB_NONE)) {
-        return 0;
-    }
-    Vec3 pinch = ctx->pinchPoint[h];
     XrPosef ray;
     if (holding) {
-        ray.orientation = ctx->nearRayTurn[h];
-    }
-    else {
-        // The bar hangs centred under the frame, where the curve is flat
-        const BarFrame* frame = &f->bar;
-        Vec3 below = { 0.0f, -(frame->height * 0.5f + BAR_DROP_FRAC * frame->width), 0.0f };
-        Vec3 drop = quatRotate(frame->pose.orientation, below);
-        Vec3 at = { frame->pose.position.x + drop.x, frame->pose.position.y + drop.y,
-                    frame->pose.position.z + drop.z };
-        Vec3 local = quatRotate(quatConj(frame->pose.orientation), vecSub(pinch, at));
-        float halfW = 0.5f * BAR_WIDTH_FRAC * frame->width;
-        float halfH = 0.5f * BAR_HEIGHT_FRAC * frame->width;
-        if (fabsf(local.x) > halfW + NEAR_BAR_REACH_M || fabsf(local.y) > halfH + NEAR_BAR_REACH_M
-                || fabsf(local.z) > NEAR_BAR_REACH_M) {
-            return 0;
+        // A pinch point lost for a moment stays where it was; lost for longer, the
+        // grab ends where the window is, never on the far ray
+        if (ctx->pinchPointValid[h]) {
+            ctx->nearLast[h] = ctx->pinchPoint[h];
+            ctx->nearLastNs[h] = f->now;
         }
-        float x = fmaxf(-0.9f * halfW, fminf(0.9f * halfW, local.x));
-        Vec3 start = { x, 0.0f, POKE_RAY_BACK_M };
-        Vec3 offset = quatRotate(frame->pose.orientation, start);
-        ctx->nearRayTurn[h] = frame->pose.orientation;
-        ctx->nearOffset[h].x = at.x + offset.x - pinch.x;
-        ctx->nearOffset[h].y = at.y + offset.y - pinch.y;
-        ctx->nearOffset[h].z = at.z + offset.z - pinch.z;
-        ray.orientation = frame->pose.orientation;
+        else if (f->now - ctx->nearLastNs[h] >= POINTER_HOLD_NS) {
+            return 1;
+        }
+        ray.orientation = ctx->nearRayTurn[h];
+        ray.position.x = ctx->nearLast[h].x + ctx->nearOffset[h].x;
+        ray.position.y = ctx->nearLast[h].y + ctx->nearOffset[h].y;
+        ray.position.z = ctx->nearLast[h].z + ctx->nearOffset[h].z;
+        ctx->nearBar[h] = 1;
+        f->aimPoses[h] = ray;
+        f->aimValid[h] = 1;
+        hoverSource(ctx, f, h);
+        return 1;
     }
-    ray.position.x = pinch.x + ctx->nearOffset[h].x;
-    ray.position.y = pinch.y + ctx->nearOffset[h].y;
-    ray.position.z = pinch.z + ctx->nearOffset[h].z;
+    // A pinch holding something on the far ray keeps it
+    if (ctx->grabMode != GRAB_NONE || ctx->pinchHold[h] == HOLD_RAY) {
+        return 0;
+    }
+
+    // The bar hangs centred under the frame, where the curve is flat
+    const BarFrame* frame = &f->bar;
+    Vec3 below = { 0.0f, -(frame->height * 0.5f + BAR_DROP_FRAC * frame->width), 0.0f };
+    Vec3 drop = quatRotate(frame->pose.orientation, below);
+    Vec3 at = { frame->pose.position.x + drop.x, frame->pose.position.y + drop.y,
+                frame->pose.position.z + drop.z };
+    NearBarRow row;
+    row.halfW = 0.5f * BAR_WIDTH_FRAC * frame->width;
+    row.halfH = 0.5f * BAR_HEIGHT_FRAC * frame->width;
+    row.hasBack = ctx->backWanted && ctx->ui[UI_PANEL_BACK].ready;
+    row.backX = 0.0f;
+    row.backHalfW = 0.0f;
+    if (row.hasBack) {
+        float bw, bh;
+        XrPosef back = uiPanelPose(ctx, UI_PANEL_BACK, &bw, &bh);
+        Vec3 backAt = { back.position.x, back.position.y, back.position.z };
+        row.backX = quatRotate(quatConj(frame->pose.orientation), vecSub(backAt, at)).x;
+        row.backHalfW = 0.5f * bw;
+    }
+
+    // The pinch point, or with the fingers apart the fingertip, which only hovers
+    Vec3 probe = { 0.0f, 0.0f, 0.0f };
+    float aimX = 0.0f;
+    int zone = NEAR_AWAY;
+    if (ctx->pinchPointValid[h]) {
+        probe = ctx->pinchPoint[h];
+        zone = nearBarZone(quatRotate(quatConj(frame->pose.orientation), vecSub(probe, at)),
+                           &row, &aimX);
+    }
+    if (zone == NEAR_AWAY && ctx->indexTipValid[h] && !ctx->triggerDown[h]) {
+        Vec3 tip = { ctx->indexTip[h].x, ctx->indexTip[h].y, ctx->indexTip[h].z };
+        probe = tip;
+        zone = nearBarZone(quatRotate(quatConj(frame->pose.orientation), vecSub(probe, at)),
+                           &row, &aimX);
+    }
+    if (zone == NEAR_AWAY) {
+        return 0;
+    }
+    Vec3 start = { aimX, 0.0f, POKE_RAY_BACK_M };
+    Vec3 offset = quatRotate(frame->pose.orientation, start);
+    ctx->nearRayTurn[h] = frame->pose.orientation;
+    ctx->nearOffset[h].x = at.x + offset.x - probe.x;
+    ctx->nearOffset[h].y = at.y + offset.y - probe.y;
+    ctx->nearOffset[h].z = at.z + offset.z - probe.z;
+    ctx->nearLast[h] = probe;
+    ctx->nearLastNs[h] = f->now;
+    ray.orientation = frame->pose.orientation;
+    ray.position.x = at.x + offset.x;
+    ray.position.y = at.y + offset.y;
+    ray.position.z = at.z + offset.z;
     ctx->nearBar[h] = 1;
     f->aimPoses[h] = ray;
     f->aimValid[h] = 1;
+    // Hands at the bar are not hands at rest
+    ctx->pointerAwake = 1;
     hoverSource(ctx, f, h);
+    // The button's place is the button's: until it shows, a pinch there is not the bar's
+    if (zone == NEAR_BACK && f->hovers[h] != HOVER_UIPANEL) {
+        ctx->triggerEdge[h] = 0;
+    }
     return 1;
 }
 
@@ -1480,7 +1541,9 @@ static int pokeHand(XrCtx* ctx, InputFrame* f, int h, int wasDown) {
     best.target = -1;
     best.depth = 0.0f;
     best.over = 0;
-    if (ctx->indexTipValid[h] && ctx->grabMode == GRAB_NONE) {
+    // A pinch holding something keeps it: no touch starts under it
+    int free = p->state != POKE_IDLE || ctx->pinchHold[h] == HOLD_NONE;
+    if (ctx->indexTipValid[h] && ctx->grabMode == GRAB_NONE && free) {
         Vec3 tip = { ctx->indexTip[h].x, ctx->indexTip[h].y, ctx->indexTip[h].z };
         int held = p->state == POKE_PRESSED ? p->target : -1;
         for (int id = 0; id <= POKE_SCREEN; id++) {
@@ -1663,9 +1726,35 @@ static void readSources(XrCtx* ctx, InputFrame* f) {
                     ctx->triggerDipping[h] = 0;
                 }
             }
-            if (ctx->profileKind[h] != PROFILE_CONTROLLER
-                    && (nearBarHand(ctx, f, h) || pokeHand(ctx, f, h, wasDown))) {
-                continue;
+            if (ctx->profileKind[h] != PROFILE_CONTROLLER) {
+                // Touch first, so the Back button beside the bar can be touched; then
+                // fingers at the bar; then the far ray
+                ctx->pinchHold[h] = pinchHoldStep(ctx->pinchHold[h], ctx->pinchDown[h], 0, 0);
+                f->touch[h] = pokeHand(ctx, f, h, wasDown) ? ctx->poke[h].state : TOUCH_NONE;
+                ctx->pinchIgnored[h] = pinchAfterTouch(ctx->pinchIgnored[h], ctx->pinchDown[h],
+                                                       f->touch[h] != TOUCH_NONE);
+                if (f->touch[h] != TOUCH_NONE) {
+                    ctx->nearBar[h] = 0;
+                    ctx->aimTracked[h] = 0;
+                    continue;
+                }
+                if (ctx->pinchIgnored[h]) {
+                    ctx->triggerDown[h] = 0;
+                    ctx->triggerEdge[h] = 0;
+                }
+                if (nearBarHand(ctx, f, h)) {
+                    ctx->aimTracked[h] = 0;
+                    continue;
+                }
+            }
+            else {
+                Vec3 none = { 0.0f, 0.0f, 0.0f };
+                ctx->poke[h].state = POKE_IDLE;
+                ctx->poke[h].target = -1;
+                ctx->pokePush[h] = none;
+                ctx->pinchHold[h] = HOLD_NONE;
+                ctx->pinchIgnored[h] = 0;
+                ctx->nearBar[h] = 0;
             }
         }
         else if (!gazeWatch) {
@@ -1861,8 +1950,10 @@ static void updateControllerClocks(XrCtx* ctx, InputFrame* f) {
 
 // Wakes the pointer on a pinch, open palm or deliberate move; sleeps it when idle.
 static void updatePointerWake(XrCtx* ctx, InputFrame* f) {
-    // A pinch while the pointer is asleep is swallowed. Only a gaze pinch
-    // wakes it; hands wake it with an open palm (below).
+    // A pinch while the pointer is asleep is swallowed. A gaze pinch wakes it, and so
+    // does a hand's new pinch aimed at the picture or its panels; hands at rest wake it
+    // only with an open palm (below).
+    int asleep = !ctx->pointerAwake;
     for (int h = 0; h < SRC_COUNT; h++) {
         if (!ctx->usingHands[h]) {
             ctx->pinchSwallowed[h] = 0;
@@ -1870,9 +1961,15 @@ static void updatePointerWake(XrCtx* ctx, InputFrame* f) {
         }
         if (ctx->triggerDown[h]) {
             f->pinching = 1;
-            if (!ctx->pointerAwake) {
+            if (asleep) {
+                int aimed = f->hovers[h] != HOVER_NONE && f->hovers[h] != HOVER_HALO;
                 if (h == SRC_GAZE) {
                     ctx->pointerAwake = 1;
+                }
+                else if (pinchWakes(!ctx->pinchSwallowed[h], aimed, ctx->handTrust[h])) {
+                    LOGI("hand %d pinched at the picture, the pointer is back", h);
+                    ctx->pointerAwake = 1;
+                    ctx->handIdleFor = 0.0f;
                 }
                 ctx->pinchSwallowed[h] = 1;
             }
@@ -1992,24 +2089,19 @@ static void pickPointingSource(XrCtx* ctx, InputFrame* f) {
         }
     }
 
-    f->hand = -1;
-    for (int i = 0; i < SRC_COUNT; i++) {
-        int h = order[i];
-        if (f->hovers[h] == HOVER_SCREEN && ctx->triggerDown[h]) {
-            f->hand = h;
-            break;
+    PointerOffer offers[SRC_COUNT];
+    for (int h = 0; h < SRC_COUNT; h++) {
+        offers[h].on = f->hovers[h] != HOVER_NONE && f->hovers[h] != HOVER_HALO;
+        offers[h].halo = f->hovers[h] == HOVER_HALO;
+        offers[h].pressing = ctx->triggerDown[h];
+        offers[h].touch = TOUCH_NONE;
+        if (h < HAND_COUNT) {
+            // Fingers at the bar count as about to touch it
+            offers[h].touch = f->touch[h] != TOUCH_NONE ? f->touch[h]
+                    : ctx->nearBar[h] ? TOUCH_NEAR : TOUCH_NONE;
         }
     }
-    // A hit on something beats a hit in the halo.
-    for (int pass = 0; pass < 2 && f->hand < 0; pass++) {
-        for (int i = 0; i < SRC_COUNT && f->hand < 0; i++) {
-            int h = order[i];
-            if (f->hovers[h] == HOVER_NONE || (pass == 0 && f->hovers[h] == HOVER_HALO)) {
-                continue;
-            }
-            f->hand = h;
-        }
-    }
+    f->hand = pickPointer(offers, order, SRC_COUNT, ctx->pointHand);
 
     if (!ctx->pointerAwake && ctx->grabMode == GRAB_NONE) {
         f->hand = -1;
@@ -2017,10 +2109,29 @@ static void pickPointingSource(XrCtx* ctx, InputFrame* f) {
             f->hovers[h] = HOVER_NONE;
         }
     }
+    ctx->pointHand = f->hand;
 
     f->hover = f->hand >= 0 ? f->hovers[f->hand] : HOVER_NONE;
     if (f->hover == HOVER_CORNER) {
         ctx->hoverCorner = f->corners[f->hand];
+    }
+
+    // A pinch pressing on something holds it until let go; a press that began on a
+    // menu is the menu's, and never a click on what is under it
+    for (int h = 0; h < SRC_COUNT; h++) {
+        int here = h == f->hand && ctx->grabMode == GRAB_NONE;
+        int touching = h < HAND_COUNT && f->touch[h] != TOUCH_NONE;
+        if (h < HAND_COUNT) {
+            ctx->pinchHold[h] = pinchHoldStep(ctx->pinchHold[h], ctx->pinchDown[h],
+                                              here && !touching && ctx->triggerDown[h]
+                                              && offers[h].on, ctx->nearBar[h]);
+        }
+        int was = ctx->uiPress[h];
+        ctx->uiPress[h] = uiPressStep(was, ctx->triggerDown[h], ctx->triggerEdge[h],
+                                      here && f->hover == HOVER_UIPANEL);
+        if (ctx->uiPress[h] && !was && !touching) {
+            ctx->triggerSwallowed[h] = 1;
+        }
     }
 }
 
@@ -2361,7 +2472,7 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
     logInputSnapshot(ctx, &f);
 
     if (f.hand >= 0 && f.hand < HAND_COUNT) {
-        out[IN_TOUCH] = (float)ctx->poke[f.hand].state;
+        out[IN_TOUCH] = (float)f.touch[f.hand];
     }
 
     // UI panel hit, which Java treats as a touch.
@@ -2370,7 +2481,10 @@ Java_com_limelight_binding_video_XrRenderer_nativeUpdateInput(JNIEnv* env, jobje
         out[IN_UI_PANEL] = (float)ctx->uiHover[f.hand];
         out[IN_UI_U] = f.hitU[f.hand];
         out[IN_UI_V] = f.hitV[f.hand];
-        out[IN_UI_PRESS] = ctx->triggerDown[f.hand] ? 1.0f : 0.0f;
+        // A fingertip presses what it touches; a ray press must have begun on a menu
+        int touching = f.hand < HAND_COUNT && f.touch[f.hand] != TOUCH_NONE;
+        int pressed = touching ? ctx->triggerDown[f.hand] : ctx->uiPress[f.hand];
+        out[IN_UI_PRESS] = pressed ? 1.0f : 0.0f;
     }
 
     // Off the picture a trigger press cannot be a click, so it may grab.

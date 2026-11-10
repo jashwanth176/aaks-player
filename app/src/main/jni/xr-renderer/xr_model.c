@@ -1,18 +1,52 @@
-// Controller model, rendered to its own transparent projection layer above
-// the picture and panels so a controller is never hidden behind the screen
+// Controller model and hand outlines, rendered to their own transparent layers above
+// the picture and panels so a controller or a hand is never hidden behind the screen.
+// Only the part of each eye's view that holds them is drawn and composited.
 #include "xr_renderer.h"
 #include "xr_shaders.h"
 
-// Eye size: the runtime's recommendation, capped
-static void modelEyeSize(XrCtx* ctx, int* outW, int* outH) {
+// The part of each eye's view the controllers and hands take this frame, sized at the
+// runtime's recommended pixel density. 0 when neither eye sees any of them.
+static int fitModelBoxes(XrCtx* ctx) {
     int eyeW = ctx->recommendedEyeWidth > 0 ? ctx->recommendedEyeWidth : 1024;
     int eyeH = ctx->recommendedEyeHeight > 0 ? ctx->recommendedEyeHeight : 1024;
-    *outW = eyeW > MODEL_MAX_EYE ? MODEL_MAX_EYE : eyeW;
-    *outH = eyeH > MODEL_MAX_EYE ? MODEL_MAX_EYE : eyeH;
+    int any = 0;
+    for (int eye = 0; eye < MODEL_EYES; eye++) {
+        ViewBox box;
+        viewBoxClear(&box);
+        for (int h = 0; h < HAND_COUNT; h++) {
+            if (ctx->modelShown[h]) {
+                viewBoxAdd(&box, ctx->modelViews[eye].pose, ctx->modelGrip[h].position,
+                           MODEL_REACH_M);
+            }
+        }
+        handsViewBox(ctx, ctx->modelViews[eye].pose, &box);
+        ctx->modelBoxOn[eye] = viewBoxFit(&box, ctx->modelViews[eye].fov, eyeW, eyeH,
+                                          MODEL_MAX_SIDE);
+        ctx->modelBox[eye] = box;
+        any |= ctx->modelBoxOn[eye];
+    }
+    return any;
 }
 
-// Lazily created on the first frame a model is shown, one side-by-side image for both
-// eyes. A failure is not retried.
+int modelEyeBegin(XrCtx* ctx, int eye, float* viewProj) {
+    if (!ctx->modelBoxOn[eye]) {
+        return 0;
+    }
+    const ViewBox* box = &ctx->modelBox[eye];
+    int x = eye * MODEL_CELL + MODEL_PAD;
+    glViewport(x, MODEL_PAD, box->width, box->height);
+    glScissor(x, MODEL_PAD, box->width, box->height);
+    float proj[16];
+    float view[16];
+    // Near plane close enough for a controller at the face
+    projectionFromFov(proj, viewBoxFov(box), MODEL_NEAR_M, MODEL_FAR_M);
+    viewFromPose(view, ctx->modelViews[eye].pose);
+    matMul(viewProj, proj, view);
+    return 1;
+}
+
+// Lazily created on the first frame a model or a hand is shown, one side-by-side image
+// for both eyes. A failure is not retried.
 static int initModelPass(XrCtx* ctx) {
     if (ctx->modelPassReady) {
         return 1;
@@ -49,32 +83,37 @@ static int initModelPass(XrCtx* ctx) {
     ctx->modelViewProjUniform = glGetUniformLocation(program, "u_viewproj");
     ctx->modelMatrixUniform = glGetUniformLocation(program, "u_model");
 
-    int eyeW;
-    int eyeH;
-    modelEyeSize(ctx, &eyeW, &eyeH);
-    if (!createArtSwapchain(ctx, eyeW * MODEL_EYES, eyeH, "create controller model swapchain",
+    if (!createArtSwapchain(ctx, MODEL_CELL * MODEL_EYES, MODEL_CELL,
+                            "create controller model swapchain",
                             &ctx->modelSwapchain, &ctx->modelImages, &ctx->modelImageCount)) {
         return 0;
     }
     LOGEV("swapchains alive %d with the controller models'", ctx->swapchainsAlive);
     glGenRenderbuffers(1, &ctx->modelDepthBuffer);
     glBindRenderbuffer(GL_RENDERBUFFER, ctx->modelDepthBuffer);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, eyeW * MODEL_EYES, eyeH);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, MODEL_CELL * MODEL_EYES,
+                          MODEL_CELL);
     glBindRenderbuffer(GL_RENDERBUFFER, 0);
     glGenFramebuffers(1, &ctx->modelFbo);
     glBindFramebuffer(GL_FRAMEBUFFER, ctx->modelFbo);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
                               ctx->modelDepthBuffer);
+    // Checked once here against the first image, not every frame
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                           ctx->modelImages[0].image, 0);
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        LOGE("controller model framebuffer incomplete: 0x%x", status);
+        return 0;
+    }
     if (ctx->timerSupported) {
         pfnGenQueries(2, ctx->modelTimerQueries);
     }
 
-    ctx->modelEyeWidth = eyeW;
-    ctx->modelEyeHeight = eyeH;
     ctx->modelPassReady = 1;
     ctx->modelPassFailed = 0;
-    LOGEV("controller model pass ready at %dx%d per eye", eyeW, eyeH);
+    LOGEV("controller model pass ready, up to %d px a side per eye", MODEL_MAX_SIDE);
     return 1;
 }
 
@@ -181,10 +220,6 @@ void updateControllerModels(XrCtx* ctx) {
         ctx->modelShown[h] = shown[h];
     }
     ctx->modelsShowing = shown[HAND_LEFT] || shown[HAND_RIGHT];
-    // Do not show a stale image when models reappear
-    if (!ctx->modelsShowing) {
-        ctx->modelRendered = 0;
-    }
     int said = shown[HAND_LEFT] | (shown[HAND_RIGHT] << 1);
     if (said != ctx->modelsSaid) {
         ctx->modelsSaid = said;
@@ -193,20 +228,31 @@ void updateControllerModels(XrCtx* ctx) {
     }
 }
 
-// Renders every frame a model is shown, after the warp. Own depth buffer so
+// Renders every frame a model or a hand is shown, after the warp. Own depth buffer so
 // one controller can occlude the other.
 void renderControllerModels(XrCtx* ctx) {
     if (ctx->modelPassReady && ctx->timerSupported) {
         collectModelTimer(ctx);
     }
-    if ((!ctx->modelsShowing && !ctx->handsShowing) || !initModelPass(ctx)
-            || !locateModelViews(ctx)) {
+    // Nothing shown: no stale image when they reappear
+    if (!ctx->modelsShowing && !ctx->handsShowing) {
+        ctx->modelRendered = 0;
+        return;
+    }
+    // A failed locate keeps the last image and where it was drawn
+    if (!initModelPass(ctx) || !locateModelViews(ctx)) {
+        return;
+    }
+    // Out of both eyes' view: nothing to draw or composite
+    if (!fitModelBoxes(ctx)) {
+        ctx->modelRendered = 0;
         return;
     }
     uint32_t index = 0;
     XrSwapchainImageAcquireInfo acquire = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
     if (!checkXr(xrAcquireSwapchainImage(ctx->modelSwapchain, &acquire, &index),
                  "acquire controller model image")) {
+        ctx->modelRendered = 0;
         return;
     }
     XrSwapchainImageWaitInfo wait = { XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
@@ -223,20 +269,25 @@ void renderControllerModels(XrCtx* ctx) {
     glBindFramebuffer(GL_FRAMEBUFFER, ctx->modelFbo);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
                            ctx->modelImages[index].image, 0);
-    if (!ctx->modelRendered) {
-        GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-        if (status != GL_FRAMEBUFFER_COMPLETE) {
-            LOGE("controller model framebuffer incomplete: 0x%x", status);
-        }
-    }
+    // Nothing of the last frame is kept, so the driver need not load it
+    static const GLenum all[2] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_ATTACHMENT };
+    glInvalidateFramebuffer(GL_FRAMEBUFFER, 2, all);
     // Colours are already gamma encoded
     if (ctx->srgbWriteControl) {
         glDisable(GL_FRAMEBUFFER_SRGB_EXT);
     }
-    // Transparent clear; models write alpha 1, valid as premultiplied
+    // Transparent clear of each eye's part and the margin round it; models write
+    // alpha 1, valid as premultiplied. The rest of the image is never shown.
+    glEnable(GL_SCISSOR_TEST);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     glClearDepthf(1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    for (int eye = 0; eye < MODEL_EYES; eye++) {
+        if (ctx->modelBoxOn[eye]) {
+            glScissor(eye * MODEL_CELL, 0, ctx->modelBox[eye].width + 2 * MODEL_PAD,
+                      ctx->modelBox[eye].height + 2 * MODEL_PAD);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        }
+    }
     glEnable(GL_DEPTH_TEST);
 
     float models[HAND_COUNT][16];
@@ -256,15 +307,11 @@ void renderControllerModels(XrCtx* ctx) {
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride, (const void*)(8 * sizeof(float)));
     glEnableVertexAttribArray(2);
-    for (int eye = 0; eye < MODEL_EYES; eye++) {
-        glViewport(eye * ctx->modelEyeWidth, 0, ctx->modelEyeWidth, ctx->modelEyeHeight);
-        float proj[16];
-        float view[16];
+    for (int eye = 0; ctx->modelsShowing && eye < MODEL_EYES; eye++) {
         float viewProj[16];
-        // Near plane close enough for a controller at the face
-        projectionFromFov(proj, ctx->modelViews[eye].fov, MODEL_NEAR_M, MODEL_FAR_M);
-        viewFromPose(view, ctx->modelViews[eye].pose);
-        matMul(viewProj, proj, view);
+        if (!modelEyeBegin(ctx, eye, viewProj)) {
+            continue;
+        }
         glUniformMatrix4fv(ctx->modelViewProjUniform, 1, GL_FALSE, viewProj);
         for (int h = 0; h < HAND_COUNT; h++) {
             if (!ctx->modelShown[h]) {
@@ -276,6 +323,9 @@ void renderControllerModels(XrCtx* ctx) {
         }
     }
     drawHandOutlines(ctx);
+    glDisable(GL_SCISSOR_TEST);
+    // Only the colour is kept
+    glInvalidateFramebuffer(GL_FRAMEBUFFER, 1, &all[1]);
 
     if (timing) {
         pfnEndQuery(GL_TIME_ELAPSED_EXT);

@@ -61,7 +61,14 @@ static void loadHandMesh(XrCtx* ctx, int h) {
         ctx->handMesh[h].indices = (uint16_t*)indices;
         ctx->handMesh[h].vertexCount = (int)nv;
         ctx->handMesh[h].indexCount = (int)ni;
-        LOGI("hand %d mesh: %u vertices, %u triangles", h, nv, ni / 3);
+        handJointReach(ctx->handMesh[h].reach, XR_HAND_JOINT_COUNT_EXT, vertices, (int)nv,
+                       ctx->handMesh[h].bind);
+        float widest = 0.0f;
+        for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++) {
+            widest = fmaxf(widest, ctx->handMesh[h].reach[j]);
+        }
+        LOGI("hand %d mesh: %u vertices, %u triangles, up to %.1f cm from a joint", h, nv,
+             ni / 3, widest * 100.0f);
     }
     else {
         LOGW("hand %d mesh could not be read", h);
@@ -198,6 +205,20 @@ static int initHandPass(XrCtx* ctx) {
     return 1;
 }
 
+// Grows an eye's box to hold the hands drawn this frame
+void handsViewBox(XrCtx* ctx, XrPosef eye, ViewBox* box) {
+    for (int h = 0; h < HAND_COUNT; h++) {
+        if (!ctx->handShown[h]) {
+            continue;
+        }
+        float size = ctx->handScale[h] > 0.0f ? ctx->handScale[h] : 1.0f;
+        for (int j = 0; j < XR_HAND_JOINT_COUNT_EXT; j++) {
+            viewBoxAdd(box, eye, ctx->handJointsLast[h][j].position,
+                       ctx->handMesh[h].reach[j] * size + VIEW_BOX_SLACK_M);
+        }
+    }
+}
+
 // Into the bound controller model framebuffer, both eyes, after the controllers.
 // Leaves attributes 2 and 3 off and no buffers bound.
 void drawHandOutlines(XrCtx* ctx) {
@@ -219,13 +240,10 @@ void drawHandOutlines(XrCtx* ctx) {
     float fill = ctx->passthrough ? 0.0f : HAND_FILL_DARK;
     GLsizei stride = HAND_VERTEX_FLOATS * sizeof(float);
     for (int eye = 0; eye < MODEL_EYES; eye++) {
-        glViewport(eye * ctx->modelEyeWidth, 0, ctx->modelEyeWidth, ctx->modelEyeHeight);
-        float proj[16];
-        float view[16];
         float viewProj[16];
-        projectionFromFov(proj, ctx->modelViews[eye].fov, MODEL_NEAR_M, MODEL_FAR_M);
-        viewFromPose(view, ctx->modelViews[eye].pose);
-        matMul(viewProj, proj, view);
+        if (!modelEyeBegin(ctx, eye, viewProj)) {
+            continue;
+        }
         glUniformMatrix4fv(ctx->handViewProjUniform, 1, GL_FALSE, viewProj);
         XrVector3f eyeAt = ctx->modelViews[eye].pose.position;
         glUniform3f(ctx->handEyeUniform, eyeAt.x, eyeAt.y, eyeAt.z);

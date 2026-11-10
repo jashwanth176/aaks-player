@@ -472,7 +472,8 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
         separation = 0.0f;
     }
     ctx->subsSeparation = warping ? separation : 0.0f;
-    ctx->subsNativeStereo = nativeStereo(ctx);
+    // A 3D file shown flat has no depth for the subtitles to stand in front of
+    ctx->subsNativeStereo = warping && nativeStereo(ctx);
     int occluding = upsampling && ctx->occlusionEnabled && separation > 0.0f;
 
     // Capture frames read back and write files; on this driver that inside a query can leave
@@ -494,10 +495,12 @@ void renderVideoFrame(XrCtx* ctx, const float* texMatrix, float separation) {
     // room light read the same colour sample.
     runFrameColorSample(ctx, texMatrix);
     runFrostSample(ctx, texMatrix);
-    if (relightWanted(ctx)) {
+    // Only passthrough is tinted by the picture; in the dark the room has the house
+    // lights alone
+    if (ctx->passthrough && relightLayerReady(ctx)) {
         relightSample(ctx);
     }
-    if (nativeStereo(ctx) && ctx->ui[UI_PANEL_SUBS].depthAuto) {
+    if (ctx->subsNativeStereo && ctx->ui[UI_PANEL_SUBS].depthAuto) {
         runStripMatch(ctx, texMatrix);
     }
     runGlowRender(ctx);

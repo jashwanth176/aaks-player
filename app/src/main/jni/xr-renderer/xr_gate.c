@@ -25,6 +25,33 @@ int controllerInUse(int kind, int tracked, int awake) {
     return kind == PROFILE_CONTROLLER && tracked && awake;
 }
 
+int pickPointer(const PointerOffer* offers, const int* order, int count, int prev) {
+    if (prev >= 0 && prev < count && offers[prev].pressing && offers[prev].on) {
+        return prev;
+    }
+    for (int rule = 0; rule < 5; rule++) {
+        for (int i = 0; i < count; i++) {
+            const PointerOffer* o = &offers[order[i]];
+            int fits;
+            switch (rule) {
+                case 0: fits = o->touch == 2; break;
+                case 1: fits = o->pressing && o->on; break;
+                case 2: fits = o->touch == 1; break;
+                case 3: fits = o->on; break;
+                default: fits = o->halo; break;
+            }
+            if (fits) {
+                return order[i];
+            }
+        }
+    }
+    return -1;
+}
+
+int pinchWakes(int fresh, int aimed, float trust) {
+    return fresh && aimed && trust >= PINCH_WAKE_TRUST;
+}
+
 void controllerClockReset(ControllerClock* c) {
     memset(c, 0, sizeof(*c));
 }

@@ -2,8 +2,9 @@
 #include "xr_renderer.h"
 
 // The runtime limit is 16 layers on the Pico, and on the Quest 3 in practice (it
-// reports 32). Over the limit, nativeEndFrame sheds the controller models. The array
-// is sized well past the worst case, since an overflow would smash the stack.
+// reports 32). Over the limit, nativeEndFrame sheds the frosted backdrops, then the
+// hands and controllers. The array is sized well past the worst case, since an
+// overflow would smash the stack.
 #define FRAME_MAX_LAYERS 24
 
 // Every layer a frame can carry; lives on nativeEndFrame's stack until xrEndFrame.
@@ -22,9 +23,9 @@ typedef struct {
     XrCompositionLayerQuad frost[FROST_PANELS];
     XrCompositionLayerQuad beam;
     XrCompositionLayerQuad dot;
-    // Over the picture and panels, under the beam and dot.
-    XrCompositionLayerProjection models;
-    XrCompositionLayerProjectionView modelViews[MODEL_EYES];
+    // Hands and controllers, a quad per eye over the picture and panels, under the
+    // beam and dot. Dropped after the frost.
+    XrCompositionLayerQuad models[MODEL_EYES];
     XrCompositionLayerQuad splashGround;
     XrCompositionLayerQuad splashSheet;
     XrCompositionLayerSettingsFB settings;
@@ -450,34 +451,29 @@ static void addUiPanelLayers(XrCtx* ctx, const FrameView* view, FrameLayers* lay
     }
 }
 
-// The controller models' projection layer, alpha blended over the picture and panels
-// since a controller is nearer. World locked, with the poses it was drawn from.
-// Controllers in the dark; hand outlines in passthrough too.
-static void addModelLayer(XrCtx* ctx, FrameLayers* layers) {
+// The hands and controllers, alpha blended over the picture and panels since they are
+// nearer: for each eye a quad over the part of its view they take, standing where
+// they are and facing the eye they were drawn for, so the compositor fills only that
+// part. World locked. Controllers in the dark; hand outlines in passthrough too.
+static void addModelLayers(XrCtx* ctx, FrameLayers* layers) {
     if ((!ctx->modelsShowing && !ctx->handsShowing) || !ctx->modelRendered) {
         return;
     }
-    XrCompositionLayerProjection* models = &layers->models;
-    memset(models, 0, sizeof(*models));
-    memset(layers->modelViews, 0, sizeof(layers->modelViews));
-    models->type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
-    models->layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-    models->space = ctx->localSpace;
-    models->viewCount = MODEL_EYES;
-    models->views = layers->modelViews;
     for (int eye = 0; eye < MODEL_EYES; eye++) {
-        XrCompositionLayerProjectionView* projView = &layers->modelViews[eye];
-        projView->type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
-        projView->pose = ctx->modelViews[eye].pose;
-        projView->fov = ctx->modelViews[eye].fov;
-        projView->subImage.swapchain = ctx->modelSwapchain;
-        projView->subImage.imageRect.offset.x = eye * ctx->modelEyeWidth;
-        projView->subImage.imageRect.offset.y = 0;
-        projView->subImage.imageRect.extent.width = ctx->modelEyeWidth;
-        projView->subImage.imageRect.extent.height = ctx->modelEyeHeight;
-        projView->subImage.imageArrayIndex = 0;
+        if (!ctx->modelBoxOn[eye]) {
+            continue;
+        }
+        const ViewBox* box = &ctx->modelBox[eye];
+        float w, h;
+        XrPosef pose = viewBoxQuad(box, ctx->modelViews[eye].pose, &w, &h);
+        quadLayerRect(&layers->models[eye], NULL,
+                      XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT, ctx->modelSwapchain,
+                      eye * MODEL_CELL + MODEL_PAD, MODEL_PAD, box->width, box->height,
+                      ctx->localSpace, pose, w, h);
+        layers->models[eye].eyeVisibility = eye == 0 ? XR_EYE_VISIBILITY_LEFT
+                                                     : XR_EYE_VISIBILITY_RIGHT;
+        pushLayer(ctx, layers, &layers->models[eye]);
     }
-    pushLayer(ctx, layers, models);
 }
 
 // The laser and its cursor.
@@ -763,6 +759,13 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
         redrawGlow(ctx, texMatrix);
         LOGI("glow redrawn on a still picture");
     }
+    // A backdrop came up after a frame the blur sat out: taken now from that frame
+    if (ctx->frostSkipped && ctx->shouldRender && ctx->everRendered && !ctx->videoStale
+            && frostWanted(ctx)) {
+        float texMatrix[16];
+        (*env)->GetFloatArrayRegion(env, texMatrixArr, 0, 16, texMatrix);
+        runFrostSample(ctx, texMatrix);
+    }
     // Every frame, since controllers move independently of the
     // video. After the warp, so the picture never waits on them.
     if (ctx->shouldRender && ctx->everRendered) {
@@ -849,18 +852,21 @@ Java_com_limelight_binding_video_XrRenderer_nativeEndFrame(JNIEnv* env, jobject 
         addHandleLayer(ctx, &view, &layers);
         stepUiPanels(ctx, frameNs);
         addUiPanelLayers(ctx, &view, &layers);
-        addModelLayer(ctx, &layers);
+        addModelLayers(ctx, &layers);
         addPointerLayers(ctx, &view, &layers);
     }
     addSplashLayers(ctx, &layers, frameNs);
 
-    // Over the runtime's limit the frame is refused whole, so shed the controller
-    // models first: the beam and dot still point.
-    if (layers.count > (uint32_t)ctx->maxLayerCount) {
-        dropLayer(&layers, &layers.models);
-    }
-    for (int i = 0; i < FROST_PANELS && layers.count > (uint32_t)ctx->maxLayerCount; i++) {
+    // Over the runtime's limit the frame is refused whole. The frost goes first, the
+    // controls' before the sheet's, which is harder to read without it; then the
+    // hands and controllers, both eyes together: the beam and dot still point.
+    for (int i = FROST_PANELS - 1; i >= 0 && layers.count > (uint32_t)ctx->maxLayerCount; i--) {
         dropLayer(&layers, &layers.frost[i]);
+    }
+    if (layers.count > (uint32_t)ctx->maxLayerCount) {
+        for (int eye = 0; eye < MODEL_EYES; eye++) {
+            dropLayer(&layers, &layers.models[eye]);
+        }
     }
 
     // Warn once; a frame that crowds the limit usually repeats. Nothing

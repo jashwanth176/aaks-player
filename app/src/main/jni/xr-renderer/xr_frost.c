@@ -11,6 +11,10 @@ static const float FROST_LOOK[FROST_PANELS][4] = {
     { 0.85f, 0.0f, 0.03f, 0.0f },
 };
 
+// A backdrop is redrawn once its panel has moved this share of the picture across
+// it: a fifth of a texel of the blur, a couple of centimetres of head movement
+#define FROST_RECT_SLACK 0.001f
+
 int frostSlot(int id) {
     return id == UI_PANEL_SHEET ? 0 : id == UI_PANEL_CONTROLS ? 1 : -1;
 }
@@ -50,10 +54,27 @@ int initFrost(XrCtx* ctx) {
     return 1;
 }
 
+// A backdrop shows or is about to: its panel is up, or still fading out
+int frostWanted(const XrCtx* ctx) {
+    static const int panels[FROST_PANELS] = { UI_PANEL_SHEET, UI_PANEL_CONTROLS };
+    for (int i = 0; ctx->frostReady && i < FROST_PANELS; i++) {
+        int id = panels[i];
+        if (ctx->ui[id].ready && (ctx->ui[id].visible || ctx->ui[id].level > 0.0f)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // The picture, one eye with the bars cropped and graded like the screen, through the
-// colour sample program; its box filter and the mips do the blurring
+// colour sample program; its box filter and the mips do the blurring. Sat out while
+// no backdrop shows; the frame loop takes it late when one comes up.
 void runFrostSample(XrCtx* ctx, const float* texMatrix) {
     if (!ctx->frostReady) {
+        return;
+    }
+    if (!frostWanted(ctx)) {
+        ctx->frostSkipped = 1;
         return;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, ctx->frostFbo);
@@ -76,6 +97,8 @@ void runFrostSample(XrCtx* ctx, const float* texMatrix) {
     glBindTexture(GL_TEXTURE_2D, ctx->frostTexture);
     glGenerateMipmap(GL_TEXTURE_2D);
     ctx->frostFilmValid = 1;
+    ctx->frostSkipped = 0;
+    ctx->frostSamples++;
 }
 
 // The panel's shape at a quarter size, rows bottom up: a cell is backdrop only when
@@ -138,6 +161,7 @@ void frostMaskFromPanel(XrCtx* ctx, int id, const unsigned char* px, int width, 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     free(mask);
     ctx->frost[slot].ready = 1;
+    ctx->frost[slot].drawn = 0;
 }
 
 // Screen-local point: x right, y up, z toward the viewer
@@ -168,6 +192,17 @@ int renderFrostBackdrop(XrCtx* ctx, int slot, XrPosef pose, float width, float h
         height * s / screenH,
     };
     int filmOn = ctx->frostFilmValid && !ctx->playerScreenHidden && ctx->videoReady;
+
+    // The image last drawn still holds: the same blur, and the panel has not moved
+    // over the picture by more than the blur hides. With no film it is a plain veil.
+    int same = ctx->frost[slot].drawn && ctx->frost[slot].drawnFilmOn == filmOn
+            && (!filmOn || ctx->frost[slot].drawnSample == ctx->frostSamples);
+    for (int i = 0; same && filmOn && i < 4; i++) {
+        same = fabsf(rect[i] - ctx->frost[slot].drawnRect[i]) < FROST_RECT_SLACK;
+    }
+    if (same) {
+        return 1;
+    }
 
     uint32_t index = 0;
     XrSwapchainImageAcquireInfo acquire = { XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
@@ -205,6 +240,10 @@ int renderFrostBackdrop(XrCtx* ctx, int slot, XrPosef pose, float width, float h
 
     XrSwapchainImageReleaseInfo release = { XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
     xrReleaseSwapchainImage(ctx->frost[slot].chain, &release);
+    ctx->frost[slot].drawn = 1;
+    ctx->frost[slot].drawnFilmOn = filmOn;
+    ctx->frost[slot].drawnSample = ctx->frostSamples;
+    memcpy(ctx->frost[slot].drawnRect, rect, sizeof(rect));
     return 1;
 }
 
@@ -218,6 +257,7 @@ void destroyFrost(XrCtx* ctx) {
         ctx->frost[i].w = 0;
         ctx->frost[i].h = 0;
         ctx->frost[i].ready = 0;
+        ctx->frost[i].drawn = 0;
     }
     if (ctx->frostFbo != 0) {
         glDeleteFramebuffers(1, &ctx->frostFbo);
@@ -233,4 +273,5 @@ void destroyFrost(XrCtx* ctx) {
     ctx->frostProgram = 0;
     ctx->frostReady = 0;
     ctx->frostFilmValid = 0;
+    ctx->frostSkipped = 0;
 }

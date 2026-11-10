@@ -857,8 +857,14 @@ static void destroyCtx(JNIEnv* env, XrCtx* ctx) {
 
     if (ctx->eglDisplay != EGL_NO_DISPLAY) {
         eglMakeCurrent(ctx->eglDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-        // The stage thread destroys its own context;
-        // these remain only if the model never loaded.
+        // The depth threads destroy their own contexts on the way out;
+        // these remain only if a thread never ran.
+        if (ctx->depthPbuffer != EGL_NO_SURFACE) {
+            eglDestroySurface(ctx->eglDisplay, ctx->depthPbuffer);
+        }
+        if (ctx->depthContext != EGL_NO_CONTEXT) {
+            eglDestroyContext(ctx->eglDisplay, ctx->depthContext);
+        }
         if (ctx->depthStagePbuffer != EGL_NO_SURFACE) {
             eglDestroySurface(ctx->eglDisplay, ctx->depthStagePbuffer);
         }
