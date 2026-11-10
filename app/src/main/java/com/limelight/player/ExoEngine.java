@@ -71,6 +71,20 @@ final class ExoEngine implements PlaybackEngine {
             }
 
             @Override
+            public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
+                pausedForFocus = !playWhenReady
+                        && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS;
+                if (reason != Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
+                    LimeLog.info("PlayerXR: " + (playWhenReady ? "playing" : "paused") + ", reason " + reason);
+                }
+            }
+
+            @Override
+            public void onPlaybackSuppressionReasonChanged(int reason) {
+                LimeLog.info("PlayerXR: playback held back, reason " + reason);
+            }
+
+            @Override
             public void onCues(CueGroup cues) {
                 showCues(cues);
             }
@@ -181,6 +195,13 @@ final class ExoEngine implements PlaybackEngine {
 
     // Set by a playback error, after which the player sits idle
     private boolean failed;
+    // Paused by the player itself when another app took the sound
+    private boolean pausedForFocus;
+
+    @Override
+    public boolean pausedForSound() {
+        return pausedForFocus;
+    }
 
     // Media3's error codes run in blocks of a thousand: 2xxx reading, 3xxx the file's
     // contents, 4xxx decoding, 5xxx the audio output
@@ -223,7 +244,15 @@ final class ExoEngine implements PlaybackEngine {
             if (playing && player.getPlaybackState() == Player.STATE_ENDED) {
                 player.seekTo(0);
             }
+            pausedForFocus = false;
             player.setPlayWhenReady(playing);
+            // Held back for a sound that never gave it back: asking for it again lets it go
+            if (playing && player.getPlaybackSuppressionReason()
+                    == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
+                LimeLog.info("PlayerXR: asking for the sound again");
+                player.setAudioAttributes(player.getAudioAttributes(), false);
+                player.setAudioAttributes(player.getAudioAttributes(), true);
+            }
         }
     }
 

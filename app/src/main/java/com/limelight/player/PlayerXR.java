@@ -1201,7 +1201,8 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
     public void onVrFocusLost() {
         main.post(() -> {
             PlaybackEngine e = engine;
-            if (e != null && !browse && e.isPlaying()) {
+            // The Quest menu also takes the sound, which may have paused the film already
+            if (e != null && !browse && (e.isPlaying() || e.pausedForSound())) {
                 e.setPlaying(false);
                 pausedForFocus = true;
                 saveProgress();

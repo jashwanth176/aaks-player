@@ -48,6 +48,11 @@ interface PlaybackEngine {
     /** True while playing or about to play; false when paused. */
     boolean isPlaying();
 
+    /** Paused because another app took the sound (the Quest menu does), not by the viewer. */
+    default boolean pausedForSound() {
+        return false;
+    }
+
     /** True once the film has played to its end. */
     default boolean isEnded() {
         return false;

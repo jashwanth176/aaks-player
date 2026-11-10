@@ -255,6 +255,11 @@ final class DiscEngine implements PlaybackEngine, DiscNative.Sink, DiscAudio.Cal
     }
 
     @Override
+    public boolean pausedForSound() {
+        return pausedByFocus;
+    }
+
+    @Override
     public void audioStarted() {
         audioStartedOnce = true;
         long h = handle;

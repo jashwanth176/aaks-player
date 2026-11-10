@@ -146,18 +146,24 @@ final class DiscAudio {
     // Generation the thread last reset for; in-flight work from an older one is abandoned
     private int activeGeneration = -1;
 
+    // The play state last applied to the track. Audio thread.
+    private boolean appliedPlaying;
+
+    private void followPlaying() {
+        if (playing != appliedPlaying) {
+            appliedPlaying = playing;
+            applyPlaying();
+        }
+    }
+
     private void run() {
-        boolean wasPlaying = false;
         while (!quit) {
             try {
                 if (activeGeneration != generation) {
                     activeGeneration = generation;
                     reset();
                 }
-                if (playing != wasPlaying) {
-                    wasPlaying = playing;
-                    applyPlaying();
-                }
+                followPlaying();
                 applySpeed();
                 Job j = queue.poll(15, TimeUnit.MILLISECONDS);
                 if (j != null && j.generation == generation && (codec != null || ff != 0)) {
@@ -407,7 +413,9 @@ final class DiscAudio {
             left -= n;
             framesWritten += n / frameBytes;
             if (n == 0) {
-                // Track buffer full
+                // Track buffer full, as it stays while paused: a resume must still reach
+                // the track from here
+                followPlaying();
                 startTrackIfReady();
                 Thread.sleep(4);
             }
