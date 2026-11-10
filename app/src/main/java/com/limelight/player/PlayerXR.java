@@ -171,6 +171,9 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugConvert")) {
             convert2d = true;
         }
+        if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugOwnFilms")) {
+            VideoLibrary.ownOnly = true;
+        }
         // A world-locked flat screen, 2.5 m away and 2.4 m wide to start with
         PreferenceConfiguration prefs = new PreferenceConfiguration();
         Film film = plan();
@@ -609,6 +612,14 @@ public class PlayerXR extends Activity implements XrRenderer.InputListener, XrRe
         }
         if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugSheet")) {
             ui.debugOpen(getIntent().getIntExtra("debugSheet", 0));
+        }
+        if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugDumpMs")) {
+            main.postDelayed(() -> {
+                PlayerUi current = ui;
+                if (current != null) {
+                    current.debugDumpAll();
+                }
+            }, getIntent().getIntExtra("debugDumpMs", 20000));
         }
         if (com.limelight.BuildConfig.DEBUG && getIntent().hasExtra("debugAskAccess")) {
             main.postDelayed(this::askAccess, 5000);

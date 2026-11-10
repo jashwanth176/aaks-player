@@ -108,10 +108,15 @@ final class VideoLibrary {
     }
 
     /** Walks the storage roots. Call off the main thread. */
+    // Debug: the app's own folders only, for screenshots without the headset's own films
+    static volatile boolean ownOnly;
+
     static List<Film> scan(Context context) {
         DemoFilms.install(context);
         List<File> roots = new ArrayList<>();
-        roots.add(storageRoot());
+        if (!ownOnly) {
+            roots.add(storageRoot());
+        }
         roots.add(new File(context.getFilesDir(), "Movies"));
         File own = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES);
         if (own != null) {

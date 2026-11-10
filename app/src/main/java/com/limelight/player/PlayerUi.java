@@ -557,6 +557,18 @@ final class PlayerUi implements XrRenderer.UiListener {
         }
     }
 
+    /** Debug: saves every panel as it stands now. */
+    void debugDumpAll() {
+        for (Panel p : panels) {
+            if (p != null) {
+                p.dumpNext = true;
+                p.dirty = true;
+            }
+        }
+        refreshState();
+        renderDirty();
+    }
+
     void stop() {
         main.removeCallbacksAndMessages(null);
         if (library != null) {
