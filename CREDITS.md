@@ -33,8 +33,10 @@ stereoscopic [Big Buck Bunny](https://www.bigbuckbunny.org) (re-encoded, with a 
 stereoscopic version by Janus B. Kristensen). Both are © Blender Foundation, CC BY 3.0; the notice
 ships in the APK as `assets/licenses/films_LICENSE.txt`.
 
-The screenshots show frames from [Sintel](https://durian.blender.org) and
-[Tears of Steel](https://mango.blender.org), © Blender Foundation, CC BY 3.0, and NASA
-photographs from the International Space Station (public domain). The rooms are
-panoramas from [Poly Haven](https://polyhaven.com) (CC0), and the depth map was made by the app's
-own ZipDepth model.
+The screenshots show the app's own menus over frames from [Sintel](https://durian.blender.org)
+and [Tears of Steel](https://mango.blender.org), © Blender Foundation, CC BY 3.0. The library in
+them also lists [Big Buck Bunny](https://www.bigbuckbunny.org) (CC BY 3.0),
+[Elephants Dream](https://orange.blender.org) (CC BY 2.5) and
+[Cosmos Laundromat](https://www.cosmoslaundromat.org) (CC BY 4.0), all © Blender Foundation. The
+rooms are panoramas from [Poly Haven](https://polyhaven.com) (CC0), and the depth map was made by
+the app's own ZipDepth model.

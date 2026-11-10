@@ -38,8 +38,8 @@ setting is remembered.
 
 | | |
 |---|---|
-| ![Library](docs/screenshots/3_library.jpg) | ![Double tap to skip](docs/screenshots/4_double_tap.jpg) |
-| ![Settings](docs/screenshots/5_settings.jpg) | ![2D film beside its depth](docs/screenshots/2_2d_to_3d.jpg) |
+| ![The library, with the films that come with the app](docs/screenshots/3_library.jpg) | ![The controls and a first-run hint, all used with hands](docs/screenshots/4_hands.jpg) |
+| ![The Light menu with house lights beside a film](docs/screenshots/5_cinema.jpg) | ![A 2D film beside the depth worked out from it](docs/screenshots/2_2d_to_3d.jpg) |
 
 ## Features
 
